@@ -1,4 +1,5 @@
 # Zuik
+<<<<<<< HEAD
 
 This starter full stack project has been generated using AlgoKit. See below for default getting started instructions.
 
@@ -43,3 +44,6 @@ The frontend starter also provides an example of interactions with your HelloWor
 ## Next Steps
 
 You can take this project and customize it to build your own decentralized applications on Algorand. Make sure to understand how to use AlgoKit and how to write smart contracts for Algorand before you start.
+=======
+Intent based decentralized finance automation platform built on Algorand. Instead of manually interacting with multiple decentralized finance tools, users simply describe what they want to achieve
+>>>>>>> 28afe74ec14454875888e9e97fd32b11d371fff9
