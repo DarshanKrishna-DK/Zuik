@@ -1,0 +1,201 @@
+import { useCallback, useRef, useMemo, useEffect, useState } from 'react'
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  addEdge,
+  useNodesState,
+  useEdgesState,
+  type Connection,
+  type Node,
+  type Edge,
+  BackgroundVariant,
+  type ReactFlowInstance,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+
+import Sidebar from '../components/flow/Sidebar'
+import GenericNode from '../components/flow/GenericNode'
+import { getBlockById } from '../lib/blockRegistry'
+import { isValidConnection } from '../lib/connectionValidator'
+import { saveFlowToLocal, loadFlowFromLocal, exportFlowJSON, importFlowJSON } from '../lib/flowSerializer'
+import { Save, Download, Upload, Trash2, Play } from 'lucide-react'
+import TransactionPanel from '../components/flow/TransactionPanel'
+
+const nodeTypes = { generic: GenericNode }
+
+let nodeIdCounter = 0
+function nextNodeId() {
+  return `node_${Date.now()}_${nodeIdCounter++}`
+}
+
+export default function Builder() {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [transactionPanelOpen, setTransactionPanelOpen] = useState(false)
+  const rfInstance = useRef<ReactFlowInstance<Node, Edge> | null>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  const onConnect = useCallback(
+    (params: Connection) => {
+      if (isValidConnection(params, nodes)) {
+        setEdges((eds) => addEdge(params, eds))
+      }
+    },
+    [nodes, setEdges],
+  )
+
+  const isConnectionValid = useCallback(
+    (connection: Edge | Connection) => isValidConnection(connection as Connection, nodes),
+    [nodes],
+  )
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      const blockId = e.dataTransfer.getData('application/zuik-block')
+      if (!blockId) return
+
+      const def = getBlockById(blockId)
+      if (!def) return
+
+      const bounds = wrapperRef.current?.getBoundingClientRect()
+      const position = rfInstance.current?.screenToFlowPosition({
+        x: e.clientX - (bounds?.left ?? 0),
+        y: e.clientY - (bounds?.top ?? 0),
+      }) ?? { x: 100, y: 100 }
+
+      const newNode: Node = {
+        id: nextNodeId(),
+        type: 'generic',
+        position,
+        data: {
+          blockId: def.id,
+          config: {},
+          label: def.name,
+        },
+      }
+      setNodes((nds) => [...nds, newNode])
+    },
+    [setNodes],
+  )
+
+  useEffect(() => {
+    const saved = loadFlowFromLocal()
+    if (saved && saved.nodes.length > 0) {
+      setNodes(saved.nodes)
+      setEdges(saved.edges)
+    }
+  }, [setNodes, setEdges])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      saveFlowToLocal(nodes, edges)
+    }, 30_000)
+    return () => clearInterval(timer)
+  }, [nodes, edges])
+
+  const handleSave = () => saveFlowToLocal(nodes, edges)
+
+  const handleExport = () => {
+    const json = exportFlowJSON(nodes, edges)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `zuik-flow-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImport = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const data = importFlowJSON(reader.result as string)
+        if (data) {
+          setNodes(data.nodes)
+          setEdges(data.edges)
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
+
+  const handleClear = () => {
+    setNodes([])
+    setEdges([])
+  }
+
+  const minimapNodeColor = useMemo(() => {
+    return (node: Node) => {
+      const blockId = (node.data as Record<string, unknown>)?.blockId as string
+      const def = getBlockById(blockId)
+      if (!def) return '#3F3F46'
+      const colors: Record<string, string> = {
+        trigger: '#8B5CF6', action: '#3B82F6', logic: '#EAB308', notification: '#22C55E', defi: '#F97316',
+      }
+      return colors[def.category] ?? '#3F3F46'
+    }
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <Sidebar />
+      <div ref={wrapperRef} style={{ flex: 1, position: 'relative' }}>
+        <div className="zuik-canvas-toolbar">
+          <button className="zuik-btn zuik-btn-primary zuik-btn-sm" onClick={() => setTransactionPanelOpen(true)} title="Execute">
+            <Play size={14} /> Execute
+          </button>
+          <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleSave} title="Save"><Save size={14} /> Save</button>
+          <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleExport} title="Export"><Download size={14} /> Export</button>
+          <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleImport} title="Import"><Upload size={14} /> Import</button>
+          <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleClear} title="Clear"><Trash2 size={14} /> Clear</button>
+        </div>
+        <TransactionPanel
+          isOpen={transactionPanelOpen}
+          onClose={() => setTransactionPanelOpen(false)}
+          nodes={nodes}
+          edges={edges}
+        />
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          isValidConnection={isConnectionValid}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onInit={(inst) => { rfInstance.current = inst }}
+          nodeTypes={nodeTypes}
+          fitView
+          snapToGrid
+          snapGrid={[16, 16]}
+          deleteKeyCode={['Backspace', 'Delete']}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#27272A" />
+          <Controls />
+          <MiniMap
+            nodeColor={minimapNodeColor}
+            maskColor="rgba(0,0,0,0.7)"
+            style={{ borderRadius: 8 }}
+          />
+        </ReactFlow>
+      </div>
+    </div>
+  )
+}

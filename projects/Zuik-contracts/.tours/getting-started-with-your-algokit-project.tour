@@ -18,9 +18,9 @@
       "line": 1
     },
     {
-      "file": "smart_contracts/hello_world/deploy_config.py",
-      "description": "The default deployment scripts invoke a sample method on the starter contract that demonstrates how to interact with your deployed Algorand on-chain applications using the [`AlgoKit Typed Clients`](https://github.com/algorandfoundation/algokit-cli/blob/main/docs/features/generate.md#1-typed-clients) feature. The invocation if deploy is aliased in `.algokit.toml` file, allowing simple deployments via `algokit project deploy` command.",
-      "line": 32
+      "file": "smart_contracts/__main__.py",
+      "description": "The build and deploy logic discovers every folder under `smart_contracts/` that has a `contract.py` and builds it. Add new contracts with `algokit generate smart-contract`; deployment is defined per-contract in `deploy_config.py`. Deploy via `algokit project deploy localnet` (or testnet/mainnet).",
+      "line": 64
     },
     {
       "file": ".env.localnet.template",

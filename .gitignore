@@ -168,3 +168,16 @@ cython_debug/
 # NPM
 node_modules
 
+# ===== Internal / Dev-only docs (not for public viewers) =====
+Zuik_Project_Documentation.pdf
+ZUIK_DEVELOPMENT_PLAN.md
+CHANGELOG.md
+AGENTS.md
+.cursorrules
+.cursor/
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo

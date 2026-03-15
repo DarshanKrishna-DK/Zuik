@@ -36,9 +36,9 @@ Run the following commands within the project folder:
 Directly manage and interact with your project using AlgoKit commands:
 
 1. **Build Contracts**: `algokit project run build` compiles all smart contracts. You can also specify a specific contract by passing the name of the contract folder as an extra argument.
-For example: `algokit project run build -- hello_world` will only build the `hello_world` contract.
+   For example: `algokit project run build -- your_contract` will only build the `your_contract` contract.
 2. **Deploy**: Use `algokit project deploy localnet` to deploy contracts to the local network. You can also specify a specific contract by passing the name of the contract folder as an extra argument.
-For example: `algokit project deploy localnet -- hello_world` will only deploy the `hello_world` contract.
+   For example: `algokit project deploy localnet -- your_contract` will only deploy the `your_contract` contract.
 
 #### VS Code 
 For a seamless experience with breakpoint debugging and other features:
@@ -65,11 +65,11 @@ This template provides a set of [algokit generators](https://github.com/algorand
 
 ### Generate Smart Contract 
 
-By default the template creates a single `HelloWorld` contract under hello_world folder in the `smart_contracts` directory. To add a new contract:
+To add a new smart contract to Zuik-contracts:
 
-1. From the root of the project (`../`) execute `algokit generate smart-contract`. This will create a new starter smart contract and deployment configuration file under `{your_contract_name}` subfolder in the `smart_contracts` directory.
-2. Each contract potentially has different creation parameters and deployment steps. Hence, you need to define your deployment logic in `deploy_config.py`file.
-3. `config.py` file will automatically build all contracts in the `smart_contracts` directory. If you want to build specific contracts manually, modify the default code provided by the template in `config.py` file.
+1. From the root of this project execute `algokit generate smart-contract`. This creates a new starter contract and deployment configuration under `smart_contracts/{your_contract_name}/` (e.g. `contract.py` and `deploy_config.py`).
+2. Define your deployment logic in `deploy_config.py` for that contract.
+3. The build system in `smart_contracts/__main__.py` discovers all folders under `smart_contracts/` that contain a `contract.py` and builds them. Use `algokit project run build` to compile all contracts (or pass a contract name to build only one).
 
 > Please note, above is just a suggested convention tailored for the base configuration and structure of this template. The default code supplied by the template in `config.py` and `index.ts` (if using ts clients) files are tailored for the suggested convention. You are free to modify the structure and naming conventions as you see fit.
 
