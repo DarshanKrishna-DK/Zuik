@@ -6,6 +6,7 @@ export interface GenericNodeData {
   blockId: string
   config: Record<string, string | number>
   label?: string
+  executionStatus?: 'running' | 'success' | 'error' | 'idle'
   [key: string]: unknown
 }
 
@@ -40,8 +41,11 @@ export default function GenericNode({ data, selected }: NodeProps) {
     nodeData.config = { ...nodeData.config, [fieldId]: value }
   }
 
+  const statusClass = nodeData.executionStatus && nodeData.executionStatus !== 'idle'
+    ? `node-${nodeData.executionStatus}` : ''
+
   return (
-    <div className={`zuik-node ${selected ? 'selected' : ''}`}>
+    <div className={`zuik-node ${selected ? 'selected' : ''} ${statusClass}`}>
       {def.inputs.map((port, i) => (
         <PortHandle key={port.id} port={port} type="target" index={i} total={def.inputs.length} />
       ))}

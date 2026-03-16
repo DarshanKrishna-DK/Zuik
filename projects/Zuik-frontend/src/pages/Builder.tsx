@@ -14,14 +14,28 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { useWallet } from '@txnlab/use-wallet-react'
 
 import Sidebar from '../components/flow/Sidebar'
 import GenericNode from '../components/flow/GenericNode'
+import TransactionPanel from '../components/flow/TransactionPanel'
+import AgentControls from '../components/flow/AgentControls'
+import ExecutionLog from '../components/flow/ExecutionLog'
 import { getBlockById } from '../lib/blockRegistry'
 import { isValidConnection } from '../lib/connectionValidator'
 import { saveFlowToLocal, loadFlowFromLocal, exportFlowJSON, importFlowJSON } from '../lib/flowSerializer'
-import { Save, Download, Upload, Trash2, Play } from 'lucide-react'
-import TransactionPanel from '../components/flow/TransactionPanel'
+import {
+  type AgentStatus,
+  type LogEntry,
+  type AgentHandle,
+  type FlowNode,
+  type FlowEdge,
+  createVariableContext,
+  subscribeAgent,
+  runFlowOnce,
+} from '../lib/runAgent'
+import { getAlgorandClient } from '../services/algorand'
+import { Save, Download, Upload, Trash2 } from 'lucide-react'
 
 const nodeTypes = { generic: GenericNode }
 
@@ -34,8 +48,13 @@ export default function Builder() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [transactionPanelOpen, setTransactionPanelOpen] = useState(false)
+  const [logOpen, setLogOpen] = useState(false)
+  const [agentStatus, setAgentStatus] = useState<AgentStatus>('idle')
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const agentHandleRef = useRef<AgentHandle | null>(null)
   const rfInstance = useRef<ReactFlowInstance<Node, Edge> | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const { transactionSigner, activeAddress } = useWallet()
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -101,6 +120,91 @@ export default function Builder() {
     return () => clearInterval(timer)
   }, [nodes, edges])
 
+  useEffect(() => {
+    return () => {
+      agentHandleRef.current?.stop()
+    }
+  }, [])
+
+  const updateNodeStatus = useCallback((nodeId: string, status: 'running' | 'success' | 'error' | 'idle') => {
+    setNodes((nds) => nds.map((n) => {
+      if (n.id === nodeId) {
+        return { ...n, data: { ...n.data, executionStatus: status } }
+      }
+      return n
+    }))
+  }, [setNodes])
+
+  const addLog = useCallback((entry: Omit<LogEntry, 'timestamp'>) => {
+    setLogs((prev) => [...prev, { ...entry, timestamp: Date.now() }])
+  }, [])
+
+  const handleStartAgent = useCallback(() => {
+    if (!transactionSigner || !activeAddress) {
+      addLog({ nodeId: '', blockId: '', blockName: 'System', type: 'error', message: 'Connect wallet first' })
+      return
+    }
+
+    agentHandleRef.current?.stop()
+
+    const flowNodes: FlowNode[] = nodes.map((n) => ({
+      id: n.id,
+      data: n.data as FlowNode['data'],
+    }))
+    const flowEdges: FlowEdge[] = edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+    }))
+
+    const algorand = getAlgorandClient()
+    const abortController = new AbortController()
+    const variables = createVariableContext()
+    const blockOutputs = new Map<string, Record<string, unknown>>()
+
+    const hasTriggers = flowNodes.some((n) => {
+      const def = getBlockById((n.data as FlowNode['data']).blockId)
+      return def?.category === 'trigger'
+    })
+
+    if (hasTriggers) {
+      const handle = subscribeAgent(flowNodes, flowEdges, {
+        sender: activeAddress,
+        signer: transactionSigner,
+        algorand,
+        variables,
+        blockOutputs,
+        log: addLog,
+        onNodeStatusChange: updateNodeStatus,
+        abortSignal: abortController.signal,
+      }, setAgentStatus)
+      agentHandleRef.current = handle
+    } else {
+      setAgentStatus('running')
+      runFlowOnce(flowNodes, flowEdges, {
+        sender: activeAddress,
+        signer: transactionSigner,
+        algorand,
+        variables,
+        blockOutputs,
+        log: addLog,
+        onNodeStatusChange: updateNodeStatus,
+        abortSignal: abortController.signal,
+      }).then(() => {
+        setAgentStatus('idle')
+      }).catch(() => {
+        setAgentStatus('error')
+      })
+      agentHandleRef.current = {
+        stop() { abortController.abort(); setAgentStatus('stopped') },
+        pause() { setAgentStatus('paused') },
+        resume() { setAgentStatus('running') },
+      }
+    }
+  }, [nodes, edges, transactionSigner, activeAddress, addLog, updateNodeStatus])
+
   const handleSave = () => saveFlowToLocal(nodes, edges)
 
   const handleExport = () => {
@@ -135,8 +239,11 @@ export default function Builder() {
   }
 
   const handleClear = () => {
+    agentHandleRef.current?.stop()
     setNodes([])
     setEdges([])
+    setLogs([])
+    setAgentStatus('idle')
   }
 
   const minimapNodeColor = useMemo(() => {
@@ -156,9 +263,16 @@ export default function Builder() {
       <Sidebar />
       <div ref={wrapperRef} style={{ flex: 1, position: 'relative' }}>
         <div className="zuik-canvas-toolbar">
-          <button className="zuik-btn zuik-btn-primary zuik-btn-sm" onClick={() => setTransactionPanelOpen(true)} title="Execute">
-            <Play size={14} /> Execute
-          </button>
+          <AgentControls
+            status={agentStatus}
+            onStart={handleStartAgent}
+            onStop={() => agentHandleRef.current?.stop()}
+            onPause={() => agentHandleRef.current?.pause()}
+            onResume={() => agentHandleRef.current?.resume()}
+            onToggleLog={() => setLogOpen((o) => !o)}
+            logCount={logs.length}
+          />
+          <div className="zuik-agent-separator" />
           <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleSave} title="Save"><Save size={14} /> Save</button>
           <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleExport} title="Export"><Download size={14} /> Export</button>
           <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleImport} title="Import"><Upload size={14} /> Import</button>
@@ -169,6 +283,12 @@ export default function Builder() {
           onClose={() => setTransactionPanelOpen(false)}
           nodes={nodes}
           edges={edges}
+        />
+        <ExecutionLog
+          isOpen={logOpen}
+          onClose={() => setLogOpen(false)}
+          logs={logs}
+          onClear={() => setLogs([])}
         />
         <ReactFlow
           nodes={nodes}
