@@ -62,8 +62,6 @@ cp .env.testnet .env
 npm run dev
 ```
 
-Open **http://localhost:5173** → Landing page → **Open Builder**
-
 ---
 
 ## Tech Stack
