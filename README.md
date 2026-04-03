@@ -121,22 +121,6 @@ Zuik/
 
 ---
 
-## Development Status
-
-| Phase | Status |
-|:------|:------:|
-| **0** Foundation & Scaffolding | ✅ |
-| **1** Visual Flow Builder | ✅ |
-| **2** Algorand Transaction Engine | ✅ |
-| **3** Triggers, Logic & Agent Runtime | ✅ |
-| **4** Conversational Interface & Intent Engine | ⏳ |
-| **5** Simulation, Explanation & Safety | ⏳ |
-| **6** Persistence, Dashboard & Monitoring | ⏳ |
-| **7** API Layer & Agent-Driven Finance | ⏳ |
-| **8** Polish, Testing & Submission | ⏳ |
-
----
-
 ## License
 
 This project is built for **[AlgoHackSeries 3.0](https://www.algohackseries.com/)**.
