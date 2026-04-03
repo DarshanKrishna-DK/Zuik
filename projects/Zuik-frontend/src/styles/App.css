@@ -573,3 +573,267 @@ body {
   background: var(--zuik-border);
   margin: 0 4px;
 }
+
+/* ===== Chat Panel ===== */
+.zuik-chat-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  background: var(--zuik-surface);
+  border-left: 1px solid var(--zuik-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+}
+
+.zuik-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--zuik-border);
+  flex-shrink: 0;
+}
+
+.zuik-chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--zuik-text);
+}
+
+.zuik-chat-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--zuik-text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.zuik-chat-close:hover {
+  background: var(--zuik-surface-2);
+  color: var(--zuik-text);
+}
+
+.zuik-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.zuik-chat-msg { display: flex; }
+.zuik-chat-msg-user { justify-content: flex-end; }
+.zuik-chat-msg-assistant { justify-content: flex-start; }
+.zuik-chat-msg-system { justify-content: center; }
+
+.zuik-chat-system {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(249,115,22,0.08);
+  border: 1px solid rgba(249,115,22,0.2);
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  color: var(--zuik-text-muted);
+  line-height: 1.5;
+}
+.zuik-chat-system svg { flex-shrink: 0; margin-top: 2px; color: var(--zuik-orange); }
+
+.zuik-chat-bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.zuik-chat-bubble-user {
+  background: var(--zuik-orange);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.zuik-chat-bubble-assistant {
+  background: var(--zuik-surface-2);
+  color: var(--zuik-text);
+  border-bottom-left-radius: 4px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.zuik-chat-bubble-assistant.error {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  color: var(--zuik-error);
+}
+.zuik-chat-bubble-assistant p { margin: 0; }
+
+.zuik-chat-intent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 5px 10px;
+  background: rgba(249,115,22,0.12);
+  border: 1px solid rgba(249,115,22,0.25);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--zuik-orange-light);
+}
+.zuik-chat-confidence {
+  color: var(--zuik-text-dim);
+  margin-left: 4px;
+}
+
+.zuik-chat-typing {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+.zuik-chat-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--zuik-text-dim);
+  animation: chatTyping 1.2s ease-in-out infinite;
+}
+.zuik-chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+.zuik-chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes chatTyping {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+.zuik-chat-templates {
+  padding: 8px 16px 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px solid var(--zuik-border);
+}
+
+.zuik-chat-template-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 16px;
+  border: 1px solid var(--zuik-border);
+  background: transparent;
+  color: var(--zuik-text-muted);
+  font-size: 0.75rem;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.zuik-chat-template-btn:hover {
+  border-color: var(--zuik-orange);
+  color: var(--zuik-orange-light);
+  background: rgba(249,115,22,0.08);
+}
+
+.zuik-chat-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(234,179,8,0.08);
+  border-top: 1px solid rgba(234,179,8,0.2);
+  font-size: 0.75rem;
+  color: var(--zuik-warning);
+}
+.zuik-chat-warning code {
+  background: rgba(234,179,8,0.15);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.6875rem;
+}
+
+.zuik-chat-input-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--zuik-border);
+  flex-shrink: 0;
+}
+
+.zuik-chat-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--zuik-bg);
+  border: 1px solid var(--zuik-border);
+  border-radius: 8px;
+  color: var(--zuik-text);
+  font-size: 0.8125rem;
+  font-family: var(--font-sans);
+  outline: none;
+}
+.zuik-chat-input:focus { border-color: var(--zuik-orange); }
+.zuik-chat-input::placeholder { color: var(--zuik-text-dim); }
+
+.zuik-chat-mic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--zuik-border);
+  background: transparent;
+  color: var(--zuik-text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.zuik-chat-mic:hover {
+  border-color: var(--zuik-text-dim);
+  color: var(--zuik-text);
+  background: var(--zuik-surface-2);
+}
+.zuik-chat-mic.active {
+  border-color: var(--zuik-error);
+  color: var(--zuik-error);
+  background: rgba(239,68,68,0.1);
+  animation: micPulse 1.5s ease-in-out infinite;
+}
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+
+.zuik-chat-send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: none;
+  background: var(--zuik-orange);
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.zuik-chat-send:hover { background: var(--zuik-orange-dark); }
+.zuik-chat-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

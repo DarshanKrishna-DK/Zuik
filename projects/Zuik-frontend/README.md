@@ -1,76 +1,121 @@
-# Zuik-frontend
+# Zuik Frontend
 
-This starter React project has been generated using AlgoKit. See below for default getting started instructions.
+The React web application for Zuik. This is the visual interface where users build, configure, and execute DeFi workflows on Algorand.
 
-# Setup
+---
 
-### Initial Setup
+## What This Project Contains
 
-#### 1. Clone the Repository
-Start by cloning this repository to your local machine.
+| Folder | Description |
+|:-------|:------------|
+| `src/pages/` | Landing page, Builder (main workflow editor), Dashboard, Settings |
+| `src/components/flow/` | Visual flow components: nodes, sidebar, execution log, chat panel |
+| `src/components/layout/` | Navigation bar and wallet connection |
+| `src/lib/` | Block registry (30 blocks), flow execution engine, intent materializer |
+| `src/services/` | Algorand transaction services, Saber Money API, AI intent parser |
+| `src/utils/` | Network configuration helpers |
 
-#### 2. Install Pre-requisites
-Ensure the following pre-requisites are installed and properly configured:
+---
 
-- **npm**: Node package manager. Install from [Node.js Installation Guide](https://nodejs.org/en/download/). Verify with `npm -v` to see version `18.12`+.
-- **AlgoKit CLI**: Essential for project setup and operations. Install the latest version from [AlgoKit CLI Installation Guide](https://github.com/algorandfoundation/algokit-cli#install). Verify installation with `algokit --version`, expecting `2.0.0` or later.
+## Setup
 
-#### 3. Bootstrap Your Local Environment
-Run the following commands within the project folder:
+### Requirements
 
-- **Install Project Dependencies**: With `algokit project bootstrap all`, ensure all dependencies are ready.
+- **Node.js** 20 or later ([nodejs.org](https://nodejs.org))
+- **npm** 9 or later (comes with Node.js)
 
-### Development Workflow
+### Install Dependencies
 
-#### Terminal
-Directly manage and interact with your project using AlgoKit commands:
+```bash
+npm install
+```
 
-1. **Build Contracts**: `algokit project run build` builds react web app and links with smart contracts in workspace, if any.
-2. Remaining set of command for linting, testing and deployment can be found in respective [package.json](./package.json) file and [.algokit.toml](./.algokit.toml) files.
+### Configure Environment
 
-#### VS Code
-For a seamless experience with breakpoint debugging and other features:
+Copy the template and fill in your API keys:
 
-1. **Open Project**: In VS Code, open the repository root.
-2. **Install Extensions**: Follow prompts to install recommended extensions.
-3. **Debugging**:
-   - Use `F5` to start debugging.
-   - **Windows Users**: Select the Python interpreter at `./.venv/Scripts/python.exe` via `Ctrl/Cmd + Shift + P` > `Python: Select Interpreter` before the first run.
+```bash
+cp .env.template .env
+```
 
-#### Other IDEs
-While primarily optimized for VS Code, Jetbrains WebStorm has base support for this project:
+Open `.env` and set these values:
 
-1. **Open Project**: In your JetBrains IDE, open the repository root.
-2. **Automatic Setup**: The IDE should configure the Python interpreter and virtual environment.
-3. **Debugging**: Use `Shift+F10` or `Ctrl+R` to start debugging. Note: Windows users may encounter issues with pre-launch tasks due to a known bug. See [JetBrains forums](https://youtrack.jetbrains.com/issue/IDEA-277486/Shell-script-configuration-cannot-run-as-before-launch-task) for workarounds.
+| Variable | Required | Where to Get It |
+|:---------|:---------|:----------------|
+| `VITE_GROQ_API_KEY` | Yes (for AI assistant) | Free at [console.groq.com/keys](https://console.groq.com/keys) |
+| `VITE_SABER_CLIENT_ID` | Optional | From Saber Money representative |
+| `VITE_SABER_CLIENT_SECRET` | Optional | From Saber Money representative |
 
-## AlgoKit Workspaces and Project Management
-This project supports both standalone and monorepo setups through AlgoKit workspaces. Leverage [`algokit project run`](https://github.com/algorandfoundation/algokit-cli/blob/main/docs/features/project/run.md) commands for efficient monorepo project orchestration and management across multiple projects within a workspace.
+The Algorand TestNet node URLs are pre-filled and work out of the box.
 
-> Please note, by default frontend is pre configured to run against Algorand LocalNet. If you want to run against TestNet or MainNet, comment out the current environment variable and uncomment the relevant one in [`.env`](.env) file that is created after running bootstrap command and based on [`.env.template`](.env.template).
+### Run the Development Server
 
-# Algorand Wallet integrations
+```bash
+npm run dev
+```
 
-The template comes with [`use-wallet`](https://github.com/txnlab/use-wallet) integration, which provides a React hook for connecting to an Algorand wallet providers. The following wallet providers are included by default:
-- LocalNet:
-- - [KMD/Local Wallet](https://github.com/TxnLab/use-wallet#kmd-algorand-key-management-daemon) - Algorand's Key Management Daemon (KMD) is a service that manages Algorand private keys and signs transactions. Works best with AlgoKit LocalNet and allows you to easily test and interact with your dApps locally.
-- TestNet and others:
-- - [Pera Wallet](https://perawallet.app).
-- - [Defly Wallet](https://defly.app).
-- - [Exodus Wallet](https://www.exodus.com).
-- - [Daffi Wallet](https://www.daffi.me).
+Open **http://localhost:5173** in your browser.
 
-Refer to official [`use-wallet`](https://github.com/txnlab/use-wallet) documentation for detailed guidelines on how to integrate with other wallet providers (such as WalletConnect v2). Too see implementation details on the use wallet hook and initialization of extra wallet providers refer to [`App.tsx`](./src/App.tsx).
+### Build for Production
 
-# Tools
+```bash
+npm run build
+```
 
-This project makes use of React and Tailwind to provider a base project configuration to develop frontends for your Algorand dApps and interactions with smart contracts. The following tools are in use:
+The output goes to the `dist/` folder.
 
-- [AlgoKit Utils](https://github.com/algorandfoundation/algokit-utils-ts) - Various TypeScript utilities to simplify interactions with Algorand and AlgoKit.
-- [React](https://reactjs.org/) - A JavaScript library for building user interfaces.
-- [use-wallet](https://github.com/txnlab/use-wallet) - A React hook for connecting to an Algorand wallet providers.
-- [npm](https://www.npmjs.com/): Node.js package manager
-It has also been configured to have a productive dev experience out of the box in [VS Code](https://code.visualstudio.com/), see the [.vscode](./.vscode) folder.
-# Integrating with smart contracts and application clients
+---
 
-Refer to the detailed guidance on [integrating with smart contracts and application clients](./src/contracts/README.md). In essence, for any smart contract codebase generated with AlgoKit or other tools that produce compile contracts into ARC34 compliant app specifications, you can use the `algokit generate` command to generate TypeScript or Python typed client. Once generated simply drag and drop the generated client into `./src/contracts` and import it into your React components as you see fit.
+## Switching Between Networks
+
+The `.env` file has three sections: TestNet, LocalNet, and MainNet. Only one should be uncommented at a time.
+
+**To use LocalNet:**
+1. Make sure Docker is running
+2. Start the local network: `algokit localnet start`
+3. Comment out the TestNet section in `.env`
+4. Uncomment the LocalNet section
+5. Restart the dev server
+
+**To use TestNet (default):**
+- The TestNet section is active by default using [Nodely](https://nodely.io) free tier nodes
+- No signup or API key is needed for the Algorand node
+
+---
+
+## Wallet Setup
+
+On TestNet, the following wallets are supported:
+
+- [Pera Wallet](https://perawallet.app)
+- [Defly Wallet](https://defly.app)
+- [Exodus Wallet](https://www.exodus.com)
+
+On LocalNet, the KMD (Key Management Daemon) wallet is used automatically.
+
+> For TestNet, you need test ALGO. Get free TestNet ALGO from the [Algorand Dispenser](https://dispenser.testnet.aws.algodev.network/).
+
+---
+
+## Available Scripts
+
+| Command | What It Does |
+|:--------|:-------------|
+| `npm run dev` | Starts the development server on port 5173 |
+| `npm run build` | Compiles TypeScript and builds for production |
+| `npm run preview` | Previews the production build locally |
+
+---
+
+## Key Technologies
+
+| Technology | Purpose |
+|:-----------|:--------|
+| [React](https://react.dev) 18 | UI framework |
+| [Vite](https://vitejs.dev) 5 | Build tool and dev server |
+| [TypeScript](https://www.typescriptlang.org) | Type safety |
+| [@xyflow/react](https://reactflow.dev) | Visual flow editor (drag and drop canvas) |
+| [@txnlab/use-wallet](https://github.com/TxnLab/use-wallet) | Algorand wallet integration |
+| [AlgoKit Utils](https://github.com/algorandfoundation/algokit-utils-ts) | Algorand SDK utilities |
+| [Lucide React](https://lucide.dev) | Icon library |
+| [notistack](https://notistack.com) | Toast notifications |

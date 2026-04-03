@@ -21,6 +21,7 @@ import GenericNode from '../components/flow/GenericNode'
 import TransactionPanel from '../components/flow/TransactionPanel'
 import AgentControls from '../components/flow/AgentControls'
 import ExecutionLog from '../components/flow/ExecutionLog'
+import ChatPanel from '../components/flow/ChatPanel'
 import { getBlockById } from '../lib/blockRegistry'
 import { isValidConnection } from '../lib/connectionValidator'
 import { saveFlowToLocal, loadFlowFromLocal, exportFlowJSON, importFlowJSON } from '../lib/flowSerializer'
@@ -35,7 +36,9 @@ import {
   runFlowOnce,
 } from '../lib/runAgent'
 import { getAlgorandClient } from '../services/algorand'
-import { Save, Download, Upload, Trash2 } from 'lucide-react'
+import { materializeIntent, addNodesToCanvas } from '../lib/intentMaterializer'
+import type { ParsedIntent } from '../services/intentParser'
+import { Save, Download, Upload, Trash2, Sparkles } from 'lucide-react'
 
 const nodeTypes = { generic: GenericNode }
 
@@ -49,6 +52,7 @@ export default function Builder() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [transactionPanelOpen, setTransactionPanelOpen] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const [agentStatus, setAgentStatus] = useState<AgentStatus>('idle')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const agentHandleRef = useRef<AgentHandle | null>(null)
@@ -205,6 +209,17 @@ export default function Builder() {
     }
   }, [nodes, edges, transactionSigner, activeAddress, addLog, updateNodeStatus])
 
+  const handleIntentParsed = useCallback((intent: ParsedIntent) => {
+    const materialized = materializeIntent(intent)
+    const merged = addNodesToCanvas(nodes, edges, materialized.nodes, materialized.edges)
+    setNodes(merged.nodes)
+    setEdges(merged.edges)
+
+    setTimeout(() => {
+      rfInstance.current?.fitView({ padding: 0.2, duration: 500 })
+    }, 100)
+  }, [nodes, edges, setNodes, setEdges])
+
   const handleSave = () => saveFlowToLocal(nodes, edges)
 
   const handleExport = () => {
@@ -273,6 +288,10 @@ export default function Builder() {
             logCount={logs.length}
           />
           <div className="zuik-agent-separator" />
+          <button className="zuik-btn zuik-btn-primary zuik-btn-sm" onClick={() => setChatOpen((o) => !o)} title="AI Intent Assistant">
+            <Sparkles size={14} /> AI
+          </button>
+          <div className="zuik-agent-separator" />
           <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleSave} title="Save"><Save size={14} /> Save</button>
           <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleExport} title="Export"><Download size={14} /> Export</button>
           <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={handleImport} title="Import"><Upload size={14} /> Import</button>
@@ -289,6 +308,11 @@ export default function Builder() {
           onClose={() => setLogOpen(false)}
           logs={logs}
           onClear={() => setLogs([])}
+        />
+        <ChatPanel
+          isOpen={chatOpen}
+          onClose={() => setChatOpen(false)}
+          onIntentParsed={handleIntentParsed}
         />
         <ReactFlow
           nodes={nodes}

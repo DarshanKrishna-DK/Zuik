@@ -5,6 +5,11 @@ import { createAsa } from './createAsa'
 import { optInToAsa } from './optInAsa'
 import { sendPayment } from './sendPayment'
 import { executeSwap, getSwapQuote } from './swapToken'
+import {
+  generateOnRampWidgetUrl,
+  initiateSellTransaction,
+  getFiatBuyQuote,
+} from './saberMoney'
 
 export interface ExecutorContext {
   sender: string
@@ -202,6 +207,112 @@ async function executeLogDebug(
   return { passthrough: config }
 }
 
+async function executeFiatOnRamp(
+  config: BlockConfig,
+): Promise<Record<string, unknown>> {
+  const userId = config.userId as string
+  const walletAddress = config.walletAddress as string
+  const fiatAmount = config.fiatAmount as number | undefined
+  const fiatCurrency = (config.fiatCurrency as string) || 'INR'
+  const cryptoSymbol = (config.cryptoSymbol as string) || 'USDT'
+  const network = (config.network as string) || 'ALGORAND'
+
+  if (!userId || !walletAddress) {
+    throw new Error('Fiat On-Ramp: userId and walletAddress are required')
+  }
+
+  const result = await generateOnRampWidgetUrl({
+    userId,
+    walletAddress,
+    fiatAmount: fiatAmount ? Number(fiatAmount) : undefined,
+    fiatCurrency,
+    cryptoSymbol,
+    network,
+  })
+
+  if (!result.success || !result.url) {
+    throw new Error(`Fiat On-Ramp: ${result.error || 'Failed to generate widget URL'}`)
+  }
+
+  window.open(result.url, '_blank', 'noopener,noreferrer')
+
+  return {
+    widgetUrl: result.url,
+    transactionId: new URL(result.url).searchParams.get('transaction_id') || '',
+    fiatAmount: fiatAmount ?? 0,
+    fiatCurrency,
+  }
+}
+
+async function executeFiatOffRamp(
+  config: BlockConfig,
+): Promise<Record<string, unknown>> {
+  const userId = config.userId as string
+  const sourceId = config.sourceId as string
+  const fiatAmount = config.fiatAmount as number | undefined
+  const fiatCurrency = (config.fiatCurrency as string) || 'INR'
+  const cryptoSymbol = (config.cryptoSymbol as string) || 'USDT'
+  const paymentMethod = (config.paymentMethod as string) || 'bank_transfer'
+
+  if (!userId || !sourceId) {
+    throw new Error('Fiat Off-Ramp: userId and sourceId (bank account) are required')
+  }
+
+  const result = await initiateSellTransaction({
+    userId,
+    sourceId,
+    fiatSymbol: fiatCurrency,
+    cryptoSymbol,
+    fiatAmount: fiatAmount ? Number(fiatAmount) : undefined,
+    paymentMethod,
+  })
+
+  if (!result.success) {
+    throw new Error(`Fiat Off-Ramp: ${result.error || 'Sell transaction failed'}`)
+  }
+
+  return {
+    transactionId: result.transactionId ?? '',
+    status: result.status ?? 'CREATED',
+    exchangeRate: result.exchangeRate ?? 0,
+    fiatAmount: fiatAmount ?? 0,
+  }
+}
+
+async function executeFiatQuote(
+  config: BlockConfig,
+): Promise<Record<string, unknown>> {
+  const userId = config.userId as string
+  const fromCurrency = (config.fromCurrency as string) || 'INR'
+  const toCurrency = (config.toCurrency as string) || 'USDT'
+  const amount = config.amount as number
+  const network = (config.network as string) || 'ALGORAND'
+
+  if (!userId || amount == null) {
+    throw new Error('Fiat Price Quote: userId and amount are required')
+  }
+
+  const result = await getFiatBuyQuote({
+    fromCurrency,
+    toCurrency,
+    network,
+    fromAmount: Number(amount),
+    userId,
+  })
+
+  if (!result.success || !result.quote) {
+    throw new Error(`Fiat Price Quote: ${result.error || 'Quote fetch failed'}`)
+  }
+
+  return {
+    fromAmount: result.quote.fromAmount,
+    toAmount: result.quote.toAmount,
+    exchangeRate: result.quote.finalPrice,
+    totalFee: result.quote.totalFee,
+    feeBreakup: result.quote.feeBreakup,
+  }
+}
+
 export const blockExecutors: Record<string, BlockExecutor> = {
   'send-payment': executeSendPayment,
   'opt-in-asa': executeOptInAsa,
@@ -210,6 +321,9 @@ export const blockExecutors: Record<string, BlockExecutor> = {
   'get-quote': executeGetQuote,
   'webhook-action': executeWebhookAction,
   'log-debug': executeLogDebug,
+  'fiat-onramp': executeFiatOnRamp,
+  'fiat-offramp': executeFiatOffRamp,
+  'fiat-quote': executeFiatQuote,
 }
 
 export const ACTION_BLOCK_IDS = Object.keys(blockExecutors)

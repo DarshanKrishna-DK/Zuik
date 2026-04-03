@@ -1,101 +1,126 @@
-# Zuik-contracts
+# Zuik Contracts
 
-This project has been generated using AlgoKit. See below for default getting started instructions.
+Algorand smart contracts for the Zuik platform, written in [Algorand Python](https://github.com/algorandfoundation/puya) and compiled to TEAL bytecode using the Puya compiler.
 
-# Setup
+---
 
-### Pre-requisites
+## Setup
 
-- [Python 3.12](https://www.python.org/downloads/) or later
-- [Docker](https://www.docker.com/) (only required for LocalNet)
+### Requirements
 
-> For interactive tour over the codebase, download [vsls-contrib.codetour](https://marketplace.visualstudio.com/items?itemName=vsls-contrib.codetour) extension for VS Code, then open the [`.codetour.json`](./.tours/getting-started-with-your-algokit-project.tour) file in code tour extension.
+- **Python** 3.12 or later ([python.org](https://www.python.org/downloads/))
+- **Poetry** 1.2 or later ([python-poetry.org](https://python-poetry.org/docs/#installation))
+- **AlgoKit CLI** 2.0 or later ([install guide](https://github.com/algorandfoundation/algokit-cli#install))
+- **Docker** (only needed for LocalNet) ([docker.com](https://www.docker.com/))
 
-### Initial Setup
+### Install Dependencies
 
-#### 1. Clone the Repository
-Start by cloning this repository to your local machine.
+```bash
+algokit project bootstrap all
+```
 
-#### 2. Install Pre-requisites
-Ensure the following pre-requisites are installed and properly configured:
+This installs all Python dependencies and sets up a virtual environment in `.venv/`.
 
-- **Docker**: Required for running a local Algorand network. [Install Docker](https://www.docker.com/).
-- **AlgoKit CLI**: Essential for project setup and operations. Install the latest version from [AlgoKit CLI Installation Guide](https://github.com/algorandfoundation/algokit-cli#install). Verify installation with `algokit --version`, expecting `2.0.0` or later.
+---
 
-#### 3. Bootstrap Your Local Environment
-Run the following commands within the project folder:
+## Creating a Smart Contract
 
-- **Install Poetry**: Required for Python dependency management. [Installation Guide](https://python-poetry.org/docs/#installation). Verify with `poetry -V` to see version `1.2`+.
-- **Setup Project**: Execute `algokit project bootstrap all` to install dependencies and setup a Python virtual environment in `.venv`.
-- **Configure environment**: Execute `algokit generate env-file -a target_network localnet` to create a `.env.localnet` file with default configuration for `localnet`.
-- **Start LocalNet**: Use `algokit localnet start` to initiate a local Algorand network.
+To add a new contract to the project:
 
-### Development Workflow
+```bash
+algokit generate smart-contract
+```
 
-#### Terminal
-Directly manage and interact with your project using AlgoKit commands:
+This creates a new folder under `smart_contracts/` with:
+- `contract.py` — your contract logic
+- `deploy_config.py` — deployment configuration
 
-1. **Build Contracts**: `algokit project run build` compiles all smart contracts. You can also specify a specific contract by passing the name of the contract folder as an extra argument.
-   For example: `algokit project run build -- your_contract` will only build the `your_contract` contract.
-2. **Deploy**: Use `algokit project deploy localnet` to deploy contracts to the local network. You can also specify a specific contract by passing the name of the contract folder as an extra argument.
-   For example: `algokit project deploy localnet -- your_contract` will only deploy the `your_contract` contract.
+---
 
-#### VS Code 
-For a seamless experience with breakpoint debugging and other features:
+## Build
 
-1. **Open Project**: In VS Code, open the repository root.
-2. **Install Extensions**: Follow prompts to install recommended extensions.
-3. **Debugging**:
-   - Use `F5` to start debugging.
-   - **Windows Users**: Select the Python interpreter at `./.venv/Scripts/python.exe` via `Ctrl/Cmd + Shift + P` > `Python: Select Interpreter` before the first run.
+Compile all smart contracts:
 
-#### JetBrains IDEs
-While primarily optimized for VS Code, JetBrains IDEs are supported:
+```bash
+algokit project run build
+```
 
-1. **Open Project**: In your JetBrains IDE, open the repository root.
-2. **Automatic Setup**: The IDE should configure the Python interpreter and virtual environment.
-3. **Debugging**: Use `Shift+F10` or `Ctrl+R` to start debugging. Note: Windows users may encounter issues with pre-launch tasks due to a known bug. See [JetBrains forums](https://youtrack.jetbrains.com/issue/IDEA-277486/Shell-script-configuration-cannot-run-as-before-launch-task) for workarounds.
+Build a specific contract only:
 
-## AlgoKit Workspaces and Project Management
-This project supports both standalone and monorepo setups through AlgoKit workspaces. Leverage [`algokit project run`](https://github.com/algorandfoundation/algokit-cli/blob/main/docs/features/project/run.md) commands for efficient monorepo project orchestration and management across multiple projects within a workspace.
+```bash
+algokit project run build -- your_contract_name
+```
 
-## AlgoKit Generators
+Compiled output (TEAL files, ARC-56 app specs, and typed clients) goes to `smart_contracts/artifacts/`.
 
-This template provides a set of [algokit generators](https://github.com/algorandfoundation/algokit-cli/blob/main/docs/features/generate.md) that allow you to further modify the project instantiated from the template to fit your needs, as well as giving you a base to build your own extensions to invoke via the `algokit generate` command.
+---
 
-### Generate Smart Contract 
+## Deploy
 
-To add a new smart contract to Zuik-contracts:
+### To LocalNet
 
-1. From the root of this project execute `algokit generate smart-contract`. This creates a new starter contract and deployment configuration under `smart_contracts/{your_contract_name}/` (e.g. `contract.py` and `deploy_config.py`).
-2. Define your deployment logic in `deploy_config.py` for that contract.
-3. The build system in `smart_contracts/__main__.py` discovers all folders under `smart_contracts/` that contain a `contract.py` and builds them. Use `algokit project run build` to compile all contracts (or pass a contract name to build only one).
+1. Make sure Docker is running
+2. Start LocalNet: `algokit localnet start`
+3. Deploy:
 
-> Please note, above is just a suggested convention tailored for the base configuration and structure of this template. The default code supplied by the template in `config.py` and `index.ts` (if using ts clients) files are tailored for the suggested convention. You are free to modify the structure and naming conventions as you see fit.
+```bash
+algokit project deploy localnet
+```
 
-### Generate '.env' files
+### To TestNet
 
-By default the template instance does not contain any env files. Using [`algokit project deploy`](https://github.com/algorandfoundation/algokit-cli/blob/main/docs/features/project/deploy.md) against `localnet` | `testnet` | `mainnet` will use default values for `algod` and `indexer` unless overwritten via `.env` or `.env.{target_network}`. 
+1. Create a `.env.testnet` file (this file is git-ignored):
 
-To generate a new `.env` or `.env.{target_network}` file, run `algokit generate env-file`
+```
+ALGOD_TOKEN=
+ALGOD_SERVER=https://testnet-api.4160.nodely.dev
+ALGOD_PORT=443
+INDEXER_TOKEN=
+INDEXER_SERVER=https://testnet-idx.4160.nodely.dev
+INDEXER_PORT=443
+DEPLOYER_MNEMONIC=your twenty five word mnemonic here
+```
 
-### Debugging Smart Contracts
+2. Deploy:
 
-This project is optimized to work with AlgoKit AVM Debugger extension. To activate it:
-Refer to the commented header in the `__main__.py` file in the `smart_contracts` folder.
+```bash
+algokit project deploy testnet
+```
 
-If you have opted in to include VSCode launch configurations in your project, you can also use the `Debug TEAL via AlgoKit AVM Debugger` launch configuration to interactively select an available trace file and launch the debug session for your smart contract.
+> Your deployer account needs TestNet ALGO. Get free TestNet ALGO from the [Algorand Dispenser](https://dispenser.testnet.aws.algodev.network/).
 
-For information on using and setting up the `AlgoKit AVM Debugger` VSCode extension refer [here](https://github.com/algorandfoundation/algokit-avm-vscode-debugger). To install the extension from the VSCode Marketplace, use the following link: [AlgoKit AVM Debugger extension](https://marketplace.visualstudio.com/items?itemName=algorandfoundation.algokit-avm-vscode-debugger).
+---
 
-# Tools
+## Project Structure
 
-This project makes use of Algorand Python to build Algorand smart contracts. The following tools are in use:
+```
+smart_contracts/
+├── __main__.py            Build and deploy entrypoint
+├── __init__.py
+├── your_contract/         One folder per contract
+│   ├── contract.py        Contract logic (Algorand Python)
+│   └── deploy_config.py   Deployment configuration
+└── artifacts/             Compiled output (auto-generated)
+    └── your_contract/
+        ├── *.approval.teal
+        ├── *.clear.teal
+        ├── *.arc56.json
+        └── *_client.py
+```
 
-- [Algorand](https://www.algorand.com/) - Layer 1 Blockchain; [Developer portal](https://dev.algorand.co/), [Why Algorand?](https://dev.algorand.co/getting-started/why-algorand/)
-- [AlgoKit](https://github.com/algorandfoundation/algokit-cli) - One-stop shop tool for developers building on the Algorand network; [docs](https://github.com/algorandfoundation/algokit-cli/blob/main/docs/algokit.md), [intro tutorial](https://github.com/algorandfoundation/algokit-cli/blob/main/docs/tutorials/intro.md)
-- [Algorand Python](https://github.com/algorandfoundation/puya) - A semantically and syntactically compatible, typed Python language that works with standard Python tooling and allows you to express smart contracts (apps) and smart signatures (logic signatures) for deployment on the Algorand Virtual Machine (AVM); [docs](https://github.com/algorandfoundation/puya), [examples](https://github.com/algorandfoundation/puya/tree/main/examples)
-- [AlgoKit Utils](https://github.com/algorandfoundation/algokit-utils-py) - A set of core Algorand utilities that make it easier to build solutions on Algorand.
-- [Poetry](https://python-poetry.org/): Python packaging and dependency management.
-It has also been configured to have a productive dev experience out of the box in [VS Code](https://code.visualstudio.com/), see the [.vscode](./.vscode) folder.
+---
 
+## Debugging
+
+This project supports the [AlgoKit AVM Debugger](https://marketplace.visualstudio.com/items?itemName=algorandfoundation.algokit-avm-vscode-debugger) VS Code extension. Trace files are generated during deployment and can be inspected interactively.
+
+---
+
+## Tools Used
+
+| Tool | Purpose |
+|:-----|:--------|
+| [Algorand Python](https://github.com/algorandfoundation/puya) | Smart contract language |
+| [AlgoKit CLI](https://github.com/algorandfoundation/algokit-cli) | Build, deploy, and manage contracts |
+| [AlgoKit Utils (Python)](https://github.com/algorandfoundation/algokit-utils-py) | Deployment and interaction utilities |
+| [Poetry](https://python-poetry.org) | Python dependency management |
