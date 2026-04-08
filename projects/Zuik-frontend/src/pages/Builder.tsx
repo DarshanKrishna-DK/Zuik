@@ -38,7 +38,7 @@ import {
 import { getAlgorandClient } from '../services/algorand'
 import { materializeIntent, addNodesToCanvas } from '../lib/intentMaterializer'
 import type { ParsedIntent } from '../services/intentParser'
-import { Save, Download, Upload, Trash2, Sparkles } from 'lucide-react'
+import { Save, Download, Upload, Trash2, Sparkles, Zap } from 'lucide-react'
 
 const nodeTypes = { generic: GenericNode }
 
@@ -261,6 +261,17 @@ export default function Builder() {
     setAgentStatus('idle')
   }
 
+  const handleHighlightNode = useCallback((nodeId: string) => {
+    setNodes((nds) => nds.map((n) => ({
+      ...n,
+      selected: n.id === nodeId,
+    })))
+    const node = nodes.find((n) => n.id === nodeId)
+    if (node && rfInstance.current) {
+      rfInstance.current.setCenter(node.position.x + 140, node.position.y + 60, { zoom: 1.2, duration: 400 })
+    }
+  }, [nodes, setNodes])
+
   const minimapNodeColor = useMemo(() => {
     return (node: Node) => {
       const blockId = (node.data as Record<string, unknown>)?.blockId as string
@@ -288,6 +299,9 @@ export default function Builder() {
             logCount={logs.length}
           />
           <div className="zuik-agent-separator" />
+          <button className="zuik-btn zuik-btn-primary zuik-btn-sm" onClick={() => setTransactionPanelOpen(true)} title="Simulate and Execute">
+            <Zap size={14} /> Execute
+          </button>
           <button className="zuik-btn zuik-btn-primary zuik-btn-sm" onClick={() => setChatOpen((o) => !o)} title="AI Intent Assistant">
             <Sparkles size={14} /> AI
           </button>
@@ -302,6 +316,7 @@ export default function Builder() {
           onClose={() => setTransactionPanelOpen(false)}
           nodes={nodes}
           edges={edges}
+          onHighlightNode={handleHighlightNode}
         />
         <ExecutionLog
           isOpen={logOpen}

@@ -837,3 +837,206 @@ body {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ===== Simulation / Transaction Panel ===== */
+.sim-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--zuik-border);
+  flex-shrink: 0;
+}
+
+.sim-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+}
+
+.sim-spinner {
+  animation: spin 0.8s linear infinite;
+  color: var(--zuik-orange);
+}
+
+.sim-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--zuik-border);
+}
+
+.sim-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--zuik-text-muted);
+  margin-bottom: 10px;
+}
+
+.sim-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+.sim-warning:last-child { margin-bottom: 0; }
+
+.sim-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sim-step {
+  padding: 10px 12px;
+  background: var(--zuik-surface-2);
+  border-radius: 8px;
+  border: 1px solid var(--zuik-border);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.sim-step:hover { border-color: var(--zuik-text-dim); }
+.sim-step.running { border-color: var(--zuik-info); background: rgba(59,130,246,0.05); }
+.sim-step.success { border-color: var(--zuik-success); background: rgba(34,197,94,0.05); }
+.sim-step.error { border-color: var(--zuik-error); background: rgba(239,68,68,0.05); }
+.sim-step.skipped { opacity: 0.5; }
+
+.sim-step-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sim-step-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.sim-step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--zuik-border);
+  color: var(--zuik-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.sim-step-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sim-step-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--zuik-text);
+  margin-bottom: 2px;
+}
+
+.sim-step-desc {
+  font-size: 0.75rem;
+  color: var(--zuik-text-muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.sim-step-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: var(--zuik-text-dim);
+}
+
+.sim-step-fee {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--zuik-text-dim);
+  white-space: nowrap;
+}
+
+.sim-step-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--zuik-border);
+}
+
+.sim-tx-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--zuik-success);
+  text-decoration: none;
+}
+.sim-tx-link:hover { text-decoration: underline; }
+
+.sim-step-error {
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.sim-error-msg {
+  color: var(--zuik-error);
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+.sim-error-fix {
+  color: var(--zuik-text-muted);
+  padding: 8px 10px;
+  background: rgba(249,115,22,0.06);
+  border: 1px solid rgba(249,115,22,0.15);
+  border-radius: 6px;
+}
+.sim-error-fix strong {
+  color: var(--zuik-orange-light);
+}
+
+.sim-error-box {
+  padding: 12px;
+  background: rgba(239,68,68,0.06);
+  border: 1px solid rgba(239,68,68,0.15);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  color: var(--zuik-error);
+  line-height: 1.5;
+}
+.sim-error-box .sim-error-fix {
+  margin-top: 10px;
+  color: var(--zuik-text-muted);
+}
+
+.sim-panel-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--zuik-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.sim-fee-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
