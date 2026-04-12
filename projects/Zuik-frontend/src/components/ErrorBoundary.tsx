@@ -1,46 +1,41 @@
-import React, { ReactNode } from 'react'
+import { Component, type ReactNode } from 'react'
 
-interface ErrorBoundaryProps {
-  children: ReactNode
+function AlertTriangleIcon() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+      <path d="M12 9v4" /><path d="M12 17h.01" />
+    </svg>
+  )
 }
 
-interface ErrorBoundaryState {
-  hasError: boolean
-  error: Error | null
-}
+interface Props { children: ReactNode; fallback?: ReactNode }
+interface State { hasError: boolean; error: Error | null }
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props)
-    this.state = { hasError: false, error: null }
+export default class ErrorBoundary extends Component<Props, State> {
+  state: State = { hasError: false, error: null }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error }
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // Update state so the next render will show the fallback UI.
-    return { hasError: true, error: error }
-  }
-
-  render(): ReactNode {
+  render() {
     if (this.state.hasError) {
-      // You can render any custom fallback UI
+      if (this.props.fallback) return this.props.fallback
       return (
-        <div className="hero min-h-screen bg-teal-400">
-          <div className="hero-content text-center rounded-lg p-6 max-w-md bg-white mx-auto">
-            <div className="max-w-md">
-              <h1 className="text-4xl">Error occured</h1>
-              <p className="py-6">
-                {this.state.error?.message.includes('Attempt to get default algod configuration')
-                  ? 'Please make sure to set up your environment variables correctly. Create a .env file based on .env.template and fill in the required values. This controls the network and credentials for connections with Algod and Indexer.'
-                  : this.state.error?.message}
-              </p>
-            </div>
-          </div>
+        <div className="zuik-error-boundary">
+          <AlertTriangleIcon />
+          <h3>Something went wrong</h3>
+          <p>{this.state.error?.message || 'An unexpected error occurred.'}</p>
+          <button
+            className="z-btn z-btn-primary"
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            Try Again
+          </button>
         </div>
       )
     }
-
     return this.props.children
   }
 }
-
-export default ErrorBoundary

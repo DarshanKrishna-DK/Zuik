@@ -1,0 +1,19 @@
+{
+  "name": "zuik-agent",
+  "version": "1.0.0",
+  "description": "Zuik local execution agent - monitors prices, evaluates conditions, sends notifications",
+  "type": "module",
+  "scripts": {
+    "start": "tsx agent.ts",
+    "dev": "tsx watch agent.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

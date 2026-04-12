@@ -1,8 +1,4 @@
 import { useWallet } from '@txnlab/use-wallet-react'
-import {
-  X, AlertTriangle, CheckCircle2, XCircle, Shield, RefreshCw, ChevronDown,
-  ChevronUp, ExternalLink, Info, Loader2,
-} from 'lucide-react'
 import { useSnackbar } from 'notistack'
 import { useState, useEffect, useCallback } from 'react'
 import { blockExecutors, getActionBlocksInOrder } from '../../services/blockExecutors'
@@ -18,6 +14,44 @@ import { runSafetyChecks, recordExecution, suggestFix } from '../../services/saf
 import type { SafetyCheckResult } from '../../services/safetyGuards'
 import type { Node, Edge } from '@xyflow/react'
 
+/* ── Inline SVG Icons ─────────────────────────────────────── */
+
+function XIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+}
+function AlertTriangleIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+}
+function CheckCircle2Icon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+}
+function XCircleIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+}
+function ShieldIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+}
+function RefreshCwIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+}
+function ChevronDownIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+}
+function ChevronUpIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+}
+function ExternalLinkIcon() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+}
+function InfoIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+}
+function Loader2Icon({ size = 24 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sim-spinner"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+}
+
+/* ── Helpers ───────────────────────────────────────────────── */
+
 const PERA_EXPLORER_TESTNET = 'https://testnet.explorer.perawallet.app/tx'
 
 type PanelPhase = 'loading' | 'review' | 'executing' | 'done' | 'error'
@@ -28,20 +62,24 @@ interface StepResult {
   status: 'pending' | 'running' | 'success' | 'error' | 'skipped'
 }
 
+type WarningIcon = (props: { size?: number }) => JSX.Element
+
 function WarningBadge({ w }: { w: SimulationWarning }) {
-  const colors: Record<string, { bg: string; border: string; text: string; Icon: typeof Info }> = {
-    info: { bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.2)', text: 'var(--zuik-info)', Icon: Info },
-    warning: { bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.2)', text: 'var(--zuik-warning)', Icon: AlertTriangle },
-    error: { bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)', text: 'var(--zuik-error)', Icon: XCircle },
+  const colors: Record<string, { bg: string; border: string; text: string; Icon: WarningIcon }> = {
+    info: { bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.2)', text: 'var(--z-info)', Icon: InfoIcon },
+    warning: { bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.2)', text: 'var(--z-warning)', Icon: AlertTriangleIcon },
+    error: { bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)', text: 'var(--z-error)', Icon: XCircleIcon },
   }
   const c = colors[w.severity] ?? colors.info
   return (
     <div className="sim-warning" style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}>
-      <c.Icon size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+      <c.Icon size={14} />
       <span>{w.message}</span>
     </div>
   )
 }
+
+/* ── Component ─────────────────────────────────────────────── */
 
 export interface TransactionPanelProps {
   isOpen: boolean
@@ -208,8 +246,8 @@ export default function TransactionPanel({
         style={{
           position: 'fixed', top: 0, right: 0,
           width: 'min(440px, 100vw)', height: '100vh',
-          background: 'var(--zuik-surface)',
-          borderLeft: '1px solid var(--zuik-border)',
+          background: 'var(--z-surface)',
+          borderLeft: '1px solid var(--z-border)',
           zIndex: 50, display: 'flex', flexDirection: 'column',
           boxShadow: '-4px 0 24px rgba(0,0,0,0.3)',
           transform: 'translateX(0)', transition: 'transform 0.2s ease',
@@ -218,8 +256,8 @@ export default function TransactionPanel({
         {/* Header */}
         <div className="sim-panel-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Shield size={18} style={{ color: 'var(--zuik-orange)' }} />
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--zuik-text)' }}>
+            <span style={{ color: 'var(--z-accent)' }}><ShieldIcon /></span>
+            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--z-text)' }}>
               {phase === 'loading' && 'Analyzing Flow...'}
               {phase === 'review' && 'Transaction Summary'}
               {phase === 'executing' && 'Executing...'}
@@ -227,8 +265,8 @@ export default function TransactionPanel({
               {phase === 'error' && 'Execution Failed'}
             </h2>
           </div>
-          <button onClick={onClose} className="zuik-btn zuik-btn-ghost zuik-btn-sm" style={{ padding: 6 }} aria-label="Close">
-            <X size={18} />
+          <button onClick={onClose} className="z-btn z-btn-ghost z-btn-sm" style={{ padding: 6 }} aria-label="Close">
+            <XIcon />
           </button>
         </div>
 
@@ -237,8 +275,8 @@ export default function TransactionPanel({
           {/* Loading */}
           {phase === 'loading' && (
             <div className="sim-loading">
-              <Loader2 size={24} className="sim-spinner" />
-              <p style={{ color: 'var(--zuik-text-muted)', fontSize: '0.875rem' }}>
+              <Loader2Icon size={24} />
+              <p style={{ color: 'var(--z-text-muted)', fontSize: '0.875rem' }}>
                 Running safety checks and building simulation...
               </p>
             </div>
@@ -247,8 +285,8 @@ export default function TransactionPanel({
           {/* Safety Errors */}
           {allErrors.length > 0 && (
             <div className="sim-section">
-              <div className="sim-section-title" style={{ color: 'var(--zuik-error)' }}>
-                <XCircle size={14} /> Errors ({allErrors.length})
+              <div className="sim-section-title" style={{ color: 'var(--z-error)' }}>
+                <XCircleIcon size={14} /> Errors ({allErrors.length})
               </div>
               {allErrors.map((w, i) => <WarningBadge key={`err-${i}`} w={w} />)}
             </div>
@@ -257,8 +295,8 @@ export default function TransactionPanel({
           {/* Warnings */}
           {allWarnings.length > 0 && phase !== 'loading' && (
             <div className="sim-section">
-              <div className="sim-section-title" style={{ color: 'var(--zuik-warning)' }}>
-                <AlertTriangle size={14} /> Warnings ({allWarnings.length})
+              <div className="sim-section-title" style={{ color: 'var(--z-warning)' }}>
+                <AlertTriangleIcon size={14} /> Warnings ({allWarnings.length})
               </div>
               {allWarnings.map((w, i) => <WarningBadge key={`warn-${i}`} w={w} />)}
             </div>
@@ -268,7 +306,7 @@ export default function TransactionPanel({
           {simulation && phase !== 'loading' && (
             <div className="sim-section">
               <div className="sim-section-title">
-                <Info size={14} /> Steps ({simulation.steps.length})
+                <InfoIcon size={14} /> Steps ({simulation.steps.length})
               </div>
               <div className="sim-steps">
                 {simulation.steps.map((step) => {
@@ -293,9 +331,9 @@ export default function TransactionPanel({
                           {(!result || result.status === 'pending') && (
                             <span className="sim-step-number">{step.index}</span>
                           )}
-                          {result?.status === 'running' && <Loader2 size={16} className="sim-spinner" />}
-                          {result?.status === 'success' && <CheckCircle2 size={16} style={{ color: 'var(--zuik-success)' }} />}
-                          {result?.status === 'error' && <XCircle size={16} style={{ color: 'var(--zuik-error)' }} />}
+                          {result?.status === 'running' && <Loader2Icon size={16} />}
+                          {result?.status === 'success' && <span style={{ color: 'var(--z-success)' }}><CheckCircle2Icon size={16} /></span>}
+                          {result?.status === 'error' && <span style={{ color: 'var(--z-error)' }}><XCircleIcon size={16} /></span>}
                           {result?.status === 'skipped' && <span className="sim-step-number" style={{ opacity: 0.4 }}>-</span>}
                         </div>
                         <div className="sim-step-content">
@@ -306,7 +344,7 @@ export default function TransactionPanel({
                           {step.fee > 0 && (
                             <span className="sim-step-fee">{formatMicroAlgo(step.fee)} ALGO</span>
                           )}
-                          {hasResult && (isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                          {hasResult && (isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />)}
                         </div>
                       </div>
 
@@ -320,7 +358,7 @@ export default function TransactionPanel({
                               className="sim-tx-link"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <ExternalLink size={12} /> View on Pera Explorer
+                              <ExternalLinkIcon /> View on Pera Explorer
                             </a>
                           )}
                           {result?.error && (
@@ -345,8 +383,8 @@ export default function TransactionPanel({
           {/* Global Error Recovery */}
           {phase === 'error' && globalError && (
             <div className="sim-section">
-              <div className="sim-section-title" style={{ color: 'var(--zuik-error)' }}>
-                <XCircle size={14} /> What went wrong
+              <div className="sim-section-title" style={{ color: 'var(--z-error)' }}>
+                <XCircleIcon size={14} /> What went wrong
               </div>
               <div className="sim-error-box">
                 <p>{globalError}</p>
@@ -362,7 +400,7 @@ export default function TransactionPanel({
           {/* Empty state */}
           {actionBlocks.length === 0 && phase !== 'loading' && (
             <div className="sim-section">
-              <p style={{ color: 'var(--zuik-text-muted)', fontSize: '0.875rem', padding: '0 16px' }}>
+              <p style={{ color: 'var(--z-text-muted)', fontSize: '0.875rem', padding: '0 16px' }}>
                 No action blocks found in this flow. Add blocks like Send Payment, Swap Token, Opt-In ASA, or Create ASA to execute transactions.
               </p>
             </div>
@@ -372,13 +410,12 @@ export default function TransactionPanel({
         {/* Footer */}
         {simulation && phase !== 'loading' && (
           <div className="sim-panel-footer">
-            {/* Fee Summary */}
             {simulation.totalFee > 0 && (
               <div className="sim-fee-summary">
-                <span style={{ color: 'var(--zuik-text-muted)', fontSize: '0.8125rem' }}>Estimated total fees</span>
-                <span style={{ color: 'var(--zuik-text)', fontSize: '0.875rem', fontWeight: 600 }}>
+                <span style={{ color: 'var(--z-text-muted)', fontSize: '0.8125rem' }}>Estimated total fees</span>
+                <span style={{ color: 'var(--z-text)', fontSize: '0.875rem', fontWeight: 600 }}>
                   {formatMicroAlgo(simulation.totalFee)} ALGO
-                  <span style={{ color: 'var(--zuik-text-dim)', fontWeight: 400, marginLeft: 6, fontSize: '0.75rem' }}>
+                  <span style={{ color: 'var(--z-text-dim)', fontWeight: 400, marginLeft: 6, fontSize: '0.75rem' }}>
                     ({microAlgoToUsd(simulation.totalFee)})
                   </span>
                 </span>
@@ -386,7 +423,7 @@ export default function TransactionPanel({
             )}
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={onClose} className="zuik-btn zuik-btn-ghost" style={{ flex: 1 }}>
+              <button onClick={onClose} className="z-btn z-btn-ghost" style={{ flex: 1 }}>
                 {phase === 'done' || phase === 'error' ? 'Close' : 'Cancel'}
               </button>
 
@@ -394,7 +431,7 @@ export default function TransactionPanel({
                 <button
                   onClick={handleExecute}
                   disabled={!canExecute}
-                  className="zuik-btn zuik-btn-primary"
+                  className="z-btn z-btn-primary"
                   style={{ flex: 2 }}
                 >
                   Sign and Execute
@@ -402,20 +439,20 @@ export default function TransactionPanel({
               )}
 
               {phase === 'executing' && (
-                <button disabled className="zuik-btn zuik-btn-primary" style={{ flex: 2 }}>
-                  <Loader2 size={14} className="sim-spinner" /> Executing...
+                <button disabled className="z-btn z-btn-primary" style={{ flex: 2 }}>
+                  <Loader2Icon size={14} /> Executing...
                 </button>
               )}
 
               {phase === 'error' && (
-                <button onClick={handleRetry} className="zuik-btn zuik-btn-primary" style={{ flex: 2 }}>
-                  <RefreshCw size={14} /> Retry
+                <button onClick={handleRetry} className="z-btn z-btn-primary" style={{ flex: 2 }}>
+                  <RefreshCwIcon /> Retry
                 </button>
               )}
 
               {phase === 'done' && (
-                <button disabled className="zuik-btn zuik-btn-ghost" style={{ flex: 2, color: 'var(--zuik-success)', borderColor: 'var(--zuik-success)' }}>
-                  <CheckCircle2 size={14} /> All steps completed
+                <button disabled className="z-btn z-btn-ghost" style={{ flex: 2, color: 'var(--z-success)', borderColor: 'var(--z-success)' }}>
+                  <CheckCircle2Icon size={14} /> All steps completed
                 </button>
               )}
             </div>

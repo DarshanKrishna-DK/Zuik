@@ -17,42 +17,29 @@ export default function BlockInputs({ fields, values, onChange }: BlockInputsPro
 
         return (
           <div key={field.id} className="zuik-node-field">
-            <div className="zuik-node-label">{field.label}</div>
+            <label>{field.label}</label>
 
             {field.type === 'select' ? (
               <div style={{ position: 'relative' }}>
                 <select
-                  className="zuik-node-select"
                   value={currentVal}
                   onChange={(e) => onChange(field.id, e.target.value)}
                   onMouseLeave={() => setHoveredOption(null)}
                 >
-                  <option value="">— select —</option>
+                  <option value="">- select -</option>
                   {field.options?.map((opt) => (
-                    <option
-                      key={opt.value}
-                      value={opt.value}
+                    <option key={opt.value} value={opt.value}
                       onMouseEnter={() => opt.description && setHoveredOption(opt.value)}
-                      onMouseLeave={() => setHoveredOption(null)}
-                    >
+                      onMouseLeave={() => setHoveredOption(null)}>
                       {opt.label}
                     </option>
                   ))}
                 </select>
                 {hoveredOption && field.options?.find(o => o.value === hoveredOption)?.description && (
                   <div style={{
-                    position: 'absolute',
-                    bottom: '100%',
-                    left: 0,
-                    marginBottom: 4,
-                    padding: '6px 8px',
-                    background: 'var(--zuik-bg)',
-                    border: '1px solid var(--zuik-border)',
-                    borderRadius: 6,
-                    fontSize: '0.6875rem',
-                    color: 'var(--zuik-text-muted)',
-                    whiteSpace: 'nowrap',
-                    zIndex: 20,
+                    position: 'absolute', bottom: '100%', left: 0, marginBottom: 4,
+                    padding: '6px 8px', background: 'var(--z-bg)', border: '1px solid var(--z-border)',
+                    borderRadius: 6, fontSize: '0.6875rem', color: 'var(--z-text-muted)', whiteSpace: 'nowrap', zIndex: 20,
                   }}>
                     {field.options?.find(o => o.value === hoveredOption)?.description}
                   </div>
@@ -60,7 +47,6 @@ export default function BlockInputs({ fields, values, onChange }: BlockInputsPro
               </div>
             ) : field.type === 'textarea' ? (
               <textarea
-                className="zuik-node-input"
                 rows={2}
                 placeholder={field.placeholder}
                 value={currentVal}
@@ -69,35 +55,17 @@ export default function BlockInputs({ fields, values, onChange }: BlockInputsPro
               />
             ) : field.type === 'slider' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="range"
-                  min={field.min ?? 0}
-                  max={field.max ?? 100}
-                  step={field.step ?? 1}
-                  value={currentVal}
-                  onChange={(e) => onChange(field.id, Number(e.target.value))}
-                  style={{ flex: 1, accentColor: 'var(--zuik-orange)' }}
-                />
-                <span style={{
-                  fontSize: '0.6875rem',
-                  color: 'var(--zuik-text-muted)',
-                  minWidth: 32,
-                  textAlign: 'right',
-                }}>
+                <input type="range" min={field.min ?? 0} max={field.max ?? 100} step={field.step ?? 1}
+                  value={currentVal} onChange={(e) => onChange(field.id, Number(e.target.value))}
+                  style={{ flex: 1, accentColor: 'var(--z-accent)' }} />
+                <span style={{ fontSize: '0.6875rem', color: 'var(--z-text-muted)', minWidth: 32, textAlign: 'right', fontFamily: 'var(--z-mono)' }}>
                   {currentVal}
                 </span>
               </div>
             ) : field.type === 'password' ? (
-              <input
-                className="zuik-node-input"
-                type="password"
-                placeholder={field.placeholder}
-                value={currentVal}
-                onChange={(e) => onChange(field.id, e.target.value)}
-              />
+              <input type="password" placeholder={field.placeholder} value={currentVal} onChange={(e) => onChange(field.id, e.target.value)} />
             ) : (
               <input
-                className="zuik-node-input"
                 type={field.type === 'number' ? 'number' : 'text'}
                 placeholder={field.placeholder}
                 value={currentVal}

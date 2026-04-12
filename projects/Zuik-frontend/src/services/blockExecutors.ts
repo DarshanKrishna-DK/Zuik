@@ -4,7 +4,7 @@ import { getAlgodClient } from './algorand'
 import { createAsa } from './createAsa'
 import { optInToAsa } from './optInAsa'
 import { sendPayment } from './sendPayment'
-import { executeSwap, getSwapQuote } from './swapToken'
+import { executeSwap, getSwapQuote, type SwapQuoteResponse } from './swapToken'
 import {
   generateOnRampWidgetUrl,
   initiateSellTransaction,

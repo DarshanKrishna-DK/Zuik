@@ -27,6 +27,9 @@ interface ImportMetaEnv {
   readonly VITE_SABER_CLIENT_SECRET: string
   readonly VITE_SABER_BASE_URL: string
   readonly VITE_SABER_WIDGET_URL: string
+
+  readonly VITE_SUPABASE_URL: string
+  readonly VITE_SUPABASE_ANON_KEY: string
 }
 
 interface ImportMeta {

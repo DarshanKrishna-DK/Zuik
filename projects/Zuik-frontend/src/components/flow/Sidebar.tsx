@@ -1,17 +1,34 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, Search } from 'lucide-react'
+import { useState, useDeferredValue } from 'react'
 import { getBlocksByCategory, CATEGORY_META, type BlockCategory, type BlockDefinition } from '../../lib/blockRegistry'
+
+function SearchIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+}
+function ChevronDownIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+}
+function ChevronRightIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+}
+function PanelCloseIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m16 15-3-3 3-3" /></svg>
+}
+function PanelOpenIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m14 9 3 3-3 3" /></svg>
+}
 
 const categoryOrder: BlockCategory[] = ['trigger', 'action', 'logic', 'notification', 'defi']
 
 export default function Sidebar() {
   const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [panelOpen, setPanelOpen] = useState(true)
   const grouped = getBlocksByCategory()
 
   const matchesSearch = (block: BlockDefinition) => {
-    if (!search) return true
-    const q = search.toLowerCase()
+    if (!deferredSearch) return true
+    const q = deferredSearch.toLowerCase()
     return block.name.toLowerCase().includes(q) || block.description.toLowerCase().includes(q)
   }
 
@@ -25,38 +42,42 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="zuik-sidebar">
-      <div className="zuik-sidebar-header">
-        <div style={{ position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--zuik-text-dim)' }} />
-          <input
-            className="zuik-sidebar-search"
-            style={{ paddingLeft: 30 }}
-            placeholder="Search blocks..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </div>
-      <div className="zuik-sidebar-scroll">
-        {categoryOrder.map(cat => {
-          const meta = CATEGORY_META[cat]
-          const items = grouped[cat].filter(matchesSearch)
-          if (search && items.length === 0) return null
-          const isCollapsed = collapsed[cat] && !search
+    <aside className={`zuik-sidebar${panelOpen ? '' : ' zuik-sidebar-collapsed'}`}>
+      <button
+        className="zuik-sidebar-toggle"
+        onClick={() => setPanelOpen((o) => !o)}
+        title={panelOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+      >
+        {panelOpen ? <PanelCloseIcon /> : <PanelOpenIcon />}
+      </button>
 
-          return (
-            <div key={cat} className="zuik-category">
-              <div className="zuik-category-header" onClick={() => toggleCategory(cat)}>
-                <span className={meta.colorClass}>{meta.label}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="zuik-category-badge">{items.length}</span>
-                  {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                </div>
-              </div>
-              {!isCollapsed && (
-                <div className="zuik-category-items">
-                  {items.map(block => {
+      {panelOpen && (
+        <div className="zuik-sidebar-content">
+          <div className="zuik-sidebar-search">
+            <SearchIcon />
+            <input
+              placeholder="Search blocks..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {categoryOrder.map(cat => {
+              const meta = CATEGORY_META[cat]
+              const items = grouped[cat].filter(matchesSearch)
+              if (deferredSearch && items.length === 0) return null
+              const isCollapsed = collapsed[cat] && !deferredSearch
+
+              return (
+                <div key={cat}>
+                  <div className="zuik-category-header" onClick={() => toggleCategory(cat)}>
+                    <span className="zuik-category-title">{meta.label}</span>
+                    <span className="zuik-category-count">
+                      {items.length}
+                      {isCollapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
+                    </span>
+                  </div>
+                  {!isCollapsed && items.map(block => {
                     const Icon = block.icon
                     return (
                       <div
@@ -74,11 +95,11 @@ export default function Sidebar() {
                     )
                   })}
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </aside>
   )
 }

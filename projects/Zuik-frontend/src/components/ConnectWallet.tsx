@@ -1,7 +1,23 @@
 import { useState } from 'react'
 import { useWallet, Wallet, WalletId } from '@txnlab/use-wallet-react'
-import { Wallet as WalletIcon, X, Copy, ExternalLink, Check } from 'lucide-react'
 import Account from './Account'
+
+function WalletIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" />
+      <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" />
+    </svg>
+  )
+}
+
+function XIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+    </svg>
+  )
+}
 
 interface ConnectWalletInterface {
   openModal: boolean
@@ -28,108 +44,25 @@ const ConnectWallet = ({ openModal, closeModal }: ConnectWalletInterface) => {
   if (!openModal) return null
 
   return (
-    <div
-      className="modal modal-open"
-      style={{
-        position: 'fixed',
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: 'rgba(0,0,0,0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        backdropFilter: 'blur(4px)',
-      }}
-      onClick={handleBackdropClick}
-    >
-      <div
-        className="modal-box"
-        style={{
-          margin: 'auto',
-          background: 'var(--zuik-surface)',
-          border: '1px solid var(--zuik-border)',
-          borderRadius: '12px',
-          width: '28em',
-          maxWidth: '90vw',
-          padding: '24px',
-          color: 'var(--zuik-text)',
-          position: 'relative',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Close button */}
+    <div className="z-modal-backdrop" onClick={handleBackdropClick}>
+      <div className="z-modal-box" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           aria-label="Close"
           data-test-id="close-wallet-modal"
           onClick={closeModal}
-          style={{
-            position: 'absolute',
-            top: '16px',
-            right: '16px',
-            width: '32px',
-            height: '32px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'transparent',
-            border: '1px solid var(--zuik-border)',
-            borderRadius: '8px',
-            color: 'var(--zuik-text-muted)',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--zuik-surface-2)'
-            e.currentTarget.style.color = 'var(--zuik-text)'
-            e.currentTarget.style.borderColor = 'var(--zuik-border)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-            e.currentTarget.style.color = 'var(--zuik-text-muted)'
-            e.currentTarget.style.borderColor = 'var(--zuik-border)'
-          }}
+          className="z-modal-close"
         >
-          <X size={18} strokeWidth={2} />
+          <XIcon />
         </button>
 
         {activeAddress ? (
-          /* Connected state */
           <div style={{ paddingRight: '36px' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                marginBottom: '20px',
-              }}
-            >
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '10px',
-                  background: 'rgba(249, 115, 22, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--zuik-orange)',
-                }}
-              >
-                <WalletIcon size={22} strokeWidth={2} />
+            <div className="z-modal-title-row">
+              <div className="z-modal-icon-wrap">
+                <WalletIcon />
               </div>
-              <span
-                style={{
-                  fontSize: '1.25rem',
-                  fontWeight: 700,
-                  color: 'var(--zuik-text)',
-                }}
-              >
-                Wallet Connected
-              </span>
+              <span className="z-modal-title">Wallet Connected</span>
             </div>
 
             <Account onCopyAddress={handleCopyAddress} copied={copied} />
@@ -148,135 +81,41 @@ const ConnectWallet = ({ openModal, closeModal }: ConnectWalletInterface) => {
                 }
                 closeModal()
               }}
-              style={{
-                width: '100%',
-                marginTop: '20px',
-                padding: '10px 16px',
-                background: 'var(--zuik-error)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '0.875rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'background 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#DC2626'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--zuik-error)'
-              }}
+              className="z-btn z-btn-danger"
+              style={{ width: '100%', marginTop: '20px', justifyContent: 'center' }}
             >
               Disconnect
             </button>
           </div>
         ) : (
-          /* Not connected – wallet grid */
           <>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                marginBottom: '20px',
-                paddingRight: '36px',
-              }}
-            >
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '10px',
-                  background: 'rgba(249, 115, 22, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--zuik-orange)',
-                }}
-              >
-                <WalletIcon size={22} strokeWidth={2} />
+            <div className="z-modal-title-row" style={{ paddingRight: '36px' }}>
+              <div className="z-modal-icon-wrap">
+                <WalletIcon />
               </div>
-              <span
-                style={{
-                  fontSize: '1.25rem',
-                  fontWeight: 700,
-                  color: 'var(--zuik-text)',
-                }}
-              >
-                Connect Wallet
-              </span>
+              <span className="z-modal-title">Connect Wallet</span>
             </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-                gap: '12px',
-              }}
-            >
+            <div className="z-wallet-grid">
               {wallets?.map((wallet) => (
                 <button
                   key={`provider-${wallet.id}`}
                   data-test-id={`${wallet.id}-connect`}
                   onClick={() => wallet.connect()}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '16px 12px',
-                    background: 'var(--zuik-surface-2)',
-                    border: '1px solid var(--zuik-border)',
-                    borderRadius: '10px',
-                    color: 'var(--zuik-text)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--zuik-border)'
-                    e.currentTarget.style.borderColor = 'var(--zuik-text-dim)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'var(--zuik-surface-2)'
-                    e.currentTarget.style.borderColor = 'var(--zuik-border)'
-                  }}
+                  className="z-wallet-option"
                 >
                   {!isKmd(wallet) ? (
                     <img
                       src={wallet.metadata.icon}
                       alt={wallet.metadata.name}
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        objectFit: 'contain',
-                      }}
+                      style={{ width: '32px', height: '32px', objectFit: 'contain' }}
                     />
                   ) : (
-                    <div
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '8px',
-                        background: 'var(--zuik-border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--zuik-text-muted)',
-                      }}
-                    >
-                      <WalletIcon size={18} strokeWidth={2} />
+                    <div className="z-wallet-kmd-icon">
+                      <WalletIcon size={18} />
                     </div>
                   )}
-                  <span
-                    style={{
-                      fontSize: '0.8125rem',
-                      fontWeight: 500,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {isKmd(wallet) ? 'LocalNet Wallet' : wallet.metadata.name}
-                  </span>
+                  <span>{isKmd(wallet) ? 'LocalNet Wallet' : wallet.metadata.name}</span>
                 </button>
               ))}
             </div>

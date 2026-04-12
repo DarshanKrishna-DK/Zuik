@@ -26,14 +26,40 @@ export interface SimulationResult {
   budgetAvailable?: number
 }
 
-const ALGO_USD_ESTIMATE = 0.18
+let cachedAlgoUsd: { price: number; fetchedAt: number } | null = null
+const CACHE_TTL_MS = 60_000
+
+export async function fetchAlgoUsdPrice(): Promise<number> {
+  if (cachedAlgoUsd && Date.now() - cachedAlgoUsd.fetchedAt < CACHE_TTL_MS) {
+    return cachedAlgoUsd.price
+  }
+  try {
+    const res = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price?ids=algorand&vs_currencies=usd',
+    )
+    if (res.ok) {
+      const data = await res.json() as { algorand?: { usd?: number } }
+      const price = data.algorand?.usd
+      if (typeof price === 'number' && price > 0) {
+        cachedAlgoUsd = { price, fetchedAt: Date.now() }
+        return price
+      }
+    }
+  } catch { /* fall through */ }
+  return cachedAlgoUsd?.price ?? 0.18
+}
+
+export function getAlgoUsdCached(): number {
+  return cachedAlgoUsd?.price ?? 0.18
+}
 
 export function formatMicroAlgo(microAlgo: number): string {
   return (microAlgo / 1_000_000).toFixed(6).replace(/\.?0+$/, '')
 }
 
 export function microAlgoToUsd(microAlgo: number): string {
-  const usd = (microAlgo / 1_000_000) * ALGO_USD_ESTIMATE
+  const price = getAlgoUsdCached()
+  const usd = (microAlgo / 1_000_000) * price
   if (usd < 0.01) return '< $0.01'
   return `~$${usd.toFixed(2)}`
 }
