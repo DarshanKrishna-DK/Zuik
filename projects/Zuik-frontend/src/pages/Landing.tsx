@@ -113,11 +113,11 @@ function LaptopVisual() {
               <span className="z-screen-title">Zuik Flow Builder</span>
             </div>
             <div className="z-screen-canvas z-screen-canvas-flow">
-              <svg className="z-wf-edges" viewBox="0 0 360 168" fill="none" aria-hidden>
-                <path d="M 106 50 L 118 50" stroke="rgba(0,229,255,0.4)" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M 210 50 L 222 50" stroke="rgba(0,229,255,0.4)" strokeWidth="1.5" strokeLinecap="round" />
-                <circle cx="112" cy="50" r="2" fill="rgba(0,229,255,0.5)" />
-                <circle cx="216" cy="50" r="2" fill="rgba(0,229,255,0.5)" />
+              <svg className="z-wf-edges" viewBox="0 0 100 100" preserveAspectRatio="none" fill="none" aria-hidden>
+                <path d="M 31 50 L 36 50" stroke="rgba(0,229,255,0.4)" strokeWidth="0.5" strokeLinecap="round" />
+                <path d="M 61 50 L 66 50" stroke="rgba(0,229,255,0.4)" strokeWidth="0.5" strokeLinecap="round" />
+                <circle cx="33.5" cy="50" r="0.6" fill="rgba(0,229,255,0.5)" />
+                <circle cx="63.5" cy="50" r="0.6" fill="rgba(0,229,255,0.5)" />
               </svg>
 
               <div className="z-wf-block z-wf-block-1">
@@ -138,9 +138,9 @@ function LaptopVisual() {
             </div>
           </div>
         </div>
-      </div>
-      <div className="z-laptop-base">
-        <div className="z-laptop-notch" />
+        <div className="z-laptop-base">
+          <div className="z-laptop-notch" />
+        </div>
       </div>
     </div>
   )
@@ -239,7 +239,6 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
       {/* ── The Problem ─────────────────────────────────── */}
       <section className="landing-section">
         <div ref={problemReveal.ref} className={`landing-section-inner${problemReveal.visible ? ' revealed' : ''}`}>
-          <div className="z-journey-node" />
           <div className="z-section-label">// THE PROBLEM</div>
           <h2 className="landing-section-title">DeFi is powerful but inaccessible</h2>
           <p className="landing-section-subtitle">
@@ -253,7 +252,6 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
       {/* ── How It Works ────────────────────────────────── */}
       <section className="landing-section">
         <div ref={stepsReveal.ref} className={`landing-section-inner${stepsReveal.visible ? ' revealed' : ''}`}>
-          <div className="z-journey-node" />
           <div className="z-section-label">// HOW IT WORKS</div>
           <h2 className="landing-section-title">Three steps. That's it.</h2>
           <div className="landing-steps-row">
@@ -276,7 +274,6 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
       {/* ── Features ────────────────────────────────────── */}
       <section className="landing-section">
         <div ref={featReveal.ref} className={`landing-section-inner${featReveal.visible ? ' revealed' : ''}`}>
-          <div className="z-journey-node" />
           <div className="z-section-label">// CAPABILITIES</div>
           <h2 className="landing-section-title">Built for real DeFi users</h2>
           <div className="z-features-grid">
@@ -301,7 +298,6 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
       {/* ── Network Stats ───────────────────────────────── */}
       <section className="landing-section">
         <div ref={statsReveal.ref} className={`landing-section-inner${statsReveal.visible ? ' revealed' : ''}`}>
-          <div className="z-journey-node" />
           <div className="z-section-label">// NETWORK</div>
           <h2 className="landing-section-title">Powered by Algorand</h2>
           <div className="z-stats-row">
@@ -332,7 +328,6 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
       {/* ── CTA ─────────────────────────────────────────── */}
       <section className="landing-section" style={{ paddingBottom: 'clamp(100px, 14vh, 160px)' }}>
         <div ref={ctaReveal.ref} className={`landing-section-inner z-cta-block${ctaReveal.visible ? ' revealed' : ''}`}>
-          <div className="z-journey-node" />
           <h2>Ready to automate your DeFi?</h2>
           <p>Start building workflows for free on Algorand TestNet.</p>
           <button className="landing-cta-primary large" onClick={onStartBuilding}>

@@ -10,11 +10,11 @@ function ChevronDownIcon() {
 function ChevronRightIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
 }
-function PanelCloseIcon() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m16 15-3-3 3-3" /></svg>
+function CollapseIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
 }
-function PanelOpenIcon() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m14 9 3 3-3 3" /></svg>
+function ExpandIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
 }
 
 const categoryOrder: BlockCategory[] = ['trigger', 'action', 'logic', 'notification', 'defi']
@@ -98,7 +98,7 @@ export default function Sidebar() {
             onClick={() => setPanelOpen(false)}
             title="Collapse blocks panel"
           >
-            <PanelCloseIcon />
+            <CollapseIcon />
           </button>
         </div>
       ) : (
@@ -109,7 +109,7 @@ export default function Sidebar() {
             onClick={() => setPanelOpen(true)}
             title="Open blocks panel"
           >
-            <PanelOpenIcon />
+            <ExpandIcon />
           </button>
         </div>
       )}

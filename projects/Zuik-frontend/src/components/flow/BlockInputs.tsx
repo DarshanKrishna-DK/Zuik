@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import type { ConfigField } from '../../lib/blockRegistry'
 
 interface BlockInputsProps {
@@ -7,8 +7,28 @@ interface BlockInputsProps {
   onChange: (fieldId: string, value: string | number) => void
 }
 
+/**
+ * Prevents keyboard events inside inputs from propagating to React Flow,
+ * which would otherwise delete the node on Backspace / Delete.
+ */
+function stopRfKeys(e: React.KeyboardEvent) {
+  e.stopPropagation()
+}
+
 export default function BlockInputs({ fields, values, onChange }: BlockInputsProps) {
   const [hoveredOption, setHoveredOption] = useState<string | null>(null)
+
+  const handleChange = useCallback(
+    (fieldId: string, fieldType: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+      const raw = e.target.value
+      if (fieldType === 'number') {
+        onChange(fieldId, raw === '' ? '' : Number(raw))
+      } else {
+        onChange(fieldId, raw)
+      }
+    },
+    [onChange],
+  )
 
   return (
     <>
@@ -23,7 +43,8 @@ export default function BlockInputs({ fields, values, onChange }: BlockInputsPro
               <div style={{ position: 'relative' }}>
                 <select
                   value={currentVal}
-                  onChange={(e) => onChange(field.id, e.target.value)}
+                  onChange={handleChange(field.id, field.type)}
+                  onKeyDown={stopRfKeys}
                   onMouseLeave={() => setHoveredOption(null)}
                 >
                   <option value="">- select -</option>
@@ -50,29 +71,29 @@ export default function BlockInputs({ fields, values, onChange }: BlockInputsPro
                 rows={2}
                 placeholder={field.placeholder}
                 value={currentVal}
-                onChange={(e) => onChange(field.id, e.target.value)}
+                onChange={handleChange(field.id, field.type)}
+                onKeyDown={stopRfKeys}
                 style={{ resize: 'vertical', minHeight: '2.5rem' }}
               />
             ) : field.type === 'slider' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input type="range" min={field.min ?? 0} max={field.max ?? 100} step={field.step ?? 1}
-                  value={currentVal} onChange={(e) => onChange(field.id, Number(e.target.value))}
+                  value={currentVal} onChange={handleChange(field.id, 'number')}
+                  onKeyDown={stopRfKeys}
                   style={{ flex: 1, accentColor: 'var(--z-accent)' }} />
                 <span style={{ fontSize: '0.6875rem', color: 'var(--z-text-muted)', minWidth: 32, textAlign: 'right', fontFamily: 'var(--z-mono)' }}>
                   {currentVal}
                 </span>
               </div>
             ) : field.type === 'password' ? (
-              <input type="password" placeholder={field.placeholder} value={currentVal} onChange={(e) => onChange(field.id, e.target.value)} />
+              <input type="password" placeholder={field.placeholder} value={currentVal} onChange={handleChange(field.id, field.type)} onKeyDown={stopRfKeys} />
             ) : (
               <input
                 type={field.type === 'number' ? 'number' : 'text'}
                 placeholder={field.placeholder}
                 value={currentVal}
-                onChange={(e) => {
-                  const v = field.type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value
-                  onChange(field.id, v)
-                }}
+                onChange={handleChange(field.id, field.type)}
+                onKeyDown={stopRfKeys}
               />
             )}
           </div>

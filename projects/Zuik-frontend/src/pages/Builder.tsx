@@ -124,8 +124,11 @@ export default function Builder() {
   const [agentStatus, setAgentStatus] = useState<AgentStatus>('idle')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [workflowId, setWorkflowId] = useState<string | null>(null)
+  const workflowIdRef = useRef<string | null>(null)
   const [workflowName, setWorkflowName] = useState('Untitled Workflow')
   const [saveIndicator, setSaveIndicator] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const savingRef = useRef(false)
+  const [isDirty, setIsDirty] = useState(false)
   const agentHandleRef = useRef<AgentHandle | null>(null)
   const rfInstance = useRef<ReactFlowInstance<Node, Edge> | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -234,6 +237,7 @@ export default function Builder() {
       getWorkflow(wfParam)
         .then((wf) => {
           if (wf) {
+            workflowIdRef.current = wf.id
             setWorkflowId(wf.id)
             setWorkflowName(wf.name)
             if (wf.flow_json?.nodes) setNodes(wf.flow_json.nodes as Node[])
@@ -271,32 +275,39 @@ export default function Builder() {
 
   const saveToSupabase = useCallback(async () => {
     if (!activeAddress || !isSupabaseConfigured() || nodes.length === 0) return
+    if (savingRef.current) return
+    savingRef.current = true
     setSaveIndicator('saving')
     try {
       const flowJson = { nodes, edges }
-      if (workflowId) {
-        await updateWorkflow(workflowId, { name: workflowName, flow_json: flowJson })
+      const existingId = workflowIdRef.current
+      if (existingId) {
+        await updateWorkflow(existingId, { name: workflowName, flow_json: flowJson })
       } else {
         const created = await createWorkflow(activeAddress, workflowName, flowJson)
+        workflowIdRef.current = created.id
         setWorkflowId(created.id)
         window.history.replaceState(null, '', `/builder?wf=${created.id}`)
       }
+      setIsDirty(false)
       setSaveIndicator('saved')
       setTimeout(() => setSaveIndicator('idle'), 2000)
     } catch (err) {
       console.error('Supabase save failed:', err)
       setSaveIndicator('idle')
+    } finally {
+      savingRef.current = false
     }
-  }, [activeAddress, nodes, edges, workflowId, workflowName])
+  }, [activeAddress, nodes, edges, workflowName])
 
   useEffect(() => {
     if (nodes.length === 0) return
+    if (flowHydrated) setIsDirty(true)
     const debounce = setTimeout(() => {
       saveFlowToLocal(nodes, edges)
-      saveToSupabase()
     }, 3_000)
     return () => clearTimeout(debounce)
-  }, [nodes, edges, saveToSupabase])
+  }, [nodes, edges, flowHydrated])
 
   useEffect(() => {
     fetchAlgoUsdPrice().catch(() => {})
@@ -336,6 +347,14 @@ export default function Builder() {
       agentHandleRef.current?.stop()
     }
   }, [nodes, edges, saveToSupabase])
+
+  // Warn before browser close / tab switch if unsaved changes
+  useEffect(() => {
+    if (!isDirty) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
 
   const updateNodeStatus = useCallback((nodeId: string, status: 'running' | 'success' | 'error' | 'idle') => {
     setNodes((nds) => nds.map((n) => {
@@ -563,6 +582,7 @@ export default function Builder() {
     setEdges([])
     setLogs([])
     setAgentStatus('idle')
+    workflowIdRef.current = null
     setWorkflowId(null)
     setWorkflowName('Untitled Workflow')
     clearFlowLocal()
@@ -590,6 +610,7 @@ export default function Builder() {
     setNodes(newNodes as Node[])
     setEdges(newEdges as Edge[])
     setWorkflowName(name)
+    workflowIdRef.current = null
     setWorkflowId(null)
     clearFlowLocal()
     window.history.replaceState(null, '', '/builder')

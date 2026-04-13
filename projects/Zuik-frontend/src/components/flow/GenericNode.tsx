@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { getBlockById, CATEGORY_META, PORT_COLORS, type BlockDefinition, type Port } from '../../lib/blockRegistry'
 import BlockInputs from './BlockInputs'
@@ -42,9 +43,18 @@ export default function GenericNode({ id, data, selected }: NodeProps) {
   const catMeta = CATEGORY_META[def.category]
   const Icon = def.icon
 
-  const onConfigChange = (fieldId: string, value: string | number) => {
-    nodeData.config = { ...nodeData.config, [fieldId]: value }
-  }
+  const onConfigChange = useCallback((fieldId: string, value: string | number) => {
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.id !== id) return n
+        const prev = (n.data as GenericNodeData).config ?? {}
+        return {
+          ...n,
+          data: { ...n.data, config: { ...prev, [fieldId]: value } },
+        }
+      }),
+    )
+  }, [id, setNodes])
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
