@@ -142,6 +142,7 @@ export default function Dashboard() {
 
   return (
     <div className="zuik-dashboard">
+      <div className="zuik-dashboard-mesh" aria-hidden />
       <div className="zuik-dashboard-inner">
         <div className="zuik-dashboard-title">
           <DashboardIcon /> Dashboard

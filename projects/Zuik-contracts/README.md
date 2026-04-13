@@ -32,8 +32,8 @@ algokit generate smart-contract
 ```
 
 This creates a new folder under `smart_contracts/` with:
-- `contract.py` — your contract logic
-- `deploy_config.py` — deployment configuration
+- `contract.py` - your contract logic
+- `deploy_config.py` - deployment configuration
 
 ---
 

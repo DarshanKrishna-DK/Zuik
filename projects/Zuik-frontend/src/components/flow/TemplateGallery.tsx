@@ -1,4 +1,5 @@
 import { useState, useMemo, useDeferredValue } from 'react'
+import { createPortal } from 'react-dom'
 import {
   getAllTemplates, searchTemplates, TEMPLATE_CATEGORIES,
   type WorkflowTemplate, type TemplateCategory, type TemplateNode, type TemplateEdge,
@@ -40,38 +41,6 @@ function getCatColor(blockId: string): string {
   return BLOCK_CATEGORY_COLOR[cat] ?? '#38BDF8'
 }
 
-function MiniGraphPreview({ nodes, edges }: { nodes: TemplateNode[]; edges: TemplateEdge[] }) {
-  if (nodes.length === 0) return null
-
-  const xs = nodes.map((n) => n.position.x)
-  const ys = nodes.map((n) => n.position.y)
-  const minX = Math.min(...xs); const maxX = Math.max(...xs)
-  const minY = Math.min(...ys); const maxY = Math.max(...ys)
-  const rangeX = Math.max(maxX - minX, 100)
-  const rangeY = Math.max(maxY - minY, 80)
-
-  const W = 180; const H = 70; const padX = 16; const padY = 14
-  const scaleX = (x: number) => padX + ((x - minX) / rangeX) * (W - padX * 2)
-  const scaleY = (y: number) => padY + ((y - minY) / rangeY) * (H - padY * 2)
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]))
-
-  return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="tpl-mini-graph">
-      {edges.map((e) => {
-        const src = nodeMap.get(e.source); const tgt = nodeMap.get(e.target)
-        if (!src || !tgt) return null
-        const x1 = scaleX(src.position.x); const y1 = scaleY(src.position.y)
-        const x2 = scaleX(tgt.position.x); const y2 = scaleY(tgt.position.y)
-        const cx = (x1 + x2) / 2
-        return <path key={e.id} d={`M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`} stroke="#3A3A42" strokeWidth="1.5" fill="none" opacity="0.6" />
-      })}
-      {nodes.map((n) => (
-        <circle key={n.id} cx={scaleX(n.position.x)} cy={scaleY(n.position.y)} r="5" fill={getCatColor(n.data.blockId)} opacity="0.9" />
-      ))}
-    </svg>
-  )
-}
-
 function TemplateDetailModal({ template, onClose, onUse }: { template: WorkflowTemplate; onClose: () => void; onUse: () => void }) {
   return (
     <>
@@ -83,7 +52,6 @@ function TemplateDetailModal({ template, onClose, onUse }: { template: WorkflowT
         </div>
         <div className="tpl-detail-body">
           <p className="tpl-detail-desc">{template.description}</p>
-          <div className="tpl-detail-preview"><MiniGraphPreview nodes={template.nodes} edges={template.edges} /></div>
 
           <div className="tpl-detail-meta">
             <span className="tpl-meta-chip" style={{ color: DIFFICULTY_COLORS[template.difficulty] }}>{template.difficulty}</span>
@@ -187,8 +155,9 @@ export default function TemplateGallery({ isOpen, onClose, onUseTemplate }: Prop
         )}
       </div>
 
-      {selectedTemplate && (
-        <TemplateDetailModal template={selectedTemplate} onClose={() => setSelectedTemplate(null)} onUse={() => handleUseTemplate(selectedTemplate)} />
+      {selectedTemplate && createPortal(
+        <TemplateDetailModal template={selectedTemplate} onClose={() => setSelectedTemplate(null)} onUse={() => handleUseTemplate(selectedTemplate)} />,
+        document.body
       )}
     </div>
   )

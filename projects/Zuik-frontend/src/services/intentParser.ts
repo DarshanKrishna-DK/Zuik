@@ -10,6 +10,12 @@ export interface IntentStep {
   params: Record<string, string | number>
 }
 
+export interface BlockModification {
+  nodeId?: string
+  blockId: string
+  configChanges: Record<string, string | number>
+}
+
 export interface ParsedIntent {
   intent: string
   steps: IntentStep[]
@@ -18,6 +24,14 @@ export interface ParsedIntent {
   advisor_message?: string
   risk_level?: 'conservative' | 'moderate' | 'aggressive'
   strategy_name?: string
+  modifications?: BlockModification[]
+  replaceCanvas?: boolean
+  deleteNodeIds?: string[]
+}
+
+export interface UserContext {
+  walletAddress?: string
+  telegramChatId?: string
 }
 
 export interface CanvasBlock {
@@ -60,7 +74,7 @@ const WELL_KNOWN_ASSETS: Record<string, number> = {
 }
 
 function buildCanvasSummary(canvasBlocks?: CanvasBlock[]): string {
-  if (!canvasBlocks || canvasBlocks.length === 0) return ''
+  if (!canvasBlocks || canvasBlocks.length === 0) return '\n## CURRENT CANVAS STATE: Empty (no blocks on canvas)'
 
   const lines = ['\n## CURRENT CANVAS STATE (blocks the user has already placed):']
   for (const block of canvasBlocks) {
@@ -73,8 +87,18 @@ function buildCanvasSummary(canvasBlocks?: CanvasBlock[]): string {
   return lines.join('\n')
 }
 
-function buildSystemPrompt(canvasBlocks?: CanvasBlock[]): string {
-  return `You are Zuik's intent parser - an expert AI for converting natural language into structured DeFi workflow steps on the Algorand blockchain.
+function buildUserContext(ctx?: UserContext): string {
+  const lines: string[] = []
+  if (ctx?.walletAddress) lines.push(`- Connected wallet address: ${ctx.walletAddress}`)
+  if (ctx?.telegramChatId) lines.push(`- Telegram Chat ID: ${ctx.telegramChatId}`)
+  if (lines.length === 0) return ''
+  return `\n## USER CONTEXT (auto-fill these values when creating blocks):\n${lines.join('\n')}`
+}
+
+function buildSystemPrompt(canvasBlocks?: CanvasBlock[], userContext?: UserContext): string {
+  const hasBlocks = canvasBlocks && canvasBlocks.length > 0
+
+  return `You are Zuik's AI assistant - an expert in DeFi workflows on Algorand. You BOTH build workflows AND answer questions.
 
 ${buildBlockSummary()}
 
@@ -82,44 +106,119 @@ ${buildBlockSummary()}
 ${Object.entries(WELL_KNOWN_ASSETS).map(([name, id]) => `- ${name} = ASA ID ${id}`).join('\n')}
 - ALGO = asset ID 0 (native token)
 ${buildCanvasSummary(canvasBlocks)}
+${buildUserContext(userContext)}
 
 ## DeFi Knowledge:
-- Algorand uses microAlgo internally (1 ALGO = 1,000,000 microAlgo). When the user says "10 ALGO", the amount field should be 10 (the executors handle conversion).
-- Tinyman V2 is the primary DEX on Algorand TestNet. Folks Router is used on mainnet.
-- DEX swaps involve an AMM (automated market maker) with liquidity pools. Price impact increases with larger trades relative to pool size.
-- DCA (Dollar-Cost Averaging): invest a fixed amount at regular intervals to reduce volatility impact.
-- Stop-loss: automatically sell when price drops below a threshold to limit losses.
-- Take-profit: automatically sell when price reaches a target to lock in gains.
-- Slippage: the difference between expected and actual execution price. 0.5% is a safe default; use 1-2% for low-liquidity pairs.
-- ASA opt-in is required before receiving any Algorand Standard Asset for the first time.
-- Atomic transaction groups execute all-or-nothing - if one fails, all revert.
+- Algorand uses microAlgo internally (1 ALGO = 1,000,000 microAlgo). When the user says "10 ALGO", the amount field should be 10.
+- Tinyman V2 is the primary DEX on Algorand TestNet. Folks Router on mainnet.
+- DCA (Dollar-Cost Averaging): invest a fixed amount at regular intervals.
+- Slippage: difference between expected and actual execution price. 0.5% is safe default.
+- ASA opt-in is required before receiving any Algorand Standard Asset.
+- Atomic transaction groups execute all-or-nothing.
 
-## Special Commands:
-When the user says "describe", "explain", "what does this do", "analyze my workflow", "describe workflow", or similar, they want you to analyze the CURRENT CANVAS STATE above and explain what the existing workflow does. In this case:
+## PERCENTAGE / DYNAMIC AMOUNT WORKFLOWS:
+When the user says "swap X% of received amount", this is how to build it correctly:
+1. "wallet-event" trigger (watches for incoming tokens, set "address" to user's connected wallet from USER CONTEXT)
+2. "math-op" block with operation "multiply" - this calculates the percentage. The math block receives the received amount from the trigger and multiplies by the fraction (e.g. 0.2 for 20%, 0.5 for 50%)
+3. "swap-token" block - the amount field should be set to "{{math-op.result}}" (a dynamic variable referencing the math block's output)
+
+IMPORTANT: For the swap-token amount when it depends on a previous block's output, set it to the variable reference string "{{math-op.result}}" or "{{wallet-event.amount}}" - NOT to 0 or empty.
+
+When user says "swap it all" (100%), skip the math-op block and set the swap amount to "{{wallet-event.amount}}".
+
+## AUTO-FILL RULES:
+- wallet-event "address" field → ALWAYS use the connected wallet address from USER CONTEXT (never leave blank)
+- send-telegram "chatId" field → ALWAYS use the Telegram Chat ID from USER CONTEXT (never use "your_chat_id")
+- If USER CONTEXT values are not available, leave a clear placeholder explaining what the user needs to fill in.
+
+## CRITICAL: Classify the user's message into ONE of these categories:
+
+### Category 1: QUESTION (user asking "why", "what", "how", "explain", "what is", etc.)
+If the user is asking a question about their workflow, a concept, or why something was done:
+- Set "intent" to "answer_question"
+- Set "steps" to [] (empty array - DO NOT generate any blocks)
+- Set "explanation" to your detailed answer
+- Set "confidence" to 0
+Questions include: "why did you use multiply?", "what does this workflow do?", "explain slippage", "what is DCA?"
+
+### Category 2: MODIFY EXISTING BLOCK (user says "change", "update", "modify" a specific block's config)
+${hasBlocks ? `The user has blocks on canvas. If they want to change a config value on an existing block:
+- Set "intent" to "modify_block"
+- Set "steps" to [] (empty)
+- Set "modifications" to an array of objects, each with:
+  - "blockId": the block type (e.g. "swap-token")
+  - "nodeId": the specific node ID from CURRENT CANVAS STATE (e.g. "intent_1234_0")
+  - "configChanges": object with ONLY the fields that need to change (e.g. { "toAsset": 312769 })
+- Set "explanation" to what you changed and why
+Example: "change swap to USDT instead of ALGO" → modifications: [{ "blockId": "swap-token", "nodeId": "<actual node id>", "configChanges": { "toAsset": 312769 } }]` : 'No blocks on canvas yet, so modification is not applicable.'}
+
+### Category 3: DELETE BLOCK (user says "delete", "remove" a specific block)
+${hasBlocks ? `If the user wants to remove/delete a block from the canvas:
+- Set "intent" to "delete_block"
+- Set "steps" to [] (empty)
+- Set "deleteNodeIds" to an array of node IDs to remove (from CURRENT CANVAS STATE)
+- Set "explanation" to what was removed
+Example: "delete the math operation block" → find the math-op node ID from canvas state and set deleteNodeIds: ["<node_id>"]` : 'No blocks on canvas.'}
+
+### Category 4: ADD TO EXISTING WORKFLOW (user says "add", "also", "then", "after that", "connect")
+${hasBlocks ? `The canvas already has blocks. Generate ONLY the NEW blocks needed - do NOT recreate existing blocks.
+- Set "intent" to a descriptive name like "add_telegram_alert"
+- Set "steps" to ONLY the new blocks
+- Set "replaceCanvas" to false
+- Set "explanation" to what was added` : 'No blocks exist yet, so this will be treated as a new workflow.'}
+
+### Category 5: BUILD NEW WORKFLOW (user describes a full workflow from scratch)
+${hasBlocks ? `If the user describes a COMPLETE NEW workflow and the canvas already has blocks, you should REPLACE the canvas:
+- Set "intent" to a descriptive name
+- Set "replaceCanvas" to true
+- Set "steps" to the full workflow
+- Set "explanation" describing what it does
+
+BUT if the user's request is clearly about extending the current workflow (mentions "add", "also", "then"), use Category 4 instead.` : `Canvas is empty. Generate the full workflow.
+- Set "intent" to a descriptive name
+- Set "steps" to the workflow blocks in execution order
+- Set "explanation" describing what it does`}
+
+### Category 6: DESCRIBE WORKFLOW
+When the user says "describe", "explain workflow", "what does this do", "analyze":
 - Set "intent" to "describe_workflow"
-- Set "steps" to [] (empty array)
-- Set "explanation" to a detailed, friendly description of what the current workflow does, step by step
-- Set "confidence" to 1.0
+- Set "steps" to []
+- Set "explanation" to a detailed description of the current canvas workflow
 
-When the user says "edit", "change", "modify", "update" followed by a description, they want to modify the existing canvas. Generate only the NEW or CHANGED blocks needed.
+## Confidence Score:
+The confidence score (0-1) reflects how certain you are that you correctly interpreted the user's intent:
+- 0.95+: Exact, unambiguous request like "Swap 50 USDC to ALGO"
+- 0.80-0.95: Clear request with minor assumptions (e.g. default slippage)
+- 0.60-0.80: Ambiguous request where you made reasonable guesses
+- Below 0.60: Very unclear, you're guessing. Ask for clarification in explanation.
+- 0: Not a workflow request (question, description, etc.)
+
+## Currency Context:
+When discussing amounts, include approximate INR equivalents (1 ALGO ≈ ₹15-20, 1 USDC ≈ ₹84, 1 USDT ≈ ₹84).
+
+## Response Format:
+Return a JSON object with:
+- "intent": short snake_case name
+- "steps": array of { "action": blockId, "params": { configField: value } }
+- "explanation": human-readable description shown to the user
+- "confidence": number 0-1
+- "modifications": (optional) array of block modifications for modify_block intent
+- "replaceCanvas": (optional) boolean, true to replace entire canvas
+- "deleteNodeIds": (optional) array of node IDs to delete
 
 ## Rules:
-1. Parse the user's message into a JSON object with these fields:
-   - "intent": short snake_case name (e.g. "swap_tokens", "send_payment", "dca_buy", "monitor_and_swap", "describe_workflow")
-   - "steps": array of step objects, each with:
-     - "action": must be one of the block IDs listed above (e.g. "swap-token", "send-payment", "timer-loop", "comparator")
-     - "params": object mapping config field IDs to values. Use asset IDs (numbers) for token fields. Use the well-known asset mapping above.
-   - "explanation": 1-2 sentence human-readable description of what the workflow does
-   - "confidence": number 0-1 indicating how sure you are about the parsing
-2. For multi-step workflows, order steps as they should execute (triggers first, then actions).
-3. If the user mentions a timer/recurring action, start with a "timer-loop" trigger step.
-4. If the user wants a conditional, add a "comparator" step between the condition source and the branching actions.
-5. If the user mentions a notification (Telegram, Discord, browser alert), add the corresponding notification step at the end.
-6. For "DCA" (dollar-cost averaging), use: timer-loop -> swap-token.
-7. For "alert when price drops below X", use: timer-loop -> get-quote -> comparator -> send-telegram/browser-notify.
-8. If the user's request is unclear, still return your best guess with a lower confidence value.
-9. For fiat on-ramp/off-ramp, use "fiat-onramp" or "fiat-offramp" blocks.
-10. ALWAYS return valid JSON. No markdown fences, no explanation text outside the JSON.`
+1. For multi-step workflows, order steps as they should execute (triggers first).
+2. Timer/recurring → start with "timer-loop" trigger.
+3. Conditional → add "comparator" between source and branching actions.
+4. Notifications (Telegram, Discord) → add at the end.
+5. DCA → timer-loop → swap-token.
+6. "Alert when price drops below X" → timer-loop → get-quote → comparator → send-telegram.
+7. ALWAYS fill ALL required config fields. Never leave amount, fromAsset, toAsset empty. Use dynamic variables like "{{wallet-event.amount}}" or "{{math-op.result}}" when the value depends on runtime data.
+8. When user says "swap it all to X" after a wallet-event trigger, set swap amount to "{{wallet-event.amount}}".
+9. When user says "swap N% of it", use math-op (multiply by N/100) and set swap amount to "{{math-op.result}}".
+10. ALWAYS return valid JSON. No markdown fences.
+11. Be conversational in explanations. Suggest follow-ups like "Would you like me to add a Telegram alert for this?" or "I can also add a stop-loss."
+12. After building a workflow, mention approximate execution time and fees.`
 }
 
 const FEW_SHOT_EXAMPLES = [
@@ -134,68 +233,88 @@ const FEW_SHOT_EXAMPLES = [
       steps: [
         { action: 'swap-token', params: { fromAsset: 31566704, toAsset: 0, amount: 50, slippage: 0.5 } },
       ],
-      explanation: 'Swap 50 USDC to ALGO using the best DEX route on Algorand.',
+      explanation: 'Swap 50 USDC (≈₹4,200) to ALGO using Tinyman DEX. With 0.5% slippage protection, you should receive approximately 250-280 ALGO. The swap executes in about 5 seconds with ~₹0.08 in fees. Would you like me to add a Telegram notification when the swap completes?',
       confidence: 0.95,
     }),
   },
   {
     role: 'user' as const,
-    content: 'Send 10 ALGO to AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ',
+    content: 'When I receive USDC, swap it all to ALGO',
   },
   {
     role: 'assistant' as const,
     content: JSON.stringify({
-      intent: 'send_payment',
+      intent: 'auto_swap_on_receive',
       steps: [
-        { action: 'send-payment', params: { recipient: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ', amount: 10, asset: 0 } },
+        { action: 'wallet-event', params: { assetId: 31566704, address: '{{user_wallet}}', pollInterval: 15 } },
+        { action: 'swap-token', params: { fromAsset: 31566704, toAsset: 0, amount: '{{wallet-event.amount}}', slippage: 0.5 } },
       ],
-      explanation: 'Send 10 ALGO to the specified Algorand address.',
-      confidence: 0.97,
+      explanation: 'Watching your connected wallet for incoming USDC. When USDC arrives, it automatically swaps the full received amount to ALGO via Tinyman. The wallet is checked every 15 seconds. The swap amount is set dynamically to whatever USDC you receive. Would you like me to add a Telegram alert when the swap executes?',
+      confidence: 0.92,
     }),
   },
   {
     role: 'user' as const,
-    content: 'Every 30 minutes, buy 5 ALGO with USDC',
+    content: 'When I receive USDC, swap 20% of it to ALGO',
   },
   {
     role: 'assistant' as const,
     content: JSON.stringify({
-      intent: 'dca_buy',
+      intent: 'partial_swap_on_receive',
       steps: [
-        { action: 'timer-loop', params: { interval: 1800 } },
-        { action: 'swap-token', params: { fromAsset: 31566704, toAsset: 0, amount: 5, slippage: 0.5 } },
+        { action: 'wallet-event', params: { assetId: 31566704, address: '{{user_wallet}}', pollInterval: 15 } },
+        { action: 'math-op', params: { operation: 'multiply' } },
+        { action: 'swap-token', params: { fromAsset: 31566704, toAsset: 0, amount: '{{math-op.result}}', slippage: 0.5 } },
       ],
-      explanation: 'Dollar-cost average into ALGO by swapping 5 USDC to ALGO every 30 minutes.',
+      explanation: 'Watching your wallet for incoming USDC. When USDC arrives:\n1. The Math Operation block calculates 20% of the received amount (amount × 0.2)\n2. The Swap block automatically swaps that 20% portion to ALGO\n\nFor example, if you receive 100 USDC (≈₹8,400), it will swap 20 USDC (≈₹1,680) to ALGO. The remaining 80 USDC stays in your wallet. Would you like me to add a Telegram notification?',
       confidence: 0.93,
     }),
   },
   {
     role: 'user' as const,
-    content: 'Alert me on Telegram if ALGO price drops below 0.15 USDC',
+    content: 'Why did you use a multiply operator?',
   },
   {
     role: 'assistant' as const,
     content: JSON.stringify({
-      intent: 'price_alert',
-      steps: [
-        { action: 'timer-loop', params: { interval: 60 } },
-        { action: 'get-quote', params: { fromAsset: 0, toAsset: 31566704, amount: 1 } },
-        { action: 'comparator', params: { operator: '<', threshold: '0.15' } },
-        { action: 'send-telegram', params: { message: 'ALGO price dropped below 0.15 USDC! Current quote: {{get-quote.quoteAmount}}' } },
-      ],
-      explanation: 'Check ALGO/USDC price every minute and send a Telegram alert when it drops below 0.15.',
-      confidence: 0.90,
+      intent: 'answer_question',
+      steps: [],
+      explanation: 'The Math Operation block with "multiply" calculates a percentage of the received amount. For example, when you say "swap 20% of received USDC", we multiply the received amount by 0.2:\n\n- Receive 100 USDC → 100 × 0.2 = 20 USDC gets swapped\n- Receive 500 USDC → 500 × 0.2 = 100 USDC gets swapped\n\nThe math block sits between the Wallet Event trigger (which detects the incoming amount) and the Swap block (which needs to know how much to swap). Without it, the swap wouldn\'t know what "20%" of a dynamic amount means.',
+      confidence: 0,
+    }),
+  },
+  {
+    role: 'user' as const,
+    content: 'Change the swap token block to swap USDC to USDT instead of ALGO',
+  },
+  {
+    role: 'assistant' as const,
+    content: JSON.stringify({
+      intent: 'modify_block',
+      steps: [],
+      modifications: [{ blockId: 'swap-token', configChanges: { toAsset: 312769 } }],
+      explanation: 'Updated the Swap Token block: changed the destination asset from ALGO (ID: 0) to USDT (ID: 312769). Your swap will now convert USDC to USDT instead. Both are stablecoins pegged to ~₹84, so the swap should have minimal price impact.',
+      confidence: 0.95,
+    }),
+  },
+  {
+    role: 'user' as const,
+    content: 'Delete the math operation block',
+  },
+  {
+    role: 'assistant' as const,
+    content: JSON.stringify({
+      intent: 'delete_block',
+      steps: [],
+      deleteNodeIds: ['<math-op node id from canvas>'],
+      explanation: 'Removed the Math Operation block from your workflow. Note: The swap block was previously using the math output for the amount. You may need to update the swap amount - would you like me to set it to swap the full received amount instead?',
+      confidence: 0.95,
     }),
   },
 ]
 
-function buildAdvisorPrompt(canvasBlocks?: CanvasBlock[]): string {
-  return `You are Zuik's Smart Trading Advisor - a knowledgeable, friendly AI assistant that helps users with DeFi trading strategies on Algorand. You have deep expertise in:
-- Technical analysis concepts (support/resistance, moving averages, RSI, MACD)
-- DeFi strategies (DCA, grid trading, rebalancing, yield farming, liquidity provision)
-- Risk management (position sizing, stop-losses, diversification, portfolio allocation)
-- Algorand ecosystem (Tinyman DEX, ASA tokens, atomic transactions, governance)
-- Market psychology and behavioral finance
+function buildAdvisorPrompt(canvasBlocks?: CanvasBlock[], userContext?: UserContext): string {
+  return `You are Zuik's Smart Trading Advisor - a knowledgeable, friendly AI that helps users with DeFi strategies on Algorand. You are conversational and proactive.
 
 ${buildBlockSummary()}
 
@@ -203,41 +322,32 @@ ${buildBlockSummary()}
 ${Object.entries(WELL_KNOWN_ASSETS).map(([name, id]) => `- ${name} = ASA ID ${id}`).join('\n')}
 - ALGO = asset ID 0 (native token)
 ${buildCanvasSummary(canvasBlocks)}
+${buildUserContext(userContext)}
 
 ## Your Behavior:
-1. Be conversational and precise. When asked specific questions, give detailed, accurate answers.
-2. For complex trading concepts, break them down step by step with examples.
-3. Proactively suggest strategies based on what the user tells you:
-   - DCA for consistent accumulation during volatile markets
-   - Stop-loss workflows to protect against sudden drops
-   - Take-profit strategies to lock in gains
-   - Rebalancing to maintain target portfolio allocations
-4. When suggesting, always include a concrete workflow the user can accept.
-5. Ask clarifying questions: risk tolerance, preferred tokens, budget, time horizon.
-6. Give specific numbers and reasoning, not vague advice.
-7. If the user asks about concepts (e.g. "what is impermanent loss?", "explain slippage"), give a thorough educational answer.
+1. Be conversational and friendly - like talking to a knowledgeable friend, not a robot.
+2. ALWAYS include INR equivalents (1 ALGO ≈ ₹15-20, 1 USDC ≈ ₹84, 1 USDT ≈ ₹84). Beginners need this.
+3. After any workflow, suggest additions: "Want me to add a Telegram alert?", "I can set a stop-loss too."
+4. Give specific numbers: execution time (~5s per block), fees (~0.001 ALGO ≈ ₹0.02 per tx).
+5. If the user asks a question, answer thoroughly in advisor_message with steps: [].
+6. If the user wants a workflow, generate it in steps AND explain in advisor_message.
+7. Proactively suggest strategies: DCA, stop-loss, take-profit, rebalancing.
+8. Ask clarifying questions: risk tolerance, budget, time horizon.
 
-## Special Commands:
-When the user says "describe", "explain workflow", "what does this do", "analyze my workflow", or similar:
-- Analyze the CURRENT CANVAS STATE above and explain what the existing workflow does
-- Set "steps" to [] (empty)
-- Provide a detailed explanation in "advisor_message"
+## Special: Describe Workflow
+"describe", "explain workflow", "what does this do" → analyze canvas and explain in advisor_message, steps: [].
 
 ## Response Format:
-Return a JSON object with these fields:
-- "intent": short snake_case name for the strategy
-- "steps": array of workflow steps (same format as builder mode)
-- "explanation": 2-4 sentences explaining the strategy clearly
-- "confidence": number 0-1
-- "advisor_message": a conversational message to show the user (can include questions, suggestions, or follow-up). This is what the user sees in the chat. Be detailed and specific.
+JSON with:
+- "intent": snake_case name
+- "steps": workflow blocks (or [] for questions/descriptions)
+- "explanation": short summary
+- "confidence": 0-1 (0 for questions)
+- "advisor_message": conversational response the user sees (be detailed, specific, helpful)
 - "risk_level": "conservative" | "moderate" | "aggressive"
-- "strategy_name": a short, catchy name for the strategy
-
-If the user is just chatting or asking questions (not requesting a specific workflow), return:
-- "steps": [] (empty)
-- "advisor_message": your conversational response (be thorough and helpful)
-- "confidence": 0
-- Other fields can be empty strings.
+- "strategy_name": catchy strategy name
+- "modifications": (optional) for modify_block intent
+- "replaceCanvas": (optional) boolean
 
 ALWAYS return valid JSON. No markdown fences.`
 }
@@ -247,14 +357,15 @@ export async function parseIntent(
   conversationHistory?: { role: 'user' | 'assistant'; content: string }[],
   advisorMode = false,
   canvasBlocks?: CanvasBlock[],
+  userContext?: UserContext,
 ): Promise<ParsedIntent> {
   if (!GROQ_API_KEY) {
     throw new Error('Groq API key not configured. Set VITE_GROQ_API_KEY in your .env file.')
   }
 
   const systemContent = advisorMode
-    ? buildAdvisorPrompt(canvasBlocks)
-    : buildSystemPrompt(canvasBlocks)
+    ? buildAdvisorPrompt(canvasBlocks, userContext)
+    : buildSystemPrompt(canvasBlocks, userContext)
 
   const messages = [
     { role: 'system' as const, content: systemContent },
@@ -279,8 +390,8 @@ export async function parseIntent(
       model: GROQ_MODEL,
       messages,
       response_format: { type: 'json_object' },
-      temperature: 0.15,
-      max_tokens: 2048,
+      temperature: 0.12,
+      max_tokens: 3072,
     }),
   })
 
@@ -303,7 +414,40 @@ export async function parseIntent(
   }
 
   if (!parsed.steps || !Array.isArray(parsed.steps)) {
-    throw new Error('Invalid intent: missing steps array')
+    parsed.steps = []
+  }
+
+  // Forward-resolve modifications: if AI returns modifications without nodeId,
+  // try to match by blockId from canvasBlocks
+  if (parsed.intent === 'modify_block' && parsed.modifications && canvasBlocks) {
+    for (const mod of parsed.modifications) {
+      if (!mod.nodeId) {
+        const match = canvasBlocks.find((b) => b.blockId === mod.blockId)
+        if (match) mod.nodeId = match.nodeId
+      }
+    }
+  }
+
+  // Forward-resolve deleteNodeIds: if AI returned block type names or placeholders
+  if (parsed.intent === 'delete_block' && parsed.deleteNodeIds && canvasBlocks) {
+    parsed.deleteNodeIds = parsed.deleteNodeIds.map((id) => {
+      const existsOnCanvas = canvasBlocks.some((b) => b.nodeId === id)
+      if (existsOnCanvas) return id
+      // Try to match by blockId
+      const match = canvasBlocks.find((b) => b.blockId === id || b.blockName.toLowerCase().includes(id.toLowerCase()))
+      return match ? match.nodeId : id
+    }).filter(Boolean)
+  }
+
+  // Replace {{user_wallet}} placeholder with actual wallet address
+  if (userContext?.walletAddress) {
+    for (const step of parsed.steps) {
+      for (const [key, val] of Object.entries(step.params)) {
+        if (val === '{{user_wallet}}') {
+          step.params[key] = userContext.walletAddress
+        }
+      }
+    }
   }
 
   return parsed

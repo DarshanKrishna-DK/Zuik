@@ -13,6 +13,27 @@ import {
   BackgroundVariant,
   type ReactFlowInstance,
 } from '@xyflow/react'
+
+const VIEWPORT_STORAGE_KEY = 'zuik_builder_viewport'
+
+function readStoredViewport(): { x: number; y: number; zoom: number } | null {
+  try {
+    const raw = sessionStorage.getItem(VIEWPORT_STORAGE_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw) as { x?: number; y?: number; zoom?: number }
+    if (typeof v.x === 'number' && typeof v.y === 'number' && typeof v.zoom === 'number') {
+      return { x: v.x, y: v.y, zoom: v.zoom }
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
+function persistViewportFrom(inst: ReactFlowInstance<Node, Edge> | null) {
+  if (!inst) return
+  try {
+    sessionStorage.setItem(VIEWPORT_STORAGE_KEY, JSON.stringify(inst.getViewport()))
+  } catch { /* ignore */ }
+}
 import '@xyflow/react/dist/style.css'
 import { useWallet } from '@txnlab/use-wallet-react'
 import { useSearchParams } from 'react-router-dom'
@@ -40,7 +61,7 @@ import {
 } from '../lib/runAgent'
 import { getAlgorandClient } from '../services/algorand'
 import { materializeIntent, addNodesToCanvas } from '../lib/intentMaterializer'
-import type { ParsedIntent, CanvasBlock } from '../services/intentParser'
+import type { ParsedIntent, CanvasBlock, UserContext } from '../services/intentParser'
 import {
   isSupabaseConfigured, getWorkflow, createWorkflow, updateWorkflow,
   recordExecution, completeExecution,
@@ -64,8 +85,8 @@ function UploadIcon() {
 function TrashIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
 }
-function SparklesIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" /><path d="M20 3v4" /><path d="M22 5h-4" /></svg>
+function BrainCircuitIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg>
 }
 function ZapIcon() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></svg>
@@ -90,6 +111,8 @@ function nextNodeId() {
   return `node_${Date.now()}_${nodeIdCounter++}`
 }
 
+const MAX_HISTORY = 50
+
 export default function Builder() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -107,8 +130,37 @@ export default function Builder() {
   const rfInstance = useRef<ReactFlowInstance<Node, Edge> | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const [rfReady, setRfReady] = useState(false)
+  const [flowHydrated, setFlowHydrated] = useState(false)
+  const viewBootDone = useRef(false)
+  const prevWfParamRef = useRef<string | null>(null)
   const { transactionSigner, activeAddress } = useWallet()
   const [searchParams] = useSearchParams()
+
+  // Undo/Redo history
+  const undoStack = useRef<{ nodes: Node[]; edges: Edge[] }[]>([])
+  const redoStack = useRef<{ nodes: Node[]; edges: Edge[] }[]>([])
+  const skipHistory = useRef(false)
+
+  const pushHistory = useCallback(() => {
+    if (skipHistory.current) return
+    undoStack.current.push({ nodes: structuredClone(nodes), edges: structuredClone(edges) })
+    if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift()
+    redoStack.current = []
+  }, [nodes, edges])
+
+  // Capture state before React Flow changes
+  const wrappedOnNodesChange: typeof onNodesChange = useCallback((changes) => {
+    const hasRemoval = changes.some((c) => c.type === 'remove')
+    if (hasRemoval) pushHistory()
+    onNodesChange(changes)
+  }, [onNodesChange, pushHistory])
+
+  const wrappedOnEdgesChange: typeof onEdgesChange = useCallback((changes) => {
+    const hasRemoval = changes.some((c) => c.type === 'remove')
+    if (hasRemoval) pushHistory()
+    onEdgesChange(changes)
+  }, [onEdgesChange, pushHistory])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -171,23 +223,51 @@ export default function Builder() {
 
   useEffect(() => {
     const wfParam = searchParams.get('wf')
+    if (prevWfParamRef.current !== null && prevWfParamRef.current !== wfParam) {
+      try { sessionStorage.removeItem(VIEWPORT_STORAGE_KEY) } catch { /* ignore */ }
+    }
+    prevWfParamRef.current = wfParam
+
+    viewBootDone.current = false
+    setFlowHydrated(false)
     if (wfParam && isSupabaseConfigured()) {
-      getWorkflow(wfParam).then((wf) => {
-        if (wf) {
-          setWorkflowId(wf.id)
-          setWorkflowName(wf.name)
-          if (wf.flow_json?.nodes) setNodes(wf.flow_json.nodes as Node[])
-          if (wf.flow_json?.edges) setEdges(wf.flow_json.edges as Edge[])
-        }
-      }).catch(() => {})
+      getWorkflow(wfParam)
+        .then((wf) => {
+          if (wf) {
+            setWorkflowId(wf.id)
+            setWorkflowName(wf.name)
+            if (wf.flow_json?.nodes) setNodes(wf.flow_json.nodes as Node[])
+            if (wf.flow_json?.edges) setEdges(wf.flow_json.edges as Edge[])
+          }
+        })
+        .catch(() => {})
+        .finally(() => setFlowHydrated(true))
     } else {
       const saved = loadFlowFromLocal()
       if (saved && saved.nodes.length > 0) {
         setNodes(saved.nodes)
         setEdges(saved.edges)
       }
+      setFlowHydrated(true)
     }
   }, [searchParams, setNodes, setEdges])
+
+  useEffect(() => {
+    if (!rfReady || !flowHydrated || viewBootDone.current) return
+    const inst = rfInstance.current
+    if (!inst) return
+    const stored = readStoredViewport()
+    if (stored) {
+      inst.setViewport(stored, { duration: 0 })
+    } else if (nodes.length > 0) {
+      inst.fitView({ padding: 0.2 })
+      persistViewportFrom(inst)
+    } else {
+      inst.setViewport({ x: 0, y: 0, zoom: 0.7 }, { duration: 0 })
+      persistViewportFrom(inst)
+    }
+    viewBootDone.current = true
+  }, [rfReady, flowHydrated, nodes.length])
 
   const saveToSupabase = useCallback(async () => {
     if (!activeAddress || !isSupabaseConfigured() || nodes.length === 0) return
@@ -226,6 +306,28 @@ export default function Builder() {
         e.preventDefault()
         saveFlowToLocal(nodes, edges)
         saveToSupabase()
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        const prev = undoStack.current.pop()
+        if (prev) {
+          redoStack.current.push({ nodes: structuredClone(nodes), edges: structuredClone(edges) })
+          skipHistory.current = true
+          setNodes(prev.nodes)
+          setEdges(prev.edges)
+          skipHistory.current = false
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z') {
+        e.preventDefault()
+        const next = redoStack.current.pop()
+        if (next) {
+          undoStack.current.push({ nodes: structuredClone(nodes), edges: structuredClone(edges) })
+          skipHistory.current = true
+          setNodes(next.nodes)
+          setEdges(next.edges)
+          skipHistory.current = false
+        }
       }
     }
     window.addEventListener('keydown', handleKeyboard)
@@ -348,16 +450,73 @@ export default function Builder() {
     }
   }, [nodes, edges, transactionSigner, activeAddress, addLog, updateNodeStatus, workflowId])
 
+  const userContext: UserContext = useMemo(() => {
+    const tgChatId = typeof window !== 'undefined' ? localStorage.getItem('zuik_telegram_chat_id') || '' : ''
+    return {
+      walletAddress: activeAddress || undefined,
+      telegramChatId: tgChatId || undefined,
+    }
+  }, [activeAddress])
+
   const handleIntentParsed = useCallback((intent: ParsedIntent) => {
+    pushHistory()
+
+    // Handle block deletions
+    if (intent.intent === 'delete_block' && intent.deleteNodeIds && intent.deleteNodeIds.length > 0) {
+      const idsToDelete = new Set(intent.deleteNodeIds)
+      setNodes((nds) => nds.filter((n) => !idsToDelete.has(n.id)))
+      setEdges((eds) => eds.filter((e) => !idsToDelete.has(e.source) && !idsToDelete.has(e.target)))
+      return
+    }
+
+    // Handle block modifications (update existing block config)
+    if (intent.intent === 'modify_block' && intent.modifications) {
+      setNodes((nds) => nds.map((n) => {
+        const data = n.data as Record<string, unknown>
+        const blockId = data.blockId as string
+        const mod = intent.modifications?.find((m) =>
+          m.blockId === blockId || m.nodeId === n.id
+        )
+        if (mod && mod.configChanges) {
+          const existingConfig = (data.config as Record<string, string | number | undefined>) ?? {}
+          return {
+            ...n,
+            data: {
+              ...data,
+              config: { ...existingConfig, ...mod.configChanges },
+            },
+          }
+        }
+        return n
+      }))
+      return
+    }
+
+    // Handle clear_and_rebuild: replace the entire canvas
+    if (intent.intent === 'clear_and_rebuild' || (nodes.length > 0 && intent.replaceCanvas)) {
+      const materialized = materializeIntent(intent)
+      setNodes(materialized.nodes)
+      setEdges(materialized.edges)
+      setTimeout(() => {
+        const inst = rfInstance.current
+        inst?.fitView({ padding: 0.2, duration: 500 })
+        setTimeout(() => persistViewportFrom(rfInstance.current), 560)
+      }, 100)
+      return
+    }
+
+    // Default: add new blocks to canvas
     const materialized = materializeIntent(intent)
     const merged = addNodesToCanvas(nodes, edges, materialized.nodes, materialized.edges)
     setNodes(merged.nodes)
     setEdges(merged.edges)
 
     setTimeout(() => {
-      rfInstance.current?.fitView({ padding: 0.2, duration: 500 })
+      const inst = rfInstance.current
+      inst?.fitView({ padding: 0.2, duration: 500 })
+      setTimeout(() => persistViewportFrom(rfInstance.current), 560)
     }, 100)
-  }, [nodes, edges, setNodes, setEdges])
+  }, [nodes, edges, setNodes, setEdges, pushHistory])
 
   const handleSave = () => {
     saveFlowToLocal(nodes, edges)
@@ -409,6 +568,8 @@ export default function Builder() {
     clearFlowLocal()
     window.history.replaceState(null, '', '/builder')
     setMenuOpen(false)
+    try { sessionStorage.removeItem(VIEWPORT_STORAGE_KEY) } catch { /* ignore */ }
+    viewBootDone.current = false
   }
 
   const handleUseTemplate = useCallback((templateNodes: TemplateNode[], templateEdges: TemplateEdge[], name: string) => {
@@ -434,7 +595,9 @@ export default function Builder() {
     window.history.replaceState(null, '', '/builder')
 
     setTimeout(() => {
-      rfInstance.current?.fitView({ padding: 0.2, duration: 500 })
+      const inst = rfInstance.current
+      inst?.fitView({ padding: 0.2, duration: 500 })
+      setTimeout(() => persistViewportFrom(rfInstance.current), 560)
     }, 100)
   }, [setNodes, setEdges])
 
@@ -496,15 +659,14 @@ export default function Builder() {
             onStop={() => agentHandleRef.current?.stop()}
             onPause={() => agentHandleRef.current?.pause()}
             onResume={() => agentHandleRef.current?.resume()}
-            onToggleLog={() => setLogOpen((o) => !o)}
-            logCount={logs.length}
+            onClear={handleClear}
           />
           <div className="zuik-agent-separator" />
 
-          <button className="zuik-btn zuik-btn-primary zuik-btn-sm" onClick={() => setChatOpen((o) => !o)} title="AI Intent Assistant">
-            <SparklesIcon /> AI
+          <button className="z-btn z-btn-primary z-btn-sm" onClick={() => setChatOpen((o) => !o)} title="AI Intent Assistant">
+            <BrainCircuitIcon /> AI
           </button>
-          <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={() => setTemplateGalleryOpen((o) => !o)} title="Starter Workflows">
+          <button className="z-btn z-btn-ghost z-btn-sm" onClick={() => setTemplateGalleryOpen((o) => !o)} title="Starter Workflows">
             <LayoutGridIcon /> Templates
           </button>
           <div className="zuik-agent-separator" />
@@ -533,8 +695,6 @@ export default function Builder() {
                 <button onClick={() => { setLogOpen((o) => !o); setMenuOpen(false) }}>
                   <ActivityIcon /> Execution Log
                 </button>
-                <div className="z-dropdown-sep" />
-                <button onClick={handleClear} style={{ color: 'var(--z-error)' }}><TrashIcon /> Clear Canvas</button>
               </div>
             )}
           </div>
@@ -558,6 +718,7 @@ export default function Builder() {
           onClose={() => setChatOpen(false)}
           onIntentParsed={handleIntentParsed}
           canvasBlocks={canvasBlocks}
+          userContext={userContext}
         />
         <TemplateGallery
           isOpen={templateGalleryOpen}
@@ -567,15 +728,18 @@ export default function Builder() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
+          onNodesChange={wrappedOnNodesChange}
+          onEdgesChange={wrappedOnEdgesChange}
           onConnect={onConnect}
           isValidConnection={isConnectionValid}
           onDrop={onDrop}
           onDragOver={onDragOver}
-          onInit={(inst) => { rfInstance.current = inst }}
+          onInit={(inst) => {
+            rfInstance.current = inst
+            setRfReady(true)
+          }}
+          onMoveEnd={() => persistViewportFrom(rfInstance.current)}
           nodeTypes={nodeTypes}
-          fitView
           snapToGrid
           snapGrid={[16, 16]}
           deleteKeyCode={['Backspace', 'Delete']}
@@ -589,13 +753,6 @@ export default function Builder() {
             style={{ borderRadius: 8 }}
           />
         </ReactFlow>
-        <button
-          className="zuik-simulate-fab"
-          onClick={() => setTransactionPanelOpen(true)}
-          title="Simulate & Sign Transactions"
-        >
-          <ZapIcon /> Simulate
-        </button>
       </div>
     </div>
   )

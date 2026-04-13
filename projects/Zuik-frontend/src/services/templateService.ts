@@ -1,4 +1,4 @@
-export type TemplateCategory = 'payments' | 'trading' | 'automation' | 'notifications'
+export type TemplateCategory = 'payments' | 'trading' | 'alerts'
 
 export interface TemplateNode {
   id: string
@@ -30,8 +30,7 @@ export interface WorkflowTemplate {
 export const TEMPLATE_CATEGORIES: { id: TemplateCategory; label: string; color: string }[] = [
   { id: 'payments', label: 'Payments', color: '#3B82F6' },
   { id: 'trading', label: 'Trading', color: '#F97316' },
-  { id: 'automation', label: 'Automation', color: '#8B5CF6' },
-  { id: 'notifications', label: 'Notifications', color: '#22C55E' },
+  { id: 'alerts', label: 'Alerts', color: '#22C55E' },
 ]
 
 const TEMPLATES: WorkflowTemplate[] = [
@@ -57,7 +56,7 @@ const TEMPLATES: WorkflowTemplate[] = [
     id: 'price-alert',
     name: 'Price Alert',
     description: 'Monitor ALGO/USDC price and send a Telegram alert when it drops below your threshold.',
-    category: 'notifications',
+    category: 'alerts',
     tags: ['alert', 'price', 'Telegram', 'monitor'],
     difficulty: 'beginner',
     estimatedFee: '~0 ALGO (read-only)',
@@ -147,7 +146,7 @@ const TEMPLATES: WorkflowTemplate[] = [
     id: 'whale-alert',
     name: 'Whale Alert',
     description: 'Monitor your wallet for large incoming payments and get instant Telegram notifications.',
-    category: 'notifications',
+    category: 'alerts',
     tags: ['whale', 'alert', 'monitor', 'Telegram'],
     difficulty: 'intermediate',
     estimatedFee: '~0 ALGO (read-only)',

@@ -43,61 +43,74 @@ export default function Sidebar() {
 
   return (
     <aside className={`zuik-sidebar${panelOpen ? '' : ' zuik-sidebar-collapsed'}`}>
-      <button
-        className="zuik-sidebar-toggle"
-        onClick={() => setPanelOpen((o) => !o)}
-        title={panelOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-      >
-        {panelOpen ? <PanelCloseIcon /> : <PanelOpenIcon />}
-      </button>
+      {panelOpen ? (
+        <div className="zuik-sidebar-content-wrap">
+          <div className="zuik-sidebar-content">
+            <div className="zuik-sidebar-search">
+              <SearchIcon />
+              <input
+                placeholder="Search blocks..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {categoryOrder.map(cat => {
+                const meta = CATEGORY_META[cat]
+                const items = grouped[cat].filter(matchesSearch)
+                if (deferredSearch && items.length === 0) return null
+                const isCollapsed = collapsed[cat] && !deferredSearch
 
-      {panelOpen && (
-        <div className="zuik-sidebar-content">
-          <div className="zuik-sidebar-search">
-            <SearchIcon />
-            <input
-              placeholder="Search blocks..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {categoryOrder.map(cat => {
-              const meta = CATEGORY_META[cat]
-              const items = grouped[cat].filter(matchesSearch)
-              if (deferredSearch && items.length === 0) return null
-              const isCollapsed = collapsed[cat] && !deferredSearch
-
-              return (
-                <div key={cat}>
-                  <div className="zuik-category-header" onClick={() => toggleCategory(cat)}>
-                    <span className="zuik-category-title">{meta.label}</span>
-                    <span className="zuik-category-count">
-                      {items.length}
-                      {isCollapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
-                    </span>
-                  </div>
-                  {!isCollapsed && items.map(block => {
-                    const Icon = block.icon
-                    return (
-                      <div
-                        key={block.id}
-                        className="zuik-block-item"
-                        draggable
-                        onDragStart={(e) => onDragStart(e, block.id)}
-                        title={block.description}
-                      >
-                        <div className={`zuik-block-icon ${meta.bgClass}`}>
-                          <Icon size={14} className={meta.colorClass} />
+                return (
+                  <div key={cat}>
+                    <div className="zuik-category-header" onClick={() => toggleCategory(cat)}>
+                      <span className="zuik-category-title">{meta.label}</span>
+                      <span className="zuik-category-count">
+                        {items.length}
+                        {isCollapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
+                      </span>
+                    </div>
+                    {!isCollapsed && items.map(block => {
+                      const Icon = block.icon
+                      return (
+                        <div
+                          key={block.id}
+                          className="zuik-block-item"
+                          draggable
+                          onDragStart={(e) => onDragStart(e, block.id)}
+                          title={block.description}
+                        >
+                          <div className={`zuik-block-icon ${meta.bgClass}`}>
+                            <Icon size={14} className={meta.colorClass} />
+                          </div>
+                          <span>{block.name}</span>
                         </div>
-                        <span>{block.name}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
           </div>
+          <button
+            type="button"
+            className="zuik-sidebar-edge-toggle"
+            onClick={() => setPanelOpen(false)}
+            title="Collapse blocks panel"
+          >
+            <PanelCloseIcon />
+          </button>
+        </div>
+      ) : (
+        <div className="zuik-sidebar-collapsed-strip">
+          <button
+            type="button"
+            className="zuik-sidebar-expand-btn"
+            onClick={() => setPanelOpen(true)}
+            title="Open blocks panel"
+          >
+            <PanelOpenIcon />
+          </button>
         </div>
       )}
     </aside>
