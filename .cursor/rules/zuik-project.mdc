@@ -1,0 +1,38 @@
+---
+description: Zuik monorepo standards, stack, and Algorand agent guidance
+alwaysApply: true
+---
+
+# Zuik project rules
+
+## Repository layout
+
+- **Frontend:** `projects/Zuik-frontend/` (React 18, Vite, TypeScript, React Router, `@xyflow/react`, `@txnlab/use-wallet`).
+- **Server agent:** `server/` (Node.js, Telegram, scheduled tasks).
+- **AlgoKit:** Root `.algokit.toml` and `.algokit/` define workspace metadata and generators. Prefer `algokit` CLI patterns when adding AlgoKit-managed projects.
+
+## Frontend and TypeScript
+
+- Match existing patterns: component structure, hooks, CSS variables in `App.css`, and `blockRegistry` for flow blocks.
+- Prefer small, task-focused diffs. Avoid unrelated refactors.
+- For React Flow: avoid keyboard shortcuts stealing focus from inputs (stop propagation on inputs where needed).
+
+## Algorand and smart contracts (when you touch chain code)
+
+- Use **Algorand TypeScript (Puya)** or **Algorand Python (Puya)** compiled with **Puya**. Do **not** use PyTEAL, Beaker, or hand-written TEAL for application logic.
+- Do **not** import third-party libraries inside contract code.
+- Default to TypeScript unless the user asks for Python.
+- Before writing contract code: use project documentation MCP (e.g. Context7 `/websites/dev_algorand_co`) and canonical examples from `algorandfoundation/devportal-code-examples`, `puya-ts`, or `puya` as appropriate.
+- For client and app calls: follow **AlgoKit Utils** and official SDK patterns already used in the repo.
+
+## Writing and UX copy
+
+- **Never use the em dash character (U+2014).** Use a normal hyphen (`-`) or a spaced hyphen (` - `) for readability.
+
+## Deployment
+
+- Before suggesting deployment to external hosts (Vercel, Netlify, Heroku, Railway, Render, Fly.io, Amplify, Cloudflare Pages, or similar): JLL policy requires InfoSec approval. Prefer localhost for prototypes unless approval is confirmed.
+
+## Duplication note
+
+Root `.cursorrules` mirrors this file for editors that only read `.cursorrules`. Edit both together or treat `.cursor/rules/zuik-project.mdc` as the source of truth.

@@ -1,0 +1,27 @@
+# Zuik (see also .cursor/rules/zuik-project.mdc for the same rules in Cursor format)
+
+## Repository layout
+
+- Frontend: projects/Zuik-frontend/ (React 18, Vite, TypeScript, React Router, @xyflow/react, @txnlab/use-wallet).
+- Server agent: server/ (Node.js, Telegram, scheduled tasks).
+- AlgoKit: root .algokit.toml and .algokit/ for workspace metadata and generators.
+
+## Frontend and TypeScript
+
+- Match existing patterns and naming. Prefer small, task-focused diffs.
+- React Flow: prevent node delete shortcuts from breaking text inputs (stop propagation on inputs where the codebase already does).
+
+## Algorand and smart contracts
+
+- Use Algorand TypeScript (Puya) or Algorand Python (Puya) with the Puya compiler. Do not use PyTEAL, Beaker, or raw TEAL for app logic.
+- No third-party imports inside contract code.
+- Default to TypeScript for contracts unless the user requests Python.
+- Use official docs and algorandfoundation examples (devportal-code-examples, puya-ts, puya) before implementing chain code.
+
+## Writing
+
+- Never use the em dash character (U+2014). Use hyphen (-) or spaced hyphen ( - ).
+
+## Deployment
+
+- JLL policy: InfoSec approval before deploying to external infrastructure; use localhost for prototypes unless approved.

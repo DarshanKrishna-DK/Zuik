@@ -173,8 +173,13 @@ Zuik_Project_Documentation.pdf
 ZUIK_DEVELOPMENT_PLAN.md
 CHANGELOG.md
 AGENTS.md
-.cursorrules
-.cursor/
+DEMO_SCRIPT.md
+
+# Cursor: track only repo Zuik rule; ignore local skill copies and other .cursor files
+.cursor/*
+!.cursor/rules/
+.cursor/rules/*
+!.cursor/rules/zuik-project.mdc
 
 # ===== IDE =====
 .vscode/
