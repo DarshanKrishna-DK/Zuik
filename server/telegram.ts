@@ -88,19 +88,24 @@ async function sendWithButtons(chatId: number, text: string, buttons: { text: st
   })
 }
 
-async function handleStart(chatId: number, firstName?: string, username?: string) {
+async function handleStart(chatId: number, firstName?: string, _username?: string) {
   try {
-    await supabase
+    const chatIdStr = String(chatId)
+    const { data: existing } = await supabase
       .from('telegram_links')
-      .upsert(
-        {
-          telegram_chat_id: String(chatId),
-          telegram_username: username || firstName || 'unknown',
-          registered_at: new Date().toISOString(),
-        },
-        { onConflict: 'telegram_chat_id' },
-      )
-    console.log(`[Telegram] Auto-registered chat ${chatId} (${username || firstName})`)
+      .select('id')
+      .eq('telegram_chat_id', chatIdStr)
+      .maybeSingle()
+
+    if (!existing) {
+      await supabase
+        .from('telegram_links')
+        .insert({
+          telegram_chat_id: chatIdStr,
+          wallet_address: '',
+        })
+    }
+    console.log(`[Telegram] Auto-registered chat ${chatId} (${firstName})`)
   } catch (e) {
     console.warn('[Telegram] Auto-register failed:', e)
   }
@@ -111,11 +116,11 @@ async function handleStart(chatId: number, firstName?: string, username?: string
     `${greeting} Welcome to <b>Zuik</b>`,
     '',
     'Your DeFi automation assistant on Algorand.',
-    'Build workflows, monitor prices, and execute',
-    'trades - all from Telegram.',
     '',
-    'You are now connected. Tap a button below',
-    'to get started.',
+    `Your Chat ID: <code>${chatId}</code>`,
+    'Copy this into Zuik Settings to receive notifications.',
+    '',
+    'Tap a button below to get started.',
   ].join('\n'), [
     [
       { text: 'Link Wallet', callback_data: 'action_link' },
@@ -164,19 +169,34 @@ async function handleLink(chatId: number, walletAddress: string) {
     return
   }
 
-  const { error } = await supabase
+  const chatIdStr = String(chatId)
+
+  const { data: existing } = await supabase
     .from('telegram_links')
-    .upsert(
-      {
+    .select('id')
+    .eq('telegram_chat_id', chatIdStr)
+    .maybeSingle()
+
+  let error: { message: string } | null = null
+  if (existing) {
+    const result = await supabase
+      .from('telegram_links')
+      .update({ wallet_address: walletAddress })
+      .eq('id', (existing as { id: string }).id)
+    error = result.error
+  } else {
+    const result = await supabase
+      .from('telegram_links')
+      .insert({
         wallet_address: walletAddress,
-        telegram_chat_id: String(chatId),
-      },
-      { onConflict: 'telegram_chat_id' },
-    )
+        telegram_chat_id: chatIdStr,
+      })
+    error = result.error
+  }
 
   if (error) {
     console.error('[Telegram] Link error:', error.message)
-    await sendReply(chatId, 'Failed to link wallet. Please try again.')
+    await sendReply(chatId, `Link failed: ${error.message}\nPlease try again or contact support.`)
     return
   }
 

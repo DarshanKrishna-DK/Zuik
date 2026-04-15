@@ -1,5 +1,7 @@
 import algosdk from 'algosdk'
 import { getAlgodClient } from './algorand'
+import { resolveAssetNameSync } from './assetResolver'
+import { getSwapQuote } from './swapToken'
 
 export interface SimulationStep {
   index: number
@@ -78,6 +80,7 @@ export function describeTransactionType(
     case 'create-asa':
       return 'asset-create'
     case 'swap-token':
+    case 'call-contract':
       return 'app-call'
     default:
       return 'unknown'
@@ -93,29 +96,28 @@ export function buildStepDescription(
     case 'send-payment': {
       const recipient = config.recipient as string
       const amount = config.amount
-      const asset = config.asset as number | undefined
-      const assetLabel = asset && Number(asset) > 0 ? `ASA #${asset}` : 'ALGO'
+      const assetLabel = resolveAssetNameSync(config.asset)
       const addr = recipient
         ? `${recipient.slice(0, 6)}...${recipient.slice(-4)}`
         : '(not set)'
       return `Send ${amount ?? '?'} ${assetLabel} to ${addr}`
     }
     case 'opt-in-asa':
-      return `Opt in to ASA #${config.assetId ?? '?'}`
+      return `Opt in to ${resolveAssetNameSync(config.assetId)}`
     case 'create-asa':
       return `Create ASA "${config.name ?? '?'}" (${config.unitName ?? '?'}, ${config.totalSupply ?? '?'} units, ${config.decimals ?? 6} decimals)`
     case 'swap-token': {
-      const fromAsset = config.fromAsset as number | undefined
-      const toAsset = config.toAsset as number | undefined
-      const fromLabel = fromAsset === 0 || !fromAsset ? 'ALGO' : `ASA #${fromAsset}`
-      const toLabel = toAsset === 0 || !toAsset ? 'ALGO' : `ASA #${toAsset}`
-      return `Swap ${config.amount ?? '?'} ${fromLabel} → ${toLabel}`
+      const fromLabel = resolveAssetNameSync(config.fromAsset)
+      const toLabel = resolveAssetNameSync(config.toAsset)
+      const base = `Swap ${config.amount ?? '?'} ${fromLabel} → ${toLabel}`
+      if (config._expectedOut != null) {
+        return `${base} (expected: ~${config._expectedOut} ${toLabel})`
+      }
+      return base
     }
     case 'get-quote': {
-      const fromAsset = config.fromAsset as number | undefined
-      const toAsset = config.toAsset as number | undefined
-      const fromLabel = fromAsset === 0 || !fromAsset ? 'ALGO' : `ASA #${fromAsset}`
-      const toLabel = toAsset === 0 || !toAsset ? 'ALGO' : `ASA #${toAsset}`
+      const fromLabel = resolveAssetNameSync(config.fromAsset)
+      const toLabel = resolveAssetNameSync(config.toAsset)
       return `Fetch swap quote: ${config.amount ?? '?'} ${fromLabel} → ${toLabel}`
     }
     case 'fiat-onramp':
@@ -128,6 +130,47 @@ export function buildStepDescription(
       return `HTTP ${config.method ?? 'GET'} → ${config.url ?? '(not set)'}`
     case 'log-debug':
       return `Log: ${config.label ?? 'debug'}`
+    case 'send-telegram':
+      return `Send Telegram: "${(config.message as string)?.slice(0, 40) ?? '(no message)'}${(config.message as string)?.length > 40 ? '...' : ''}" to chat ${config.chatId || '(not set)'}`
+    case 'send-discord':
+      return `Send Discord message`
+    case 'browser-notify':
+      return `Browser notification: ${config.title ?? 'Zuik'}`
+    case 'comparator':
+      return `Compare: value ${config.operator ?? '=='} ${config.threshold ?? '?'}`
+    case 'delay':
+      return `Wait ${config.duration ?? 5} seconds`
+    case 'math-op': {
+      const op = config.operation ?? 'add'
+      if (op === 'percentage') return `Calculate ${config.b ?? '?'}% of input`
+      return `Math: ${op} (b = ${config.b ?? '?'})`
+    }
+    case 'filter':
+      return `Filter: ${config.field ?? '?'} ${config.operator ?? '=='} ${config.value ?? '?'}`
+    case 'rate-limiter':
+      return `Rate limit: max ${config.maxPerWindow ?? 5} per ${config.windowSec ?? 60}s`
+    case 'variable-set':
+      return `Set variable: ${config.varName ?? '?'}`
+    case 'constant':
+      return `Constant: ${config.value ?? '(empty)'}`
+    case 'merge':
+      return `Merge (${config.mode ?? 'first'})`
+    case 'transform-data':
+      return `Transform to ${config.targetType ?? 'string'}`
+    case 'price-monitor':
+      return `Monitor price of asset ${config.assetId ?? '?'}`
+    case 'pool-info':
+      return `Pool info: ${resolveAssetNameSync(config.asset1)} / ${resolveAssetNameSync(config.asset2)}`
+    case 'portfolio-balance':
+      return `Check portfolio balance`
+    case 'wallet-event':
+      return `Watch wallet for incoming ${resolveAssetNameSync(config.assetId)} transfers`
+    case 'timer-loop':
+      return `Timer: every ${config.interval ?? 60}s${config.maxIterations ? ` (max ${config.maxIterations})` : ''}`
+    case 'webhook-receiver':
+      return `Listen for webhook at ${config.path ?? '/'}`
+    case 'telegram-trigger':
+      return `Listen for Telegram messages`
     default:
       return blockName
   }
@@ -139,11 +182,12 @@ export function estimateStepFee(blockId: string): number {
   switch (blockId) {
     case 'send-payment':
     case 'opt-in-asa':
-      return MIN_FEE_MICRO
     case 'create-asa':
       return MIN_FEE_MICRO
     case 'swap-token':
-      return MIN_FEE_MICRO * 4
+      return MIN_FEE_MICRO * 2
+    case 'call-contract':
+      return MIN_FEE_MICRO * 2
     default:
       return 0
   }
@@ -181,12 +225,88 @@ export function buildSimulationPreview(
     })
   }
 
+  const hasTriggerBlocks = actionBlocks.some((b) =>
+    ['timer-loop', 'wallet-event', 'webhook-receiver', 'telegram-trigger'].includes(b.blockId)
+  )
+  if (hasTriggerBlocks) {
+    warnings.push({
+      severity: 'info',
+      message: 'This workflow has trigger blocks. Run executes all steps once for testing. For live triggers (polling for wallet events, timers), use the agent Run button in the toolbar.',
+    })
+  }
+
   return {
     success: true,
     steps,
     totalFee,
     warnings,
   }
+}
+
+async function getAssetDecimalsForSim(assetId: number): Promise<number> {
+  if (assetId === 0) return 6
+  try {
+    const algod = getAlgodClient()
+    const info = await algod.getAssetByID(BigInt(assetId)).do()
+    return Number(
+      (info as Record<string, unknown>).decimals ??
+      (info as Record<string, Record<string, unknown>>).params?.decimals ?? 6
+    )
+  } catch {
+    return 6
+  }
+}
+
+/**
+ * Fetches live DEX quotes for swap steps and enriches the simulation with
+ * expected output amounts.
+ */
+export async function enrichSwapQuotes(
+  actionBlocks: { blockId: string; config: Record<string, string | number | undefined> }[],
+  simulation: SimulationResult,
+): Promise<SimulationResult> {
+  const updated = { ...simulation, steps: [...simulation.steps] }
+
+  for (let i = 0; i < actionBlocks.length; i++) {
+    const { blockId, config } = actionBlocks[i]
+    if (blockId !== 'swap-token') continue
+
+    const fromAssetId = Number(config.fromAsset ?? 0)
+    const toAssetId = Number(config.toAsset ?? 0)
+    const rawAmount = config.amount
+    if (rawAmount == null || typeof rawAmount === 'string' && /\{\{.*\}\}/.test(rawAmount)) continue
+
+    const numericAmount = Number(rawAmount)
+    if (isNaN(numericAmount) || numericAmount <= 0) continue
+
+    try {
+      const decimalsIn = await getAssetDecimalsForSim(fromAssetId)
+      const decimalsOut = await getAssetDecimalsForSim(toAssetId)
+      const baseAmount = Math.round(numericAmount * 10 ** decimalsIn)
+
+      const quote = await getSwapQuote({
+        fromAssetId,
+        toAssetId,
+        amount: baseAmount,
+        swapType: 'FIXED_INPUT',
+        network: 'testnet',
+      })
+
+      if (quote.quoteAmount > 0) {
+        const humanOut = (quote.quoteAmount / 10 ** decimalsOut).toFixed(decimalsOut > 2 ? 4 : 2)
+        const enrichedConfig = { ...config, _expectedOut: humanOut }
+        const step = updated.steps[i]
+        updated.steps[i] = {
+          ...step,
+          description: buildStepDescription(blockId, step.blockName, enrichedConfig),
+        }
+      }
+    } catch (e) {
+      console.warn('[enrichSwapQuotes] Quote fetch failed for step', i + 1, e)
+    }
+  }
+
+  return updated
 }
 
 export async function simulatePaymentTransaction(

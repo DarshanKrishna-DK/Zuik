@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useWallet } from '@txnlab/use-wallet-react'
 import { getAlgodConfigFromViteEnvironment } from '../utils/network/getAlgoClientConfigs'
 import { isSupabaseConfigured } from '../services/supabase'
@@ -45,6 +45,17 @@ export default function Settings() {
   const { activeAddress } = useWallet()
   const sbConfigured = isSupabaseConfigured()
   const groqConfigured = isGroqConfigured()
+  const [tgChatId, setTgChatId] = useState(() =>
+    typeof localStorage !== 'undefined' ? localStorage.getItem('zuik_telegram_chat_id') ?? '' : ''
+  )
+  const saveTgChatId = useCallback((value: string) => {
+    setTgChatId(value)
+    if (value.trim()) {
+      localStorage.setItem('zuik_telegram_chat_id', value.trim())
+    } else {
+      localStorage.removeItem('zuik_telegram_chat_id')
+    }
+  }, [])
 
   const algod = useMemo(() => {
     try {
@@ -100,17 +111,42 @@ export default function Settings() {
             </div>
             <div style={{ padding: '4px 16px 12px' }}>
               <p style={{ fontSize: '0.75rem', color: 'var(--z-text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
-                Open the bot in Telegram, press /start, and it will automatically link to your account. Build workflows, get alerts, and check status - all from Telegram.
+                1. Open the bot in Telegram and press /start<br/>
+                2. The bot will show your <strong>Chat ID</strong> - copy it below<br/>
+                3. Workflows with "Send Telegram" blocks will auto-use this ID
               </p>
               <a
                 href={`https://t.me/${TG_BOT_USERNAME}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="z-btn z-btn-primary z-btn-sm"
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none' }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none', marginBottom: 10 }}
               >
                 <TelegramIcon /> Open in Telegram <ExternalLinkIcon />
               </a>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="text"
+                  value={tgChatId}
+                  onChange={(e) => saveTgChatId(e.target.value)}
+                  placeholder="Paste your Telegram Chat ID"
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    fontSize: '0.75rem',
+                    borderRadius: 6,
+                    border: '1px solid var(--z-border)',
+                    background: 'var(--z-surface)',
+                    color: 'var(--z-text)',
+                    fontFamily: 'var(--z-mono)',
+                  }}
+                />
+              </div>
+              {tgChatId && (
+                <p style={{ fontSize: '0.7rem', color: 'var(--z-success)', marginTop: 4 }}>
+                  Chat ID saved. Telegram notifications will use this ID.
+                </p>
+              )}
             </div>
           </div>
 

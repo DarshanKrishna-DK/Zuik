@@ -4,12 +4,30 @@ import { getAlgodClient } from './algorand'
 import { createAsa } from './createAsa'
 import { optInToAsa } from './optInAsa'
 import { sendPayment } from './sendPayment'
-import { executeSwap, getSwapQuote, type SwapQuoteResponse } from './swapToken'
+import { executeSwap, getSwapQuote } from './swapToken'
 import {
   generateOnRampWidgetUrl,
   initiateSellTransaction,
   getFiatBuyQuote,
 } from './saberMoney'
+
+async function getAssetDecimals(assetId: number): Promise<number> {
+  if (assetId === 0) return 6
+  try {
+    const algod = getAlgodClient()
+    const info = await algod.getAssetByID(BigInt(assetId)).do()
+    return Number(
+      (info as Record<string, unknown>).decimals ??
+      (info as Record<string, Record<string, unknown>>).params?.decimals ?? 6
+    )
+  } catch {
+    return 6
+  }
+}
+
+function toBaseUnits(amount: number, decimals: number): number {
+  return Math.round(amount * 10 ** decimals)
+}
 
 export interface ExecutorContext {
   sender: string
@@ -120,23 +138,90 @@ async function executeCreateAsa(
   return { txId: result.txId, assetId: result.assetId }
 }
 
+function isTemplateExpr(val: unknown): boolean {
+  return typeof val === 'string' && /\{\{.*\}\}/.test(val)
+}
+
+async function preflight(sender: string, fromAssetId: number, baseAmount: number): Promise<void> {
+  const algod = getAlgodClient()
+  try {
+    const acctInfo = await algod.accountInformation(sender).do()
+    const info = acctInfo as Record<string, unknown>
+    const algoBalance = Number(info.amount ?? 0)
+    const minBalance = Number(info.minBalance ?? info['min-balance'] ?? 100_000)
+
+    if (algoBalance < minBalance + 200_000) {
+      const algoStr = (algoBalance / 1e6).toFixed(4)
+      const needStr = ((minBalance + 200_000) / 1e6).toFixed(4)
+      throw new Error(
+        `Wallet ${sender.slice(0, 8)}... has ${algoStr} ALGO but needs at least ${needStr} ALGO ` +
+        `(min balance + swap fees). Fund this wallet with more ALGO before swapping.`
+      )
+    }
+
+    if (fromAssetId !== 0) {
+      type AssetHolding = Record<string, unknown>
+      const assets = info.assets as AssetHolding[] | undefined
+      const holding = assets?.find((a) => {
+        const id = Number(a.assetId ?? a['asset-id'] ?? a.assetID ?? -1)
+        return id === fromAssetId
+      })
+      if (!holding) {
+        throw new Error(
+          `Wallet ${sender.slice(0, 8)}... is not opted in to asset ${fromAssetId}. ` +
+          'Opt in to the asset first before swapping.'
+        )
+      }
+      const holdingAmount = Number(holding.amount ?? 0)
+      if (holdingAmount < baseAmount) {
+        throw new Error(
+          `Wallet ${sender.slice(0, 8)}... has ${holdingAmount} base units of asset ${fromAssetId} ` +
+          `but the swap requires ${baseAmount}. You do not have enough of this asset.`
+        )
+      }
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('Wallet ')) throw e
+    console.warn('[preflight] Could not verify account:', e)
+  }
+}
+
 async function executeSwapToken(
   config: BlockConfig,
   context: ExecutorContext
 ): Promise<Record<string, unknown>> {
   const fromAsset = config.fromAsset as number
   const toAsset = config.toAsset as number
-  const amount = config.amount as number
+  const amount = config.amount
 
   if (fromAsset == null || toAsset == null || amount == null) {
     throw new Error('Swap Token: fromAsset, toAsset, and amount are required')
   }
 
+  const numericAmount = Number(amount)
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    if (isTemplateExpr(amount)) {
+      throw new Error(
+        `Swap Token: amount "${amount}" was not resolved. ` +
+        'This usually means the upstream trigger block did not produce output. ' +
+        'Check that the wallet-event or math-op block is connected and has fired.'
+      )
+    }
+    throw new Error(`Swap Token: amount "${amount}" is not a valid positive number`)
+  }
+
+  const fromAssetId = Number(fromAsset)
+  const decimals = await getAssetDecimals(fromAssetId)
+  const baseAmount = toBaseUnits(numericAmount, decimals)
+
+  console.log('[Zuik Swap] sender:', context.sender, '| from:', fromAssetId, '| amount:', baseAmount)
+  await preflight(context.sender, fromAssetId, baseAmount)
+
   const network = import.meta.env.VITE_ALGOD_NETWORK ?? 'testnet'
   const quote = await getSwapQuote({
-    fromAssetId: Number(fromAsset),
+    fromAssetId,
     toAssetId: Number(toAsset),
-    amount: Number(amount),
+    amount: baseAmount,
     swapType: 'FIXED_INPUT',
     network,
   })
@@ -156,17 +241,32 @@ async function executeGetQuote(
 ): Promise<Record<string, unknown>> {
   const fromAsset = config.fromAsset as number
   const toAsset = config.toAsset as number
-  const amount = config.amount as number
+  const amount = config.amount
 
   if (fromAsset == null || toAsset == null || amount == null) {
     throw new Error('Get Quote: fromAsset, toAsset, and amount are required')
   }
 
+  const numericAmount = Number(amount)
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    if (isTemplateExpr(amount)) {
+      throw new Error(
+        `Get Quote: amount "${amount}" was not resolved. ` +
+        'Check that the upstream block is connected and has produced output.'
+      )
+    }
+    throw new Error(`Get Quote: amount "${amount}" is not a valid positive number`)
+  }
+
+  const fromAssetId = Number(fromAsset)
+  const decimals = await getAssetDecimals(fromAssetId)
+  const baseAmount = toBaseUnits(numericAmount, decimals)
+
   const network = import.meta.env.VITE_ALGOD_NETWORK ?? 'testnet'
   const quote = await getSwapQuote({
-    fromAssetId: Number(fromAsset),
+    fromAssetId,
     toAssetId: Number(toAsset),
-    amount: Number(amount),
+    amount: baseAmount,
     swapType: 'FIXED_INPUT',
     network,
   })
@@ -328,22 +428,33 @@ export const blockExecutors: Record<string, BlockExecutor> = {
 
 export const ACTION_BLOCK_IDS = Object.keys(blockExecutors)
 
-export function getActionBlocksInOrder(
+/**
+ * Returns all blocks with a blockId in topological order, including triggers.
+ */
+export function getExecutableBlocksInOrder(
   nodes: { id: string; data: Record<string, unknown> }[],
   edges: { source: string; target: string }[]
 ): { nodeId: string; blockId: string; config: BlockConfig }[] {
-  const actionNodes = nodes.filter((n) => {
+  const executableNodes = nodes.filter((n) => {
     const blockId = n.data.blockId as string
-    return blockId && ACTION_BLOCK_IDS.includes(blockId)
+    return !!blockId
   })
-  const nodeIds = actionNodes.map((n) => n.id)
+  const nodeIds = executableNodes.map((n) => n.id)
   const ordered = topologicalSort(nodeIds, edges)
   return ordered.map((nodeId) => {
-    const node = actionNodes.find((n) => n.id === nodeId)!
+    const node = executableNodes.find((n) => n.id === nodeId)!
     return {
       nodeId,
       blockId: node.data.blockId as string,
       config: (node.data.config as BlockConfig) ?? {},
     }
   })
+}
+
+/** @deprecated Use getExecutableBlocksInOrder instead */
+export function getActionBlocksInOrder(
+  nodes: { id: string; data: Record<string, unknown> }[],
+  edges: { source: string; target: string }[]
+): { nodeId: string; blockId: string; config: BlockConfig }[] {
+  return getExecutableBlocksInOrder(nodes, edges)
 }

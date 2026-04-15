@@ -221,6 +221,18 @@ export function recordExecution(): void {
 export function suggestFix(errorMessage: string): string | null {
   const msg = errorMessage.toLowerCase()
 
+  if (msg.includes('template expression')) {
+    return 'Template variables like {{...}} are resolved at runtime by the workflow agent. To test manually, replace with a real number.'
+  }
+  if (msg.includes('not opted in to asset')) {
+    return 'Your wallet must opt in to this asset before you can swap it. Add an Opt-In ASA block first.'
+  }
+  if (msg.includes('do not have enough of this asset')) {
+    return 'Your wallet does not hold enough of the source asset. Check your balance and reduce the swap amount.'
+  }
+  if (msg.includes('fund this wallet')) {
+    return 'Fund the active wallet with ALGO from the TestNet Dispenser: https://bank.testnet.algorand.network/'
+  }
   if (msg.includes('overspend') || msg.includes('insufficient')) {
     return 'Your account does not have enough ALGO. Fund your wallet from the Algorand TestNet Dispenser.'
   }
@@ -228,7 +240,7 @@ export function suggestFix(errorMessage: string): string | null {
     return 'The recipient has not opted in to this asset. They need to opt in before receiving it.'
   }
   if (msg.includes('below min') || msg.includes('min balance')) {
-    return 'This transaction would bring your balance below the minimum. You need more ALGO in your wallet.'
+    return 'The connected wallet does not have enough ALGO to cover minimum balance + fees. Switch to a funded wallet or add ALGO.'
   }
   if (msg.includes('slippage') || msg.includes('price moved')) {
     return 'The swap price moved beyond your slippage tolerance. Try increasing the slippage or try again.'

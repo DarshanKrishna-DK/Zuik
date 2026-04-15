@@ -669,14 +669,14 @@ export default function Builder() {
             className="zuik-wf-name-input"
             value={workflowName}
             onChange={(e) => setWorkflowName(e.target.value)}
-            onBlur={saveToSupabase}
+            onBlur={() => { if (workflowIdRef.current) saveToSupabase() }}
             placeholder="Workflow name"
           />
           <div className="zuik-agent-separator" />
 
           <AgentControls
             status={agentStatus}
-            onStart={handleStartAgent}
+            onStart={() => setTransactionPanelOpen(true)}
             onStop={() => agentHandleRef.current?.stop()}
             onPause={() => agentHandleRef.current?.pause()}
             onResume={() => agentHandleRef.current?.resume()}
@@ -711,7 +711,7 @@ export default function Builder() {
                 <button onClick={handleImport}><UploadIcon /> Import JSON</button>
                 <div className="z-dropdown-sep" />
                 <button onClick={() => { setTransactionPanelOpen(true); setMenuOpen(false) }}>
-                  <ZapIcon /> Simulate
+                  <ZapIcon /> Run Workflow
                 </button>
                 <button onClick={() => { setLogOpen((o) => !o); setMenuOpen(false) }}>
                   <ActivityIcon /> Execution Log
@@ -727,6 +727,8 @@ export default function Builder() {
           nodes={nodes}
           edges={edges}
           onHighlightNode={handleHighlightNode}
+          workflowId={workflowId}
+          workflowName={workflowName}
         />
         <ExecutionLog
           isOpen={logOpen}

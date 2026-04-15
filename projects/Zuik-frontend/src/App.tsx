@@ -46,7 +46,7 @@ export default function App() {
   })
 
   return (
-    <SnackbarProvider maxSnack={3}>
+    <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
       <WalletProvider manager={walletManager}>
         <BrowserRouter>
           <AppShell />

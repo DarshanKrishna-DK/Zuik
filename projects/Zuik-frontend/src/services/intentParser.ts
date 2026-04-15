@@ -65,12 +65,18 @@ function buildBlockSummary(): string {
 
 const WELL_KNOWN_ASSETS: Record<string, number> = {
   ALGO: 0,
+  USDC: 10458941,
+  USDt: 10458941,
+  USDT: 10458941,
+}
+
+const MAINNET_ASSETS: Record<string, number> = {
+  ALGO: 0,
   USDC: 31566704,
   USDt: 312769,
   USDT: 312769,
   goETH: 386192725,
   goBTC: 386195940,
-  PEPE: 1096015467,
 }
 
 function buildCanvasSummary(canvasBlocks?: CanvasBlock[]): string {
@@ -119,12 +125,13 @@ ${buildUserContext(userContext)}
 ## PERCENTAGE / DYNAMIC AMOUNT WORKFLOWS:
 When the user says "swap X% of received amount", this is how to build it correctly:
 1. "wallet-event" trigger (watches for incoming tokens, set "address" to user's connected wallet from USER CONTEXT)
-2. "math-op" block with operation "multiply" - this calculates the percentage. The math block receives the received amount from the trigger and multiplies by the fraction (e.g. 0.2 for 20%, 0.5 for 50%)
+2. "math-op" block with operation "percentage" and b = the percentage number (e.g. b=20 for 20%, b=50 for 50%). The math block receives the amount from upstream and calculates A * (B / 100).
 3. "swap-token" block - the amount field should be set to "{{math-op.result}}" (a dynamic variable referencing the math block's output)
 
 IMPORTANT: For the swap-token amount when it depends on a previous block's output, set it to the variable reference string "{{math-op.result}}" or "{{wallet-event.amount}}" - NOT to 0 or empty.
 
 When user says "swap it all" (100%), skip the math-op block and set the swap amount to "{{wallet-event.amount}}".
+When user says "swap 50%", use math-op with operation="percentage" and b=50.
 
 ## AUTO-FILL RULES:
 - wallet-event "address" field → ALWAYS use the connected wallet address from USER CONTEXT (never leave blank)
@@ -148,9 +155,9 @@ ${hasBlocks ? `The user has blocks on canvas. If they want to change a config va
 - Set "modifications" to an array of objects, each with:
   - "blockId": the block type (e.g. "swap-token")
   - "nodeId": the specific node ID from CURRENT CANVAS STATE (e.g. "intent_1234_0")
-  - "configChanges": object with ONLY the fields that need to change (e.g. { "toAsset": 312769 })
+  - "configChanges": object with ONLY the fields that need to change (e.g. { "toAsset": 10458941 })
 - Set "explanation" to what you changed and why
-Example: "change swap to USDT instead of ALGO" → modifications: [{ "blockId": "swap-token", "nodeId": "<actual node id>", "configChanges": { "toAsset": 312769 } }]` : 'No blocks on canvas yet, so modification is not applicable.'}
+Example: "change swap to USDT instead of ALGO" → modifications: [{ "blockId": "swap-token", "nodeId": "<actual node id>", "configChanges": { "toAsset": 10458941 } }]` : 'No blocks on canvas yet, so modification is not applicable.'}
 
 ### Category 3: DELETE BLOCK (user says "delete", "remove" a specific block)
 ${hasBlocks ? `If the user wants to remove/delete a block from the canvas:
@@ -215,7 +222,7 @@ Return a JSON object with:
 6. "Alert when price drops below X" → timer-loop → get-quote → comparator → send-telegram.
 7. ALWAYS fill ALL required config fields. Never leave amount, fromAsset, toAsset empty. Use dynamic variables like "{{wallet-event.amount}}" or "{{math-op.result}}" when the value depends on runtime data.
 8. When user says "swap it all to X" after a wallet-event trigger, set swap amount to "{{wallet-event.amount}}".
-9. When user says "swap N% of it", use math-op (multiply by N/100) and set swap amount to "{{math-op.result}}".
+9. When user says "swap N% of it", use math-op with operation="percentage" and b=N, and set swap amount to "{{math-op.result}}".
 10. ALWAYS return valid JSON. No markdown fences.
 11. Be conversational in explanations. Suggest follow-ups like "Would you like me to add a Telegram alert for this?" or "I can also add a stop-loss."
 12. After building a workflow, mention approximate execution time and fees.`
@@ -231,9 +238,9 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'swap_tokens',
       steps: [
-        { action: 'swap-token', params: { fromAsset: 31566704, toAsset: 0, amount: 50, slippage: 0.5 } },
+        { action: 'swap-token', params: { fromAsset: 10458941, toAsset: 0, amount: 50, slippage: 0.5 } },
       ],
-      explanation: 'Swap 50 USDC (≈₹4,200) to ALGO using Tinyman DEX. With 0.5% slippage protection, you should receive approximately 250-280 ALGO. The swap executes in about 5 seconds with ~₹0.08 in fees. Would you like me to add a Telegram notification when the swap completes?',
+      explanation: 'Swap 50 USDC to ALGO using Tinyman DEX. With 0.5% slippage protection, the swap executes in about 5 seconds with minimal fees. Would you like me to add a Telegram notification when the swap completes?',
       confidence: 0.95,
     }),
   },
@@ -246,10 +253,10 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'auto_swap_on_receive',
       steps: [
-        { action: 'wallet-event', params: { assetId: 31566704, address: '{{user_wallet}}', pollInterval: 15 } },
-        { action: 'swap-token', params: { fromAsset: 31566704, toAsset: 0, amount: '{{wallet-event.amount}}', slippage: 0.5 } },
+        { action: 'wallet-event', params: { assetId: 10458941, address: '{{user_wallet}}', pollInterval: 15 } },
+        { action: 'swap-token', params: { fromAsset: 10458941, toAsset: 0, amount: '{{wallet-event.amount}}', slippage: 0.5 } },
       ],
-      explanation: 'Watching your connected wallet for incoming USDC. When USDC arrives, it automatically swaps the full received amount to ALGO via Tinyman. The wallet is checked every 15 seconds. The swap amount is set dynamically to whatever USDC you receive. Would you like me to add a Telegram alert when the swap executes?',
+      explanation: 'Watching your connected wallet for incoming USDC. When USDC arrives, it automatically swaps the full received amount to ALGO via Tinyman. The wallet is checked every 15 seconds. Would you like me to add a Telegram alert when the swap executes?',
       confidence: 0.92,
     }),
   },
@@ -262,11 +269,11 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'partial_swap_on_receive',
       steps: [
-        { action: 'wallet-event', params: { assetId: 31566704, address: '{{user_wallet}}', pollInterval: 15 } },
-        { action: 'math-op', params: { operation: 'multiply' } },
-        { action: 'swap-token', params: { fromAsset: 31566704, toAsset: 0, amount: '{{math-op.result}}', slippage: 0.5 } },
+        { action: 'wallet-event', params: { assetId: 10458941, address: '{{user_wallet}}', pollInterval: 15 } },
+        { action: 'math-op', params: { operation: 'percentage', b: 20 } },
+        { action: 'swap-token', params: { fromAsset: 10458941, toAsset: 0, amount: '{{math-op.result}}', slippage: 0.5 } },
       ],
-      explanation: 'Watching your wallet for incoming USDC. When USDC arrives:\n1. The Math Operation block calculates 20% of the received amount (amount × 0.2)\n2. The Swap block automatically swaps that 20% portion to ALGO\n\nFor example, if you receive 100 USDC (≈₹8,400), it will swap 20 USDC (≈₹1,680) to ALGO. The remaining 80 USDC stays in your wallet. Would you like me to add a Telegram notification?',
+      explanation: 'Watching your wallet for incoming USDC. When USDC arrives:\n1. The Math Operation block calculates 20% of the received amount\n2. The Swap block automatically swaps that 20% portion to ALGO\n\nFor example, if you receive 100 USDC, it will swap 20 USDC to ALGO. The remaining 80 USDC stays in your wallet. Would you like me to add a Telegram notification?',
       confidence: 0.93,
     }),
   },
@@ -279,7 +286,7 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'answer_question',
       steps: [],
-      explanation: 'The Math Operation block with "multiply" calculates a percentage of the received amount. For example, when you say "swap 20% of received USDC", we multiply the received amount by 0.2:\n\n- Receive 100 USDC → 100 × 0.2 = 20 USDC gets swapped\n- Receive 500 USDC → 500 × 0.2 = 100 USDC gets swapped\n\nThe math block sits between the Wallet Event trigger (which detects the incoming amount) and the Swap block (which needs to know how much to swap). Without it, the swap wouldn\'t know what "20%" of a dynamic amount means.',
+      explanation: 'The Math Operation block with "percentage" calculates a percentage of the received amount. When you say "swap 20% of received USDC", the math block takes the amount and applies 20%:\n\n- Receive 100 USDC → 100 * 20% = 20 USDC gets swapped\n- Receive 500 USDC → 500 * 20% = 100 USDC gets swapped\n\nThe math block sits between the Wallet Event trigger (which detects the incoming amount) and the Swap block (which needs to know how much to swap). Without it, the swap wouldn\'t know what "20%" of a dynamic amount means.',
       confidence: 0,
     }),
   },
@@ -292,8 +299,8 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'modify_block',
       steps: [],
-      modifications: [{ blockId: 'swap-token', configChanges: { toAsset: 312769 } }],
-      explanation: 'Updated the Swap Token block: changed the destination asset from ALGO (ID: 0) to USDT (ID: 312769). Your swap will now convert USDC to USDT instead. Both are stablecoins pegged to ~₹84, so the swap should have minimal price impact.',
+      modifications: [{ blockId: 'swap-token', configChanges: { toAsset: 10458941 } }],
+      explanation: 'Updated the Swap Token block: changed the destination asset from ALGO to USDT. Your swap will now convert USDC to USDT instead. Both are stablecoins, so the swap should have minimal price impact.',
       confidence: 0.95,
     }),
   },

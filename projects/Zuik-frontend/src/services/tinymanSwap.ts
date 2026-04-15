@@ -1,21 +1,21 @@
 /**
- * Tinyman V2 AMM integration for Algorand TestNet swaps.
+ * Tinyman V2 AMM integration using the official @tinymanorg/tinyman-js-sdk.
  *
- * Uses the Tinyman V2 REST API to fetch quotes and prepare swap transactions.
- * Docs: https://docs.tinyman.org
- *
- * Testnet App IDs:
- *   - Tinyman V2 AMM: 148607000 (testnet)
- *   - Tinyman V2 AMM: 1002541853 (mainnet)
+ * Uses DIRECT pool swap (2 transactions) instead of the swap router (6 txns)
+ * to avoid testnet issues with unfunded intermediary accounts.
  */
 
+import {
+  poolUtils,
+  Swap,
+  SwapType,
+  type SwapQuote,
+  type SignerTransaction,
+} from '@tinymanorg/tinyman-js-sdk'
+import type { InitiatorSigner, SupportedNetwork } from '@tinymanorg/tinyman-js-sdk'
 import algosdk from 'algosdk'
-import type { TransactionSigner, Algodv2 } from 'algosdk'
-
-const TINYMAN_API: Record<string, string> = {
-  testnet: 'https://testnet.analytics.tinyman.org',
-  mainnet: 'https://mainnet.analytics.tinyman.org',
-}
+import type { Algodv2, TransactionSigner } from 'algosdk'
+import { getAlgodClient } from './algorand'
 
 export interface TinymanQuoteParams {
   fromAssetId: number
@@ -32,7 +32,7 @@ export interface TinymanQuote {
   amountOutMin: number
   priceImpact: number
   poolAddress: string
-  swapTransactions: string[]
+  sdkQuote: SwapQuote
 }
 
 export interface TinymanSwapResult {
@@ -40,134 +40,155 @@ export interface TinymanSwapResult {
   amountOut: number
 }
 
-function assetKey(id: number): string {
-  return id === 0 ? '0' : String(id)
+async function getAssetDecimals(client: Algodv2, assetId: number): Promise<number> {
+  if (assetId === 0) return 6
+  try {
+    const info = await client.getAssetByID(BigInt(assetId)).do()
+    return Number((info as Record<string, unknown>).decimals ?? (info as Record<string, Record<string, unknown>>).params?.decimals ?? 6)
+  } catch {
+    return 6
+  }
 }
 
-/**
- * Fetch a swap quote from Tinyman V2 using the analytics/swap endpoint.
- * Falls back to a direct pool-based calculation if the analytics API is unavailable.
- */
 export async function getTinymanQuote(params: TinymanQuoteParams): Promise<TinymanQuote> {
   const {
     fromAssetId,
     toAssetId,
     amount,
-    swapType = 'fixed-input',
     network = 'testnet',
     slippage = 0.5,
   } = params
 
-  const baseUrl = TINYMAN_API[network] || TINYMAN_API.testnet
-  const amountStr = String(amount)
+  const client = getAlgodClient()
+  const net = network as SupportedNetwork
 
-  const url = `${baseUrl}/api/v1/swap/quote/?asset_in_id=${assetKey(fromAssetId)}&asset_out_id=${assetKey(toAssetId)}&amount=${amountStr}&swap_type=${swapType}`
+  const pool = await poolUtils.v2.getPoolInfo({
+    network: net,
+    client: client as unknown as Parameters<typeof poolUtils.v2.getPoolInfo>[0]['client'],
+    asset1ID: fromAssetId,
+    asset2ID: toAssetId,
+  })
 
-  const res = await fetch(url)
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Tinyman quote failed (${res.status}): ${text || res.statusText}`)
+  if (!pool || !pool.account || pool.status !== 'ready') {
+    throw new Error(`No Tinyman V2 pool found for ${fromAssetId} <-> ${toAssetId} on ${network}`)
   }
 
-  const data = await res.json() as Record<string, unknown>
+  const [fromDecimals, toDecimals] = await Promise.all([
+    getAssetDecimals(client, fromAssetId),
+    getAssetDecimals(client, toAssetId),
+  ])
 
-  const amountOut = Number(data.asset_out_amount ?? data.amount_out ?? 0)
-  const slippageMultiplier = 1 - slippage / 100
-  const amountOutMin = Math.floor(amountOut * slippageMultiplier)
+  const amountBigint = typeof amount === 'bigint' ? amount : BigInt(amount)
+  const sdkSlippage = slippage / 100
+
+  const directQuote = Swap.v2.getFixedInputDirectSwapQuote({
+    pool,
+    amount: amountBigint,
+    assetIn: { id: fromAssetId, decimals: fromDecimals },
+    assetOut: { id: toAssetId, decimals: toDecimals },
+  })
+
+  const sdkQuote: SwapQuote = {
+    type: 'direct' as SwapQuote['type'],
+    data: { quote: directQuote, pool },
+  } as SwapQuote
+
+  const amountOut = Number(directQuote.assetOutAmount)
+  const amountOutMin = Math.floor(amountOut * (1 - sdkSlippage))
+
+  let poolAddr = ''
+  try {
+    const acct = pool.account as { address?: () => string; toString?: () => string }
+    poolAddr = acct?.address?.() ?? acct?.toString?.() ?? ''
+  } catch { /* ignore */ }
 
   return {
-    amountIn: Number(amountStr),
+    amountIn: Number(amountBigint),
     amountOut,
     amountOutMin,
-    priceImpact: Number(data.price_impact ?? 0),
-    poolAddress: (data.pool_address as string) ?? '',
-    swapTransactions: Array.isArray(data.transactions) ? data.transactions as string[] : [],
+    priceImpact: directQuote.priceImpact,
+    poolAddress: poolAddr,
+    sdkQuote,
   }
 }
 
 /**
- * Build, sign, and submit Tinyman V2 swap transactions.
+ * Wraps a @txnlab/use-wallet TransactionSigner into the InitiatorSigner
+ * format expected by the Tinyman SDK.
  *
- * The Tinyman analytics API returns pre-built transaction groups
- * as base64-encoded msgpack. We decode, sign, and submit them.
+ * Converts SDK Transaction objects to our algosdk via toByte() bridge.
  */
+function wrapWalletSigner(walletSigner: TransactionSigner, senderAddr: string): InitiatorSigner {
+  return async (txGroups: SignerTransaction[][]): Promise<Uint8Array[]> => {
+    const allSignedTxns: Uint8Array[] = []
+
+    for (const group of txGroups) {
+      const ourTxns = group.map((item) => {
+        const bytes = (item.txn as unknown as { toByte: () => Uint8Array }).toByte()
+        return algosdk.decodeUnsignedTransaction(bytes)
+      })
+
+      const indexesToSign = group
+        .map((item, i) => {
+          if (!item.signers || item.signers.length === 0) return -1
+          return item.signers.includes(senderAddr) ? i : -1
+        })
+        .filter((i) => i >= 0)
+
+      if (indexesToSign.length === 0) continue
+
+      const walletSigned = await walletSigner(ourTxns, indexesToSign)
+      for (const signed of walletSigned) {
+        allSignedTxns.push(signed)
+      }
+    }
+
+    return allSignedTxns
+  }
+}
+
 export async function executeTinymanSwap(
   quote: TinymanQuote,
   sender: string,
   signer: TransactionSigner,
   algodClient: Algodv2,
 ): Promise<TinymanSwapResult> {
-  if (quote.swapTransactions.length === 0) {
-    throw new Error('Tinyman quote has no swap transactions. The pool may not exist on this network.')
-  }
+  const network = (import.meta.env.VITE_ALGOD_NETWORK ?? 'testnet') as SupportedNetwork
+  const slippage = 0.005
 
-  const txnGroup: algosdk.Transaction[] = []
+  console.log('[Tinyman] Generating swap txns for sender:', sender)
 
-  for (const b64 of quote.swapTransactions) {
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-    try {
-      txnGroup.push(algosdk.decodeUnsignedTransaction(bytes))
-    } catch {
-      const decoded = algosdk.decodeObj(bytes) as unknown
-      if (Array.isArray(decoded)) {
-        for (const item of decoded) {
-          txnGroup.push(algosdk.decodeUnsignedTransaction(new Uint8Array(item as ArrayLike<number>)))
-        }
-      } else {
-        throw new Error('Unable to decode Tinyman transaction payload')
-      }
-    }
-  }
-
-  const indexesToSign = txnGroup
-    .map((txn, i) => (algosdk.encodeAddress(txn.sender.publicKey) === sender ? i : -1))
-    .filter((i) => i >= 0)
-
-  const signed = await signer(txnGroup, indexesToSign)
-
-  const combined: Uint8Array[] = []
-  for (let i = 0; i < txnGroup.length; i++) {
-    if (indexesToSign.includes(i)) {
-      combined.push(signed[indexesToSign.indexOf(i)])
-    } else {
-      combined.push(algosdk.encodeObj({ txn: txnGroup[i].get_obj_for_encoding() }) as Uint8Array)
-    }
-  }
-
-  const totalLen = combined.reduce((s, a) => s + a.length, 0)
-  const mergedBytes = new Uint8Array(totalLen)
-  let offset = 0
-  for (const chunk of combined) {
-    mergedBytes.set(chunk, offset)
-    offset += chunk.length
-  }
-
-  const result = await algodClient.sendRawTransaction(mergedBytes).do()
-  const txId = (result as { txid?: string }).txid ?? ''
-
-  return { txId, amountOut: quote.amountOut }
-}
-
-/**
- * Simple direct swap: gets a Tinyman V2 quote and executes it in one call.
- */
-export async function tinymanSwap(params: {
-  fromAssetId: number
-  toAssetId: number
-  amount: number
-  sender: string
-  signer: TransactionSigner
-  algodClient: Algodv2
-  network?: string
-  slippage?: number
-}): Promise<TinymanSwapResult> {
-  const quote = await getTinymanQuote({
-    fromAssetId: params.fromAssetId,
-    toAssetId: params.toAssetId,
-    amount: params.amount,
-    network: params.network,
-    slippage: params.slippage,
+  const txGroup = await Swap.v2.generateTxns({
+    client: algodClient as unknown as Parameters<typeof Swap.v2.generateTxns>[0]['client'],
+    network,
+    quote: quote.sdkQuote,
+    swapType: SwapType.FixedInput,
+    slippage,
+    initiatorAddr: sender,
   })
 
-  return executeTinymanSwap(quote, params.sender, params.signer, params.algodClient)
+  console.log('[Tinyman] Generated', txGroup.length, 'transactions')
+
+  const initiatorSigner = wrapWalletSigner(signer, sender)
+
+  const signedTxns = await Swap.v2.signTxns({
+    txGroup,
+    initiatorSigner,
+  })
+
+  console.log('[Tinyman] Signed', signedTxns.length, 'transactions, submitting...')
+
+  const result = await Swap.v2.execute({
+    client: algodClient as unknown as Parameters<typeof Swap.v2.execute>[0]['client'],
+    quote: quote.sdkQuote,
+    txGroup,
+    signedTxns,
+  })
+
+  console.log('[Tinyman] Swap executed, txnID:', result.txnID)
+
+  return {
+    txId: result.txnID ?? '',
+    amountOut: quote.amountOut,
+  }
 }

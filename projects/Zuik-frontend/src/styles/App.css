@@ -2617,3 +2617,451 @@ h1, h2, h3, h4, h5, h6 {
   .dash-exec-header-row, .dash-exec-row { grid-template-columns: repeat(4, 1fr); }
   .dash-exec-header-row span:nth-child(n+5), .dash-exec-row span:nth-child(n+5) { display: none; }
 }
+
+/* ─── Transaction / Simulation Panel ──────────────────── */
+
+.sim-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 40;
+  animation: sim-fade-in 0.15s ease;
+}
+
+.sim-panel {
+  position: fixed; top: 0; right: 0;
+  width: min(460px, 100vw); height: 100vh;
+  background: var(--z-surface);
+  border-left: 1px solid var(--z-border);
+  z-index: 50;
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.35), -2px 0 8px rgba(0, 229, 255, 0.04);
+  animation: sim-slide-in 0.2s ease;
+}
+
+@keyframes sim-slide-in {
+  from { transform: translateX(40px); opacity: 0.8; }
+  to   { transform: translateX(0);    opacity: 1;   }
+}
+@keyframes sim-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sim-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--z-border);
+  background: linear-gradient(180deg, rgba(0, 229, 255, 0.04) 0%, transparent 100%);
+}
+
+.sim-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--z-accent);
+  flex-shrink: 0;
+}
+
+.sim-header-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--z-text);
+  margin: 0; line-height: 1.2;
+}
+
+.sim-header-subtitle {
+  font-size: 0.6875rem;
+  color: var(--z-text-dim);
+  font-family: var(--z-mono);
+  margin-top: 2px;
+  display: block;
+}
+
+.sim-phase-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.sim-close-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
+  color: var(--z-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sim-close-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--z-text);
+}
+
+.sim-progress-track {
+  height: 2px;
+  background: rgba(0, 229, 255, 0.08);
+  overflow: hidden;
+}
+.sim-progress-fill {
+  height: 100%;
+  background: var(--z-accent);
+  transition: width 0.4s ease;
+  border-radius: 0 1px 1px 0;
+}
+
+.sim-body {
+  flex: 1;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+.sim-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 64px 20px;
+  color: var(--z-accent);
+}
+.sim-loading p {
+  color: var(--z-text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.sim-section {
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.sim-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+  color: var(--z-text-muted);
+}
+
+.sim-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.7875rem;
+  line-height: 1.45;
+  margin-bottom: 6px;
+}
+
+.sim-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sim-step {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  background: rgba(255, 255, 255, 0.015);
+}
+.sim-step:hover {
+  border-color: rgba(0, 229, 255, 0.18);
+  background: rgba(0, 229, 255, 0.025);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.05);
+}
+.sim-step.success {
+  border-color: rgba(52, 211, 153, 0.25);
+  background: rgba(52, 211, 153, 0.04);
+}
+.sim-step.error {
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.04);
+}
+.sim-step.running {
+  border-color: rgba(0, 229, 255, 0.3);
+  background: rgba(0, 229, 255, 0.05);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.06);
+}
+
+.sim-step-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sim-step-status {
+  flex-shrink: 0;
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sim-step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--z-accent);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-family: var(--z-mono);
+}
+
+.sim-step-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sim-step-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--z-text);
+  line-height: 1.2;
+}
+
+.sim-step-desc {
+  font-size: 0.7375rem;
+  color: var(--z-text-muted);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--z-mono);
+}
+
+.sim-step-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sim-step-fee {
+  font-size: 0.625rem;
+  font-family: var(--z-mono);
+  font-weight: 500;
+  color: var(--z-text-dim);
+  background: rgba(0, 229, 255, 0.06);
+  padding: 3px 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 229, 255, 0.08);
+}
+
+.sim-step-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.sim-tx-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--z-accent);
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(0, 229, 255, 0.05);
+  transition: background 0.15s;
+}
+.sim-tx-link:hover {
+  background: rgba(0, 229, 255, 0.1);
+  text-decoration: none;
+}
+
+.sim-step-error {
+  font-size: 0.75rem;
+  color: var(--z-error);
+  line-height: 1.5;
+}
+.sim-error-msg {
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+.sim-error-fix {
+  color: var(--z-text-muted);
+  font-style: italic;
+}
+
+.sim-error-box {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 0.8rem;
+  color: var(--z-text);
+  line-height: 1.5;
+}
+.sim-error-box .sim-error-fix {
+  margin-top: 8px;
+}
+
+.sim-success-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 10px;
+  background: rgba(52, 211, 153, 0.06);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  color: var(--z-success);
+}
+.sim-success-banner strong {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--z-text);
+}
+.sim-success-banner span {
+  display: block;
+  font-size: 0.7375rem;
+  color: var(--z-text-muted);
+  margin-top: 2px;
+}
+
+.sim-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 22px;
+  color: var(--z-text-dim);
+}
+.sim-empty p {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--z-text-muted);
+  margin: 12px 0 4px;
+}
+.sim-empty span {
+  font-size: 0.75rem;
+  color: var(--z-text-dim);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.sim-panel-footer {
+  padding: 18px 22px;
+  border-top: 1px solid var(--z-border);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: linear-gradient(0deg, rgba(0, 229, 255, 0.03) 0%, transparent 100%);
+}
+
+.sim-fee-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sim-fee-label {
+  font-size: 0.75rem;
+  color: var(--z-text-muted);
+  font-weight: 500;
+}
+.sim-fee-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.sim-fee-algo {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--z-text);
+  font-family: var(--z-mono);
+}
+.sim-fee-usd {
+  font-size: 0.6875rem;
+  color: var(--z-text-dim);
+  font-family: var(--z-mono);
+}
+
+.sim-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.sim-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+.sim-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sim-btn-ghost {
+  flex: 1;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--z-text-muted);
+}
+.sim-btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--z-text);
+}
+
+.sim-btn-primary {
+  flex: 2;
+  background: var(--z-accent);
+  border-color: var(--z-accent);
+  color: #0D1117;
+}
+.sim-btn-primary:hover:not(:disabled) {
+  background: var(--z-accent-deep);
+  border-color: var(--z-accent-deep);
+}
+
+.sim-btn-success {
+  flex: 2;
+  background: transparent;
+  border-color: var(--z-success);
+  color: var(--z-success);
+}
+
+@keyframes sim-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.sim-spinner {
+  animation: sim-spin 0.8s linear infinite;
+}

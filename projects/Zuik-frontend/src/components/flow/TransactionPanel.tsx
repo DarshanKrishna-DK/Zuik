@@ -1,20 +1,28 @@
 import { useWallet } from '@txnlab/use-wallet-react'
 import { useSnackbar } from 'notistack'
 import { useState, useEffect, useCallback } from 'react'
-import { blockExecutors, getActionBlocksInOrder } from '../../services/blockExecutors'
+import { getExecutableBlocksInOrder } from '../../services/blockExecutors'
 import { getAlgorandClient } from '../../services/algorand'
 import { getBlockById } from '../../lib/blockRegistry'
+import { runFlowOnce, createVariableContext } from '../../lib/runAgent'
+import type { FlowNode, FlowEdge } from '../../lib/runAgent'
 import {
   buildSimulationPreview,
+  enrichSwapQuotes,
   formatMicroAlgo,
   microAlgoToUsd,
 } from '../../services/transactionSimulator'
 import type { SimulationResult, SimulationWarning } from '../../services/transactionSimulator'
-import { runSafetyChecks, recordExecution, suggestFix } from '../../services/safetyGuards'
+import { runSafetyChecks, recordExecution as recordLocalExecution, suggestFix } from '../../services/safetyGuards'
 import type { SafetyCheckResult } from '../../services/safetyGuards'
+import {
+  isSupabaseConfigured,
+  recordExecution as recordSupabaseExecution,
+  completeExecution as completeSupabaseExecution,
+} from '../../services/supabase'
 import type { Node, Edge } from '@xyflow/react'
 
-/* ── Inline SVG Icons ─────────────────────────────────────── */
+/* ── Inline SVG Icons ─────────────────────────── */
 
 function XIcon() {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -49,10 +57,16 @@ function InfoIcon({ size = 14 }: { size?: number }) {
 function Loader2Icon({ size = 24 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sim-spinner"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
 }
+function ZapIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+}
 
-/* ── Helpers ───────────────────────────────────────────────── */
+/* ── Helpers ───────────────────────────────────── */
 
-const PERA_EXPLORER_TESTNET = 'https://testnet.explorer.perawallet.app/tx'
+const NETWORK = import.meta.env.VITE_ALGOD_NETWORK || 'testnet'
+const EXPLORER_TX_BASE = NETWORK === 'mainnet'
+  ? 'https://lora.algokit.io/mainnet/transaction'
+  : 'https://lora.algokit.io/testnet/transaction'
 
 type PanelPhase = 'loading' | 'review' | 'executing' | 'done' | 'error'
 
@@ -79,7 +93,27 @@ function WarningBadge({ w }: { w: SimulationWarning }) {
   )
 }
 
-/* ── Component ─────────────────────────────────────────────── */
+function PhaseIndicator({ phase, stepsDone, stepsTotal }: { phase: PanelPhase; stepsDone: number; stepsTotal: number }) {
+  const config: Record<PanelPhase, { color: string; label: string }> = {
+    loading: { color: 'var(--z-accent)', label: 'Analyzing' },
+    review: { color: 'var(--z-accent)', label: 'Ready' },
+    executing: { color: 'var(--z-warning)', label: `${stepsDone}/${stepsTotal}` },
+    done: { color: 'var(--z-success)', label: 'Complete' },
+    error: { color: 'var(--z-error)', label: 'Failed' },
+  }
+  const { color, label } = config[phase]
+  return (
+    <span className="sim-phase-badge" style={{ color, borderColor: color }}>
+      {phase === 'loading' && <Loader2Icon size={10} />}
+      {phase === 'executing' && <Loader2Icon size={10} />}
+      {phase === 'done' && <CheckCircle2Icon size={10} />}
+      {phase === 'error' && <XCircleIcon size={10} />}
+      {label}
+    </span>
+  )
+}
+
+/* ── Component ─────────────────────────────────── */
 
 export interface TransactionPanelProps {
   isOpen: boolean
@@ -87,6 +121,8 @@ export interface TransactionPanelProps {
   nodes: Node[]
   edges: Edge[]
   onHighlightNode?: (nodeId: string) => void
+  workflowId?: string | null
+  workflowName?: string
 }
 
 export default function TransactionPanel({
@@ -95,6 +131,8 @@ export default function TransactionPanel({
   nodes,
   edges,
   onHighlightNode,
+  workflowId,
+  workflowName,
 }: TransactionPanelProps) {
   const { transactionSigner, activeAddress } = useWallet()
   const { enqueueSnackbar } = useSnackbar()
@@ -105,8 +143,10 @@ export default function TransactionPanel({
   const [stepResults, setStepResults] = useState<Record<number, StepResult>>({})
   const [globalError, setGlobalError] = useState<string | null>(null)
   const [expandedStep, setExpandedStep] = useState<number | null>(null)
+  const [executionTxIds, setExecutionTxIds] = useState<string[]>([])
+  const [executionDuration, setExecutionDuration] = useState<string | null>(null)
 
-  const actionBlocks = getActionBlocksInOrder(
+  const actionBlocks = getExecutableBlocksInOrder(
     nodes as { id: string; data: Record<string, unknown> }[],
     edges.map((e) => ({ source: e.source, target: e.target })),
   )
@@ -123,6 +163,8 @@ export default function TransactionPanel({
       setStepResults({})
       setGlobalError(null)
       setExpandedStep(null)
+      setExecutionTxIds([])
+      setExecutionDuration(null)
       return
     }
 
@@ -130,13 +172,17 @@ export default function TransactionPanel({
       setPhase('loading')
       setGlobalError(null)
 
-      const sim = buildSimulationPreview(actionBlocks, blockNameLookup)
+      let sim = buildSimulationPreview(actionBlocks, blockNameLookup)
       setSimulation(sim)
 
-      if (activeAddress) {
-        const safetyResult = await runSafetyChecks(actionBlocks, activeAddress)
-        setSafety(safetyResult)
-      }
+      const [enrichedSim, safetyResult] = await Promise.all([
+        enrichSwapQuotes(actionBlocks, sim).catch(() => sim),
+        activeAddress ? runSafetyChecks(actionBlocks, activeAddress) : Promise.resolve(null),
+      ])
+
+      sim = enrichedSim
+      setSimulation(sim)
+      if (safetyResult) setSafety(safetyResult)
 
       const initial: Record<number, StepResult> = {}
       sim.steps.forEach((s) => { initial[s.index] = { status: 'pending' } })
@@ -148,6 +194,9 @@ export default function TransactionPanel({
     runChecks()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
+
+  const completedSteps = Object.values(stepResults).filter((r) => r.status === 'success').length
+  const totalSteps = simulation?.steps.length ?? 0
 
   const allWarnings: SimulationWarning[] = [
     ...(simulation?.warnings ?? []),
@@ -169,54 +218,115 @@ export default function TransactionPanel({
       return
     }
     if (actionBlocks.length === 0) {
-      enqueueSnackbar('No action blocks to execute', { variant: 'info' })
+      enqueueSnackbar('No executable blocks to run', { variant: 'info' })
       return
     }
 
     setPhase('executing')
     setGlobalError(null)
 
+    const startTime = Date.now()
     const algorand = getAlgorandClient()
-    const context = { sender: activeAddress, signer: transactionSigner, algorand }
-    let hasError = false
+    const variables = createVariableContext()
+    const blockOutputs = new Map<string, Record<string, unknown>>()
+    const abortController = new AbortController()
+    const collectedTxIds: string[] = []
 
-    for (let i = 0; i < actionBlocks.length; i++) {
-      const { nodeId, blockId, config } = actionBlocks[i]
-      const stepIndex = i + 1
-      const executor = blockExecutors[blockId]
-      if (!executor) {
-        setStepResults((r) => ({ ...r, [stepIndex]: { status: 'skipped' } }))
-        continue
-      }
+    const nodeIdToStepIndex = new Map<string, number>()
+    actionBlocks.forEach((b, i) => nodeIdToStepIndex.set(b.nodeId, i + 1))
 
-      setStepResults((r) => ({ ...r, [stepIndex]: { status: 'running' } }))
+    const flowNodes: FlowNode[] = nodes.map((n) => ({
+      id: n.id,
+      data: n.data as FlowNode['data'],
+    }))
+    const flowEdges: FlowEdge[] = edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+    }))
 
+    let execId: string | null = null
+    if (workflowId && isSupabaseConfigured()) {
       try {
-        const output = await executor(config, context)
-        const txId = output.txId as string | undefined
-        setStepResults((r) => ({ ...r, [stepIndex]: { txId: txId ?? '', status: 'success' } }))
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        setStepResults((r) => ({ ...r, [stepIndex]: { error: message, status: 'error' } }))
-        hasError = true
-        setGlobalError(message)
-        setExpandedStep(stepIndex)
-
-        for (let j = i + 1; j < actionBlocks.length; j++) {
-          setStepResults((r) => ({ ...r, [j + 1]: { status: 'skipped' } }))
-        }
-        break
-      }
+        execId = await recordSupabaseExecution(workflowId, activeAddress, actionBlocks.length)
+      } catch { /* non-blocking */ }
     }
 
-    recordExecution()
+    let errorMessage: string | null = null
 
-    if (hasError) {
+    try {
+      await runFlowOnce(flowNodes, flowEdges, {
+        sender: activeAddress,
+        signer: transactionSigner,
+        algorand,
+        variables,
+        blockOutputs,
+        log: (entry) => {
+          const stepIdx = nodeIdToStepIndex.get(entry.nodeId)
+          if (!stepIdx) return
+
+          if (entry.type === 'start') {
+            setStepResults((r) => ({ ...r, [stepIdx]: { status: 'running' } }))
+          } else if (entry.type === 'success') {
+            const txId = entry.data ? (entry.data as Record<string, unknown>).txId as string | undefined : undefined
+            if (txId) collectedTxIds.push(txId)
+            setStepResults((r) => ({ ...r, [stepIdx]: { txId: txId ?? '', status: 'success' } }))
+          } else if (entry.type === 'error') {
+            errorMessage = entry.message
+            setStepResults((r) => ({ ...r, [stepIdx]: { error: entry.message, status: 'error' } }))
+            setGlobalError(entry.message)
+            setExpandedStep(stepIdx)
+          } else if (entry.type === 'skip') {
+            setStepResults((r) => ({ ...r, [stepIdx]: { status: 'skipped' } }))
+          } else if (entry.type === 'trigger-fire') {
+            setStepResults((r) => ({ ...r, [stepIdx]: { status: 'success' } }))
+          }
+        },
+        onNodeStatusChange: (_nodeId, _status) => { /* handled via log */ },
+        abortSignal: abortController.signal,
+      })
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : String(err)
+      setGlobalError(errorMessage)
+    }
+
+    const durationMs = Date.now() - startTime
+    const durationSec = (durationMs / 1000).toFixed(1)
+    setExecutionTxIds(collectedTxIds)
+    setExecutionDuration(durationSec)
+    recordLocalExecution()
+
+    if (execId && isSupabaseConfigured()) {
+      try {
+        await completeSupabaseExecution(execId, {
+          status: errorMessage ? 'failed' : 'success',
+          txIds: collectedTxIds,
+          errorMessage: errorMessage ?? undefined,
+          durationMs,
+        })
+      } catch { /* non-blocking */ }
+    }
+
+    const wfLabel = workflowName || 'Workflow'
+
+    if (errorMessage) {
       setPhase('error')
+      const errMsg = errorMessage.length > 120 ? errorMessage.slice(0, 120) + '...' : errorMessage
+      enqueueSnackbar(`${wfLabel} failed: ${errMsg}`, {
+        variant: 'error',
+        autoHideDuration: 8000,
+      })
     } else {
       setPhase('done')
-      const successCount = actionBlocks.length
-      enqueueSnackbar(`${successCount} step(s) executed successfully`, { variant: 'success' })
+      const txSummary = collectedTxIds.length > 0
+        ? ` | ${collectedTxIds.length} txn(s)`
+        : ''
+      enqueueSnackbar(
+        `Successfully executed "${wfLabel}" - ${actionBlocks.length} step(s) in ${durationSec}s${txSummary}`,
+        { variant: 'success', autoHideDuration: 8000 },
+      )
     }
   }
 
@@ -232,53 +342,54 @@ export default function TransactionPanel({
 
   return (
     <>
-      <div
-        className="transaction-panel-overlay"
-        onClick={onClose}
-        style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,0.5)', zIndex: 40,
-          opacity: 1, backdropFilter: 'blur(2px)',
-        }}
-      />
-      <div
-        className="transaction-panel"
-        style={{
-          position: 'fixed', top: 0, right: 0,
-          width: 'min(440px, 100vw)', height: '100vh',
-          background: 'var(--z-surface)',
-          borderLeft: '1px solid var(--z-border)',
-          zIndex: 50, display: 'flex', flexDirection: 'column',
-          boxShadow: '-4px 0 24px rgba(0,0,0,0.3)',
-          transform: 'translateX(0)', transition: 'transform 0.2s ease',
-        }}
-      >
+      <div className="sim-overlay" onClick={onClose} />
+      <div className="sim-panel">
         {/* Header */}
         <div className="sim-panel-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ color: 'var(--z-accent)' }}><ShieldIcon /></span>
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--z-text)' }}>
-              {phase === 'loading' && 'Analyzing Flow...'}
-              {phase === 'review' && 'Transaction Summary'}
-              {phase === 'executing' && 'Executing...'}
-              {phase === 'done' && 'Execution Complete'}
-              {phase === 'error' && 'Execution Failed'}
-            </h2>
+            <span className="sim-header-icon">
+              {phase === 'done' ? <CheckCircle2Icon size={18} /> : phase === 'error' ? <XCircleIcon size={18} /> : <ShieldIcon />}
+            </span>
+            <div>
+              <h2 className="sim-header-title">
+                {phase === 'loading' && 'Analyzing Flow'}
+                {phase === 'review' && 'Run Workflow'}
+                {phase === 'executing' && 'Executing'}
+                {phase === 'done' && 'Execution Complete'}
+                {phase === 'error' && 'Execution Failed'}
+              </h2>
+              {phase !== 'loading' && totalSteps > 0 && (
+                <span className="sim-header-subtitle">
+                  {totalSteps} step{totalSteps !== 1 ? 's' : ''} - {formatMicroAlgo(simulation?.totalFee ?? 0)} ALGO est. fees
+                </span>
+              )}
+            </div>
           </div>
-          <button onClick={onClose} className="z-btn z-btn-ghost z-btn-sm" style={{ padding: 6 }} aria-label="Close">
-            <XIcon />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <PhaseIndicator phase={phase} stepsDone={completedSteps} stepsTotal={totalSteps} />
+            <button onClick={onClose} className="sim-close-btn" aria-label="Close">
+              <XIcon />
+            </button>
+          </div>
         </div>
 
+        {/* Progress bar */}
+        {phase === 'executing' && totalSteps > 0 && (
+          <div className="sim-progress-track">
+            <div
+              className="sim-progress-fill"
+              style={{ width: `${(completedSteps / totalSteps) * 100}%` }}
+            />
+          </div>
+        )}
+
         {/* Body */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '0' }}>
+        <div className="sim-body">
           {/* Loading */}
           {phase === 'loading' && (
             <div className="sim-loading">
-              <Loader2Icon size={24} />
-              <p style={{ color: 'var(--z-text-muted)', fontSize: '0.875rem' }}>
-                Running safety checks and building simulation...
-              </p>
+              <Loader2Icon size={28} />
+              <p>Running safety checks and building simulation...</p>
             </div>
           )}
 
@@ -306,7 +417,7 @@ export default function TransactionPanel({
           {simulation && phase !== 'loading' && (
             <div className="sim-section">
               <div className="sim-section-title">
-                <InfoIcon size={14} /> Steps ({simulation.steps.length})
+                <ZapIcon size={14} /> Steps ({simulation.steps.length})
               </div>
               <div className="sim-steps">
                 {simulation.steps.map((step) => {
@@ -334,15 +445,15 @@ export default function TransactionPanel({
                           {result?.status === 'running' && <Loader2Icon size={16} />}
                           {result?.status === 'success' && <span style={{ color: 'var(--z-success)' }}><CheckCircle2Icon size={16} /></span>}
                           {result?.status === 'error' && <span style={{ color: 'var(--z-error)' }}><XCircleIcon size={16} /></span>}
-                          {result?.status === 'skipped' && <span className="sim-step-number" style={{ opacity: 0.4 }}>-</span>}
+                          {result?.status === 'skipped' && <span className="sim-step-number" style={{ opacity: 0.3 }}>-</span>}
                         </div>
                         <div className="sim-step-content">
                           <div className="sim-step-name">{step.blockName}</div>
-                          <div className="sim-step-desc">{step.description}</div>
+                          <div className="sim-step-desc" title={step.description}>{step.description}</div>
                         </div>
                         <div className="sim-step-meta">
                           {step.fee > 0 && (
-                            <span className="sim-step-fee">{formatMicroAlgo(step.fee)} ALGO</span>
+                            <span className="sim-step-fee">{formatMicroAlgo(step.fee)}</span>
                           )}
                           {hasResult && (isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />)}
                         </div>
@@ -352,13 +463,13 @@ export default function TransactionPanel({
                         <div className="sim-step-detail">
                           {result?.txId && (
                             <a
-                              href={`${PERA_EXPLORER_TESTNET}/${result.txId}`}
+                              href={`${EXPLORER_TX_BASE}/${result.txId}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="sim-tx-link"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <ExternalLinkIcon /> View on Pera Explorer
+                              <ExternalLinkIcon /> View on Lora Explorer
                             </a>
                           )}
                           {result?.error && (
@@ -397,12 +508,45 @@ export default function TransactionPanel({
             </div>
           )}
 
+          {/* Success summary */}
+          {phase === 'done' && (
+            <div className="sim-section">
+              <div className="sim-success-banner">
+                <CheckCircle2Icon size={20} />
+                <div>
+                  <strong>Successfully executed "{workflowName || 'Workflow'}"</strong>
+                  <span>
+                    {totalSteps} step{totalSteps !== 1 ? 's' : ''} completed
+                    {executionDuration ? ` in ${executionDuration}s` : ''}
+                    {executionTxIds.length > 0 ? ` - ${executionTxIds.length} txn(s)` : ''}
+                  </span>
+                  {executionTxIds.length > 0 && (
+                    <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {executionTxIds.map((txId, i) => (
+                        <a
+                          key={txId}
+                          href={`${EXPLORER_TX_BASE}/${txId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="sim-tx-link"
+                          style={{ fontSize: 12 }}
+                        >
+                          <ExternalLinkIcon /> Tx {i + 1}: {txId.slice(0, 8)}...
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Empty state */}
           {actionBlocks.length === 0 && phase !== 'loading' && (
-            <div className="sim-section">
-              <p style={{ color: 'var(--z-text-muted)', fontSize: '0.875rem', padding: '0 16px' }}>
-                No action blocks found in this flow. Add blocks like Send Payment, Swap Token, Opt-In ASA, or Create ASA to execute transactions.
-              </p>
+            <div className="sim-section sim-empty">
+              <ZapIcon size={32} />
+              <p>No action blocks in this flow</p>
+              <span>Add blocks like Send Payment, Swap Token, or Opt-In ASA to execute transactions.</span>
             </div>
           )}
         </div>
@@ -412,47 +556,44 @@ export default function TransactionPanel({
           <div className="sim-panel-footer">
             {simulation.totalFee > 0 && (
               <div className="sim-fee-summary">
-                <span style={{ color: 'var(--z-text-muted)', fontSize: '0.8125rem' }}>Estimated total fees</span>
-                <span style={{ color: 'var(--z-text)', fontSize: '0.875rem', fontWeight: 600 }}>
-                  {formatMicroAlgo(simulation.totalFee)} ALGO
-                  <span style={{ color: 'var(--z-text-dim)', fontWeight: 400, marginLeft: 6, fontSize: '0.75rem' }}>
-                    ({microAlgoToUsd(simulation.totalFee)})
-                  </span>
-                </span>
+                <span className="sim-fee-label">Estimated fees</span>
+                <div className="sim-fee-value">
+                  <span className="sim-fee-algo">{formatMicroAlgo(simulation.totalFee)} ALGO</span>
+                  <span className="sim-fee-usd">{microAlgoToUsd(simulation.totalFee)}</span>
+                </div>
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={onClose} className="z-btn z-btn-ghost" style={{ flex: 1 }}>
+            <div className="sim-actions">
+              <button onClick={onClose} className="sim-btn sim-btn-ghost">
                 {phase === 'done' || phase === 'error' ? 'Close' : 'Cancel'}
               </button>
 
-              {(phase === 'review') && (
+              {phase === 'review' && (
                 <button
                   onClick={handleExecute}
                   disabled={!canExecute}
-                  className="z-btn z-btn-primary"
-                  style={{ flex: 2 }}
+                  className="sim-btn sim-btn-primary"
                 >
-                  Sign and Execute
+                  <ZapIcon size={14} /> Sign and Execute
                 </button>
               )}
 
               {phase === 'executing' && (
-                <button disabled className="z-btn z-btn-primary" style={{ flex: 2 }}>
+                <button disabled className="sim-btn sim-btn-primary">
                   <Loader2Icon size={14} /> Executing...
                 </button>
               )}
 
               {phase === 'error' && (
-                <button onClick={handleRetry} className="z-btn z-btn-primary" style={{ flex: 2 }}>
+                <button onClick={handleRetry} className="sim-btn sim-btn-primary">
                   <RefreshCwIcon /> Retry
                 </button>
               )}
 
               {phase === 'done' && (
-                <button disabled className="z-btn z-btn-ghost" style={{ flex: 2, color: 'var(--z-success)', borderColor: 'var(--z-success)' }}>
-                  <CheckCircle2Icon size={14} /> All steps completed
+                <button disabled className="sim-btn sim-btn-success">
+                  <CheckCircle2Icon size={14} /> All done
                 </button>
               )}
             </div>

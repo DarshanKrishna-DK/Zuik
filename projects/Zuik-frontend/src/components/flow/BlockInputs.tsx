@@ -15,13 +15,17 @@ function stopRfKeys(e: React.KeyboardEvent) {
   e.stopPropagation()
 }
 
+function hasTemplateExpr(val: unknown): boolean {
+  return typeof val === 'string' && /\{\{.*\}\}/.test(val)
+}
+
 export default function BlockInputs({ fields, values, onChange }: BlockInputsProps) {
   const [hoveredOption, setHoveredOption] = useState<string | null>(null)
 
   const handleChange = useCallback(
     (fieldId: string, fieldType: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
       const raw = e.target.value
-      if (fieldType === 'number') {
+      if (fieldType === 'number' && !hasTemplateExpr(raw)) {
         onChange(fieldId, raw === '' ? '' : Number(raw))
       } else {
         onChange(fieldId, raw)
@@ -89,8 +93,8 @@ export default function BlockInputs({ fields, values, onChange }: BlockInputsPro
               <input type="password" placeholder={field.placeholder} value={currentVal} onChange={handleChange(field.id, field.type)} onKeyDown={stopRfKeys} />
             ) : (
               <input
-                type={field.type === 'number' ? 'number' : 'text'}
-                placeholder={field.placeholder}
+                type={field.type === 'number' && !hasTemplateExpr(currentVal) ? 'number' : 'text'}
+                placeholder={field.placeholder ?? (field.type === 'number' ? 'number or {{variable}}' : undefined)}
                 value={currentVal}
                 onChange={handleChange(field.id, field.type)}
                 onKeyDown={stopRfKeys}

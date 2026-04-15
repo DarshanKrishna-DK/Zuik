@@ -44,7 +44,7 @@ const TEMPLATES: WorkflowTemplate[] = [
     estimatedFee: '~0.002 ALGO/swap',
     nodes: [
       { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'timer-loop', config: { interval: 3600, maxIterations: '' }, label: 'Every Hour' } },
-      { id: 'n2', type: 'generic', position: { x: 350, y: 100 }, data: { blockId: 'swap-token', config: { fromAsset: 31566704, toAsset: 0, amount: 5, slippage: 0.5 }, label: 'Swap 5 USDC to ALGO' } },
+      { id: 'n2', type: 'generic', position: { x: 350, y: 100 }, data: { blockId: 'swap-token', config: { fromAsset: 10458941, toAsset: 0, amount: 5, slippage: 0.5 }, label: 'Swap 5 USDC to ALGO' } },
       { id: 'n3', type: 'generic', position: { x: 650, y: 100 }, data: { blockId: 'send-telegram', config: { message: 'DCA executed: swapped 5 USDC to ALGO' }, label: 'Notify' } },
     ],
     edges: [
@@ -62,7 +62,7 @@ const TEMPLATES: WorkflowTemplate[] = [
     estimatedFee: '~0 ALGO (read-only)',
     nodes: [
       { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'timer-loop', config: { interval: 60 }, label: 'Every Minute' } },
-      { id: 'n2', type: 'generic', position: { x: 300, y: 100 }, data: { blockId: 'get-quote', config: { fromAsset: 0, toAsset: 31566704, amount: 1 }, label: 'Get ALGO Price' } },
+      { id: 'n2', type: 'generic', position: { x: 300, y: 100 }, data: { blockId: 'get-quote', config: { fromAsset: 0, toAsset: 10458941, amount: 1 }, label: 'Get ALGO Price' } },
       { id: 'n3', type: 'generic', position: { x: 550, y: 100 }, data: { blockId: 'comparator', config: { operator: '<', threshold: '0.15' }, label: 'Below 0.15?' } },
       { id: 'n4', type: 'generic', position: { x: 800, y: 100 }, data: { blockId: 'send-telegram', config: { message: 'ALGO price dropped below $0.15!' }, label: 'Alert' } },
     ],
@@ -117,7 +117,7 @@ const TEMPLATES: WorkflowTemplate[] = [
     difficulty: 'beginner',
     estimatedFee: '~0.002 ALGO',
     nodes: [
-      { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'swap-token', config: { fromAsset: 31566704, toAsset: 0, amount: 10, slippage: 0.5 }, label: 'Swap 10 USDC to ALGO' } },
+      { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'swap-token', config: { fromAsset: 10458941, toAsset: 0, amount: 10, slippage: 0.5 }, label: 'Swap 10 USDC to ALGO' } },
       { id: 'n2', type: 'generic', position: { x: 400, y: 100 }, data: { blockId: 'send-telegram', config: { message: 'Swap complete: 10 USDC -> ALGO' }, label: 'Telegram Alert' } },
     ],
     edges: [
@@ -172,9 +172,9 @@ const TEMPLATES: WorkflowTemplate[] = [
     estimatedFee: '~0.002 ALGO',
     nodes: [
       { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'timer-loop', config: { interval: 30 }, label: 'Every 30s' } },
-      { id: 'n2', type: 'generic', position: { x: 300, y: 100 }, data: { blockId: 'get-quote', config: { fromAsset: 0, toAsset: 31566704, amount: 1 }, label: 'Check ALGO Price' } },
+      { id: 'n2', type: 'generic', position: { x: 300, y: 100 }, data: { blockId: 'get-quote', config: { fromAsset: 0, toAsset: 10458941, amount: 1 }, label: 'Check ALGO Price' } },
       { id: 'n3', type: 'generic', position: { x: 550, y: 100 }, data: { blockId: 'comparator', config: { operator: '<', threshold: '0.12' }, label: 'Below Stop-Loss?' } },
-      { id: 'n4', type: 'generic', position: { x: 800, y: 50 }, data: { blockId: 'swap-token', config: { fromAsset: 0, toAsset: 31566704, amount: 100, slippage: 1 }, label: 'Emergency Swap' } },
+      { id: 'n4', type: 'generic', position: { x: 800, y: 50 }, data: { blockId: 'swap-token', config: { fromAsset: 0, toAsset: 10458941, amount: 100, slippage: 1 }, label: 'Emergency Swap' } },
       { id: 'n5', type: 'generic', position: { x: 800, y: 200 }, data: { blockId: 'send-telegram', config: { message: 'Stop-loss triggered! Swapped ALGO to USDC at emergency price.' }, label: 'Alert' } },
     ],
     edges: [
@@ -194,7 +194,7 @@ const TEMPLATES: WorkflowTemplate[] = [
     estimatedFee: '~0.002 ALGO + fiat fees',
     nodes: [
       { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'fiat-onramp', config: { fiatAmount: 1000, fiatCurrency: 'INR', cryptoSymbol: 'USDT' }, label: 'Buy USDT' } },
-      { id: 'n2', type: 'generic', position: { x: 350, y: 100 }, data: { blockId: 'swap-token', config: { fromAsset: 312769, toAsset: 0, amount: 10, slippage: 0.5 }, label: 'Swap USDT to ALGO' } },
+      { id: 'n2', type: 'generic', position: { x: 350, y: 100 }, data: { blockId: 'swap-token', config: { fromAsset: 10458941, toAsset: 0, amount: 10, slippage: 0.5 }, label: 'Swap USDT to ALGO' } },
       { id: 'n3', type: 'generic', position: { x: 650, y: 100 }, data: { blockId: 'browser-notify', config: { title: 'Fiat to ALGO Complete', message: 'Your fiat has been converted to ALGO.' }, label: 'Done' } },
     ],
     edges: [
@@ -212,8 +212,8 @@ const TEMPLATES: WorkflowTemplate[] = [
     estimatedFee: '~0.002 ALGO/rebalance',
     nodes: [
       { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'timer-loop', config: { interval: 86400 }, label: 'Daily Check' } },
-      { id: 'n2', type: 'generic', position: { x: 300, y: 100 }, data: { blockId: 'get-quote', config: { fromAsset: 0, toAsset: 31566704, amount: 1 }, label: 'Get ALGO Price' } },
-      { id: 'n3', type: 'generic', position: { x: 550, y: 50 }, data: { blockId: 'swap-token', config: { fromAsset: 31566704, toAsset: 0, amount: 10, slippage: 0.5 }, label: 'Rebalance to ALGO' } },
+      { id: 'n2', type: 'generic', position: { x: 300, y: 100 }, data: { blockId: 'get-quote', config: { fromAsset: 0, toAsset: 10458941, amount: 1 }, label: 'Get ALGO Price' } },
+      { id: 'n3', type: 'generic', position: { x: 550, y: 50 }, data: { blockId: 'swap-token', config: { fromAsset: 10458941, toAsset: 0, amount: 10, slippage: 0.5 }, label: 'Rebalance to ALGO' } },
       { id: 'n4', type: 'generic', position: { x: 550, y: 200 }, data: { blockId: 'send-telegram', config: { message: 'Portfolio rebalance executed - allocation adjusted.' }, label: 'Notify' } },
     ],
     edges: [

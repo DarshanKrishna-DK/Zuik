@@ -1,16 +1,16 @@
 /**
  * Multi-DEX swap aggregation for Algorand.
  *
- * Strategy: Tinyman V2 (testnet-compatible) -> Folks Router (mainnet) -> error.
- * On testnet, Tinyman V2 has real liquidity pools; Folks Router may not.
+ * Strategy:
+ *   1. Tinyman V2 SDK (reads pool state from chain - works on testnet)
+ *   2. Folks Router V2 API (aggregator)
+ *   3. Error if neither returns a valid quote
  */
 
 import algosdk from 'algosdk'
 import type { Algodv2 } from 'algosdk'
 import type { TransactionSigner } from 'algosdk'
 import { getTinymanQuote, executeTinymanSwap, type TinymanQuote } from './tinymanSwap'
-
-const FOLKS_ROUTER_API_BASE = 'https://api.folksrouter.io'
 
 export type SwapType = 'FIXED_INPUT' | 'FIXED_OUTPUT'
 
@@ -43,6 +43,11 @@ export interface ExecuteSwapResult {
   amountOut: number
 }
 
+function folksBaseUrl(network: string): string {
+  if (network === 'testnet') return 'https://api.folksrouter.io/testnet/v2'
+  return 'https://api.folksrouter.io/v2'
+}
+
 async function fetchFolksQuote(params: GetSwapQuoteParams): Promise<SwapQuoteResponse | null> {
   const {
     fromAssetId,
@@ -53,7 +58,8 @@ async function fetchFolksQuote(params: GetSwapQuoteParams): Promise<SwapQuoteRes
   } = params
 
   const amountStr = typeof amount === 'bigint' ? amount.toString() : String(amount)
-  const url = new URL(`${FOLKS_ROUTER_API_BASE}/v1/fetch/quote`)
+  const base = folksBaseUrl(network)
+  const url = new URL(`${base}/fetch/quote`)
   url.searchParams.set('network', network)
   url.searchParams.set('fromAsset', String(fromAssetId))
   url.searchParams.set('toAsset', String(toAssetId))
@@ -65,12 +71,15 @@ async function fetchFolksQuote(params: GetSwapQuoteParams): Promise<SwapQuoteRes
     const res = await fetch(url.toString())
     if (!res.ok) return null
     const data = await res.json() as Record<string, unknown>
-    if (!data.quoteAmount && !data.txnPayload) return null
+
+    const result = (data.result ?? data) as Record<string, unknown>
+    if (!result.quoteAmount && !result.txnPayload) return null
+
     return {
-      quoteAmount: Number(data.quoteAmount ?? 0),
-      priceImpact: Number(data.priceImpact ?? 0),
+      quoteAmount: Number(result.quoteAmount ?? 0),
+      priceImpact: Number(result.priceImpact ?? 0),
       source: 'folks-router',
-      _folksTxnPayload: data.txnPayload as string | undefined,
+      _folksTxnPayload: result.txnPayload as string | undefined,
     }
   } catch {
     return null
@@ -92,13 +101,14 @@ async function fetchTinymanQuote(params: GetSwapQuoteParams): Promise<SwapQuoteR
       source: 'tinyman',
       _tinymanQuote: tq,
     }
-  } catch {
+  } catch (e) {
+    console.warn('[SwapToken] Tinyman quote failed:', e instanceof Error ? e.message : e)
     return null
   }
 }
 
 /**
- * Multi-DEX quote: tries Tinyman first (better testnet support), then Folks Router.
+ * Multi-DEX quote: tries Tinyman first (on-chain pool state), then Folks Router.
  */
 export async function getSwapQuote(params: GetSwapQuoteParams): Promise<SwapQuoteResponse> {
   const network = params.network ?? 'testnet'
