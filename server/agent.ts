@@ -154,14 +154,20 @@ function topoSort(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[] {
 
 // ── Workflow execution ──────────────────────────────────
 
-async function executeWorkflow(schedule: ScheduleRow): Promise<void> {
-  const { nodes, edges } = schedule.flow_json
+/** Run notification / price / logic flows without a wallet (used by schedule poller and Telegram). */
+export async function executeWorkflowHeadless(
+  flowJson: { nodes: FlowNode[]; edges: FlowEdge[] },
+  walletAddress: string,
+  workflowLabel?: string,
+): Promise<void> {
+  const { nodes, edges } = flowJson
   if (!nodes || nodes.length === 0) return
 
   const sorted = topoSort(nodes, edges ?? [])
   const context: Record<string, unknown> = {}
 
-  console.log(`[Agent] Executing workflow ${schedule.workflow_id} (${sorted.length} nodes)`)
+  const label = workflowLabel ?? 'workflow'
+  console.log(`[Agent] Executing ${label} (${sorted.length} nodes) for ${walletAddress.slice(0, 8)}...`)
 
   for (const node of sorted) {
     const blockId = node.data?.blockId
@@ -220,7 +226,7 @@ async function executeWorkflow(schedule: ScheduleRow): Promise<void> {
           await sendTelegram(chatId, msg)
           console.log(`  [send-telegram] Sent to ${chatId}`)
         } else {
-          const linked = await getLinkedTelegramChats(schedule.wallet_address)
+          const linked = await getLinkedTelegramChats(walletAddress)
           for (const chat of linked) {
             await sendTelegram(chat, msg)
             console.log(`  [send-telegram] Sent to linked chat ${chat}`)
@@ -256,14 +262,16 @@ async function executeWorkflow(schedule: ScheduleRow): Promise<void> {
       }
 
       case 'delay': {
-        const ms = Math.min(Number(config.seconds ?? 1) * 1000, 30_000)
+        const sec = Number(config.duration ?? config.seconds ?? 5)
+        const ms = Math.min(sec * 1000, 30_000)
         console.log(`  [delay] Waiting ${ms}ms`)
         await new Promise((r) => setTimeout(r, ms))
         break
       }
 
-      case 'log': {
-        console.log(`  [log] ${config.message ?? 'Log node'}`)
+      case 'log':
+      case 'log-debug': {
+        console.log(`  [log] ${config.message ?? config.label ?? 'Log node'}`)
         break
       }
 
@@ -275,6 +283,10 @@ async function executeWorkflow(schedule: ScheduleRow): Promise<void> {
         }
     }
   }
+}
+
+async function executeWorkflow(schedule: ScheduleRow): Promise<void> {
+  await executeWorkflowHeadless(schedule.flow_json, schedule.wallet_address, schedule.workflow_id)
 }
 
 // ── Telegram link helpers ───────────────────────────────

@@ -202,11 +202,13 @@ export async function getDashboardStats(walletAddress: string) {
     sb.from('executions').select('*').eq('wallet_address', walletAddress).order('started_at', { ascending: false }).limit(200),
   ])
 
+  const normStatus = (s: string | undefined) => (s ?? '').toLowerCase().trim()
+
   const totalWorkflows = wfResult.count ?? 0
   const executions = (exResult.data ?? []) as ExecutionRow[]
   const totalExecutions = executions.length
-  const successCount = executions.filter((e) => e.status === 'success').length
-  const failedCount = executions.filter((e) => e.status === 'failed').length
+  const successCount = executions.filter((e) => normStatus(e.status) === 'success').length
+  const failedCount = executions.filter((e) => normStatus(e.status) === 'failed').length
   const successRate = totalExecutions > 0 ? Math.round((successCount / totalExecutions) * 100) : 0
   const totalFees = executions.reduce((sum, e) => sum + (e.total_fees_microalgo || 0), 0)
 
@@ -215,8 +217,9 @@ export async function getDashboardStats(walletAddress: string) {
     const day = ex.started_at.slice(0, 10)
     const entry = dailyMap.get(day) ?? { success: 0, failed: 0, total: 0 }
     entry.total++
-    if (ex.status === 'success') entry.success++
-    if (ex.status === 'failed') entry.failed++
+    const st = normStatus(ex.status)
+    if (st === 'success') entry.success++
+    if (st === 'failed') entry.failed++
     dailyMap.set(day, entry)
   }
   const dailyData = Array.from(dailyMap.entries())

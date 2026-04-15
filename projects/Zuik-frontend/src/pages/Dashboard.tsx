@@ -40,17 +40,18 @@ function DashboardIcon() { return <svg width="22" height="22" viewBox="0 0 24 24
 function WalletIcon() { return <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" /><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" /></svg> }
 
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { color: string; Icon: () => JSX.Element }> = {
-    success: { color: 'var(--z-success)', Icon: CheckCircleIcon },
-    failed: { color: 'var(--z-error)', Icon: XCircleIcon },
-    running: { color: 'var(--z-info)', Icon: CheckCircleIcon },
-    cancelled: { color: 'var(--z-text-dim)', Icon: XCircleIcon },
+  const map: Record<string, { color: string; Icon: () => JSX.Element; label: string }> = {
+    success: { color: 'var(--z-success)', Icon: CheckCircleIcon, label: 'Success' },
+    failed: { color: 'var(--z-error)', Icon: XCircleIcon, label: 'Failed' },
+    running: { color: 'var(--z-info)', Icon: CheckCircleIcon, label: 'Running' },
+    cancelled: { color: 'var(--z-text-dim)', Icon: XCircleIcon, label: 'Cancelled' },
   }
-  const entry = map[status] ?? map.cancelled
+  const key = (status || '').toLowerCase().trim()
+  const entry = map[key] ?? { ...map.cancelled, label: status || 'Unknown' }
   return (
     <span className="dash-status-badge" style={{ color: entry.color }}>
       <entry.Icon />
-      {status}
+      {entry.label}
     </span>
   )
 }

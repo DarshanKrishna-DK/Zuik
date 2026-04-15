@@ -56,9 +56,9 @@ export default function Navbar({ onConnectWallet }: NavbarProps) {
 
   return (
     <nav className="zuik-navbar">
-      <Link to="/" className="zuik-navbar-brand">
+      <Link to="/" className="landing-nav-brand zuik-navbar-brand">
         <img src={zuikLogo} alt="Zuik" />
-        <span>Zuik</span>
+        <span>ZUIK</span>
       </Link>
 
       <div className="zuik-nav-links">

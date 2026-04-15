@@ -229,8 +229,13 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--z-text);
   flex-shrink: 0;
 }
-.zuik-navbar-brand img { height: 28px; width: 28px; border-radius: 6px; }
-.zuik-navbar-brand span { font-weight: 700; font-size: 1.125rem; letter-spacing: -0.03em; }
+
+/* Same wordmark as landing: ZUIK + logo (see .landing-nav-brand) */
+.zuik-navbar .landing-nav-brand.zuik-navbar-brand img {
+  height: 32px;
+  width: 32px;
+  border-radius: 8px;
+}
 
 .zuik-nav-links {
   display: flex;

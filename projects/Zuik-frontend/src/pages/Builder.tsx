@@ -66,7 +66,7 @@ import {
   isSupabaseConfigured, getWorkflow, createWorkflow, updateWorkflow,
   recordExecution, completeExecution,
 } from '../services/supabase'
-import { fetchAlgoUsdPrice } from '../services/transactionSimulator'
+import { fetchAlgoUsdPrice, estimateStepFee } from '../services/transactionSimulator'
 
 /* ── Inline SVG Icons ─────────────────────────────────── */
 
@@ -402,6 +402,7 @@ export default function Builder() {
 
     let execId: string | null = null
     const startTime = Date.now()
+    let execFinalized = false
     if (workflowId && isSupabaseConfigured()) {
       try {
         execId = await recordExecution(workflowId, activeAddress, flowNodes.length)
@@ -413,12 +414,16 @@ export default function Builder() {
     const variables = createVariableContext()
     const blockOutputs = new Map<string, Record<string, unknown>>()
     const collectedTxIds: string[] = []
+    let totalFeesMicroalgo = 0
 
     const wrappedLog = (entry: Omit<LogEntry, 'timestamp'>) => {
       addLog(entry)
       if (entry.type === 'success' && entry.data) {
         const txId = (entry.data as Record<string, unknown>)?.txId
-        if (typeof txId === 'string') collectedTxIds.push(txId)
+        if (typeof txId === 'string' && txId) {
+          collectedTxIds.push(txId)
+          totalFeesMicroalgo += estimateStepFee(entry.blockId)
+        }
       }
     }
 
@@ -428,16 +433,17 @@ export default function Builder() {
     })
 
     const finishExecution = async (status: 'success' | 'failed' | 'cancelled', errorMsg?: string) => {
-      if (execId && isSupabaseConfigured()) {
-        try {
-          await completeExecution(execId, {
-            status,
-            txIds: collectedTxIds,
-            errorMessage: errorMsg,
-            durationMs: Date.now() - startTime,
-          })
-        } catch { /* non-blocking */ }
-      }
+      if (!execId || !isSupabaseConfigured() || execFinalized) return
+      try {
+        await completeExecution(execId, {
+          status,
+          txIds: [...new Set(collectedTxIds)],
+          errorMessage: errorMsg,
+          durationMs: Date.now() - startTime,
+          totalFeesMicroalgo,
+        })
+        execFinalized = true
+      } catch { /* non-blocking */ }
     }
 
     if (hasTriggers) {
@@ -450,9 +456,19 @@ export default function Builder() {
         log: wrappedLog,
         onNodeStatusChange: updateNodeStatus,
         abortSignal: abortController.signal,
-      }, setAgentStatus, workflowId)
+      }, setAgentStatus, workflowId, (evResult) => {
+        setAgentStatus('idle')
+        if (evResult.success) {
+          void finishExecution('success')
+        } else {
+          void finishExecution('failed', evResult.errorMessage)
+        }
+      })
       const originalStop = handle.stop.bind(handle)
-      handle.stop = () => { originalStop(); finishExecution('cancelled') }
+      handle.stop = () => {
+        originalStop()
+        if (!execFinalized) void finishExecution('cancelled')
+      }
       agentHandleRef.current = handle
     } else {
       setAgentStatus('running')
@@ -467,13 +483,17 @@ export default function Builder() {
         abortSignal: abortController.signal,
       }).then(() => {
         setAgentStatus('idle')
-        finishExecution('success')
+        void finishExecution('success')
       }).catch((err) => {
         setAgentStatus('error')
-        finishExecution('failed', err instanceof Error ? err.message : String(err))
+        void finishExecution('failed', err instanceof Error ? err.message : String(err))
       })
       agentHandleRef.current = {
-        stop() { abortController.abort(); setAgentStatus('stopped'); finishExecution('cancelled') },
+        stop() {
+          abortController.abort()
+          setAgentStatus('stopped')
+          if (!execFinalized) void finishExecution('cancelled')
+        },
         pause() { setAgentStatus('paused') },
         resume() { setAgentStatus('running') },
       }

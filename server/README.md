@@ -64,5 +64,9 @@ npm run dev
 | `/start` | Welcome message |
 | `/link <address>` | Link your Algorand wallet to this Telegram chat |
 | `/workflows` | List your saved workflows |
+| `/workflow_build <text>` | AI builds a workflow from your description and saves it to your linked wallet in Supabase (requires `GROQ_API_KEY`) |
+| `/run_workflow` | Inline picker to run a saved workflow. Server can execute price checks and Telegram alerts only; swaps and wallet triggers open `ZUIK_APP_URL/builder?wf=...` |
 | `/status` | Show active schedules |
 | Free text | AI-powered DeFi advice via Groq |
+
+Environment: set `ZUIK_APP_URL` to your Zuik web app base URL (default `https://zuik.vercel.app`) for deep links from `/run_workflow`.

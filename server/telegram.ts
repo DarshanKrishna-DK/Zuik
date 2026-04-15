@@ -1,7 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { sendTelegram, fetchPrice } from './agent.js'
+import { sendTelegram, fetchPrice, executeWorkflowHeadless } from './agent.js'
+import { buildWorkflowFromText } from './workflowIntentGroq.js'
+import { workflowNeedsZuikApp } from './flowSigner.js'
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? ''
+const ZUIK_APP_URL = (process.env.ZUIK_APP_URL ?? 'https://zuik.vercel.app').replace(/\/$/, '')
 const GROQ_API_KEY = process.env.GROQ_API_KEY ?? ''
 const GROQ_MODEL = process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile'
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
@@ -53,6 +56,8 @@ async function setBotCommands() {
     { command: 'balance', description: 'Check wallet ALGO balance' },
     { command: 'price', description: 'Live ALGO/USD price' },
     { command: 'workflows', description: 'List your saved workflows' },
+    { command: 'workflow_build', description: 'Describe a workflow to save it' },
+    { command: 'run_workflow', description: 'Pick a workflow to run' },
     { command: 'status', description: 'Active workflow schedules' },
     { command: 'profit', description: 'Execution history and stats' },
     { command: 'commands', description: 'Show all commands with buttons' },
@@ -146,6 +151,8 @@ async function handleCommands(chatId: number) {
     '/balance - Wallet balance (ALGO + INR)',
     '/price - Live ALGO price',
     '/workflows - Your saved workflows',
+    '/workflow_build &lt;description&gt; - AI saves a workflow to your account',
+    '/run_workflow - Pick a workflow (server runs alerts only; swaps open in the app)',
     '/status - Active schedules',
     '/profit - Execution history',
     '/commands - This command list',
@@ -359,6 +366,186 @@ async function handlePrice(chatId: number) {
   }
 }
 
+async function handleWorkflowBuild(chatId: number, instruction: string) {
+  if (!instruction.trim()) {
+    await sendReply(
+      chatId,
+      [
+        '<b>Build a workflow</b>',
+        '',
+        'Example:',
+        '<code>/workflow_build timer every 5 minutes fetch ALGO price and send it to Telegram</code>',
+        '',
+        'Your linked wallet is used for saving. On-chain swaps and transfers must be run in the Zuik web app to sign.',
+      ].join('\n'),
+    )
+    return
+  }
+
+  const walletAddress = await getWalletForChat(chatId)
+  if (!walletAddress) {
+    await sendReply(chatId, 'Link your wallet first: /link YOUR_ALGORAND_ADDRESS')
+    return
+  }
+
+  await sendReply(chatId, 'Building workflow with AI… one moment.')
+
+  const result = await buildWorkflowFromText(instruction, {
+    walletAddress,
+    telegramChatId: String(chatId),
+  })
+
+  if (!result.ok || !result.parsed) {
+    await sendReply(chatId, `Could not build workflow: ${result.error ?? 'Unknown error'}`)
+    return
+  }
+
+  if (!result.flowJson || (result.flowJson.nodes as unknown[]).length === 0) {
+    await sendReply(chatId, result.parsed.explanation || 'No workflow steps were generated.')
+    return
+  }
+
+  const flowJson = result.flowJson as { nodes: Array<{ data?: { blockId?: string; config?: Record<string, unknown> } }>; edges: unknown[] }
+
+  for (const n of flowJson.nodes) {
+    const cfg = n.data?.config
+    if (!cfg) continue
+    if (n.data?.blockId === 'send-telegram' && String(cfg.chatId ?? '') === '{{telegram_chat_id}}') {
+      cfg.chatId = String(chatId)
+    }
+    if (n.data?.blockId === 'wallet-event' && String(cfg.address ?? '') === '{{user_wallet}}') {
+      cfg.address = walletAddress
+    }
+  }
+
+  const name =
+    (result.parsed.workflowName && String(result.parsed.workflowName).trim()) ||
+    result.parsed.intent ||
+    'Telegram workflow'
+
+  const { data: inserted, error } = await supabase
+    .from('workflows')
+    .insert({
+      wallet_address: walletAddress,
+      name: name.slice(0, 120),
+      description: result.parsed.explanation.slice(0, 500),
+      flow_json: flowJson,
+      is_active: true,
+    })
+    .select('id')
+    .single()
+
+  if (error || !inserted) {
+    console.error('[Telegram] workflow insert:', error)
+    await sendReply(chatId, `Save failed: ${error?.message ?? 'database error'}`)
+    return
+  }
+
+  const id = (inserted as { id: string }).id
+  await sendReply(
+    chatId,
+    [
+      '<b>Workflow saved</b>',
+      '',
+      `<b>${escapeHtml(name)}</b>`,
+      '',
+      escapeHtml(result.parsed.explanation),
+      '',
+      `Open in builder: ${ZUIK_APP_URL}/builder?wf=${id}`,
+      '',
+      'Run from Telegram with /run_workflow (server can only run notification and price checks; swaps need the web app).',
+    ].join('\n'),
+  )
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+async function handleRunWorkflowMenu(chatId: number) {
+  const walletAddress = await getWalletForChat(chatId)
+  if (!walletAddress) {
+    await sendReply(chatId, 'No wallet linked. Use /link YOUR_WALLET_ADDRESS first.')
+    return
+  }
+
+  const { data: workflows, error } = await supabase
+    .from('workflows')
+    .select('id, name')
+    .eq('wallet_address', walletAddress)
+    .order('updated_at', { ascending: false })
+    .limit(20)
+
+  if (error || !workflows || workflows.length === 0) {
+    await sendReply(chatId, 'No saved workflows. Use /workflow_build with a description, or create one in the web app.')
+    return
+  }
+
+  const rows: { text: string; callback_data?: string; url?: string }[][] = workflows.map((w: { id: string; name: string }) => [
+    {
+      text: (w.name || 'Untitled').slice(0, 60),
+      callback_data: `runwf:${w.id}`,
+    },
+  ])
+
+  await sendWithButtons(
+    chatId,
+    '<b>Tap a workflow to run</b>\n\nServer-side runs work for price checks and Telegram alerts. Flows with swaps or wallet triggers open in the web app.',
+    rows,
+  )
+}
+
+async function handleRunWorkflowExecute(chatId: number, workflowId: string) {
+  const walletAddress = await getWalletForChat(chatId)
+  if (!walletAddress) {
+    await sendReply(chatId, 'No wallet linked.')
+    return
+  }
+
+  const { data: wf, error } = await supabase
+    .from('workflows')
+    .select('id, name, flow_json')
+    .eq('id', workflowId)
+    .eq('wallet_address', walletAddress)
+    .maybeSingle()
+
+  if (error || !wf) {
+    await sendReply(chatId, 'Workflow not found or access denied.')
+    return
+  }
+
+  const flowJson = wf.flow_json as { nodes: unknown[]; edges: unknown[] }
+  if (!flowJson?.nodes?.length) {
+    await sendReply(chatId, 'This workflow has no blocks.')
+    return
+  }
+
+  if (workflowNeedsZuikApp(flowJson as Parameters<typeof workflowNeedsZuikApp>[0])) {
+    await sendReply(
+      chatId,
+      [
+        `<b>${escapeHtml(wf.name || 'Workflow')}</b> uses on-chain signing or a browser-only trigger.`,
+        '',
+        `Open Zuik to run and sign:\n${ZUIK_APP_URL}/builder?wf=${wf.id}`,
+      ].join('\n'),
+    )
+    return
+  }
+
+  await sendReply(chatId, `Running <b>${escapeHtml(wf.name || 'workflow')}</b> on the server…`)
+
+  try {
+    await executeWorkflowHeadless(flowJson as Parameters<typeof executeWorkflowHeadless>[0], walletAddress, wf.name)
+    await sendReply(chatId, `Done. Finished running "${escapeHtml(wf.name || 'workflow')}".`)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    await sendReply(chatId, `Run failed: ${escapeHtml(msg)}`)
+  }
+}
+
 async function handleProfit(chatId: number) {
   const walletAddress = await getWalletForChat(chatId)
   if (!walletAddress) {
@@ -479,6 +666,12 @@ async function pollTelegram() {
       const chatId = cb.message?.chat.id ?? cb.from.id
       await answerCallbackQuery(cb.id)
 
+      if (cb.data?.startsWith('runwf:')) {
+        const wid = cb.data.slice('runwf:'.length)
+        await handleRunWorkflowExecute(chatId, wid)
+        continue
+      }
+
       switch (cb.data) {
         case 'action_link':
           await sendReply(chatId, 'To link your wallet, send:\n\n/link YOUR_58_CHAR_ALGORAND_ADDRESS')
@@ -528,6 +721,13 @@ async function pollTelegram() {
       await handlePrice(chatId)
     } else if (text === '/workflows') {
       await handleWorkflows(chatId)
+    } else if (/^\/workflow_build(\@\S+)?\s*$/i.test(text)) {
+      await handleWorkflowBuild(chatId, '')
+    } else if (text.startsWith('/workflow_build')) {
+      const rest = text.replace(/^\/workflow_build(\@\S+)?\s*/i, '').trim()
+      await handleWorkflowBuild(chatId, rest)
+    } else if (/^\/run_workflow(\@\S+)?\s*$/i.test(text)) {
+      await handleRunWorkflowMenu(chatId)
     } else if (text === '/status') {
       await handleStatus(chatId)
     } else if (text === '/profit') {

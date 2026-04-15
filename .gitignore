@@ -176,6 +176,7 @@ AGENTS.md
 DEMO_SCRIPT.md
 .cursorrules
 .cursor/
+reference_docs/
 
 # ===== IDE =====
 .vscode/
