@@ -113,39 +113,25 @@ export async function getTinymanQuote(params: TinymanQuoteParams): Promise<Tinym
 }
 
 /**
- * Wraps a @txnlab/use-wallet TransactionSigner into the InitiatorSigner
- * format expected by the Tinyman SDK.
- *
- * Converts SDK Transaction objects to our algosdk via toByte() bridge.
+ * Tinyman returns SignerTransaction[] { txn, signers }; use-wallet expects algosdk.Transaction[].
+ * Bridge via bytes when needed (algosdk version / txn class mismatches).
  */
-function wrapWalletSigner(walletSigner: TransactionSigner, senderAddr: string): InitiatorSigner {
-  return async (txGroups: SignerTransaction[][]): Promise<Uint8Array[]> => {
-    const allSignedTxns: Uint8Array[] = []
-
-    for (const group of txGroups) {
-      const ourTxns = group.map((item) => {
-        const bytes = (item.txn as unknown as { toByte: () => Uint8Array }).toByte()
-        return algosdk.decodeUnsignedTransaction(bytes)
-      })
-
-      const indexesToSign = group
-        .map((item, i) => {
-          if (!item.signers || item.signers.length === 0) return -1
-          return item.signers.includes(senderAddr) ? i : -1
-        })
-        .filter((i) => i >= 0)
-
-      if (indexesToSign.length === 0) continue
-
-      const walletSigned = await walletSigner(ourTxns, indexesToSign)
-      for (const signed of walletSigned) {
-        allSignedTxns.push(signed)
-      }
+function signerTransactionToAlgosdkTxn(st: SignerTransaction): algosdk.Transaction {
+  const t = st.txn as algosdk.Transaction & { toByte?: () => Uint8Array }
+  if (typeof t.toByte === 'function') {
+    try {
+      return algosdk.decodeUnsignedTransaction(t.toByte())
+    } catch {
+      /* fall through */
     }
-
-    return allSignedTxns
   }
+  return t
 }
+
+/**
+ * Execute a Tinyman V2 swap directly via pool interaction (2 transactions).
+ * Signs with the wallet using plain algosdk.Transaction[] (Pera-compatible).
+ */
 
 export async function executeTinymanSwap(
   quote: TinymanQuote,
@@ -169,15 +155,32 @@ export async function executeTinymanSwap(
 
   console.log('[Tinyman] Generated', txGroup.length, 'transactions')
 
-  const initiatorSigner = wrapWalletSigner(signer, sender)
+  // Wait 2 seconds before requesting user signature to prevent Pera wallet conflicts
+  console.log('[Tinyman] Waiting 2s before requesting signature...')
+  await new Promise(resolve => setTimeout(resolve, 2000))
 
-  const signedTxns = await Swap.v2.signTxns({
-    txGroup,
-    initiatorSigner,
-  })
+  const unsignedTxns = txGroup.map(signerTransactionToAlgosdkTxn)
+  const indexesToSign = txGroup
+    .map((st, i) => {
+      if (st.signers !== undefined && st.signers.length === 0) return -1
+      if (st.signers && !st.signers.includes(sender)) return -1
+      return i
+    })
+    .filter((i): i is number => i >= 0)
 
-  console.log('[Tinyman] Signed', signedTxns.length, 'transactions, submitting...')
+  console.log('[Tinyman] Signing', indexesToSign.length, 'txn(s) at indices', indexesToSign.join(','))
 
+  let signedTxns: Uint8Array[]
+  try {
+    signedTxns = await signer(unsignedTxns, indexesToSign)
+    console.log('[Tinyman] Signed', signedTxns.length, 'transaction blob(s)')
+  } catch (err) {
+    console.error('[Tinyman] Signing error:', err)
+    throw new Error(`Failed to sign Tinyman transactions: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  // Submit the signed transactions
+  console.log('[Tinyman] Submitting signed transactions...')
   const result = await Swap.v2.execute({
     client: algodClient as unknown as Parameters<typeof Swap.v2.execute>[0]['client'],
     quote: quote.sdkQuote,

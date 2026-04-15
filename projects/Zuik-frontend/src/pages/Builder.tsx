@@ -309,9 +309,12 @@ export default function Builder() {
     return () => clearTimeout(debounce)
   }, [nodes, edges, flowHydrated])
 
+  // Fetch ALGO price once on mount
   useEffect(() => {
     fetchAlgoUsdPrice().catch(() => {})
+  }, [])
 
+  useEffect(() => {
     const handleKeyboard = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
@@ -344,9 +347,15 @@ export default function Builder() {
     window.addEventListener('keydown', handleKeyboard)
     return () => {
       window.removeEventListener('keydown', handleKeyboard)
-      agentHandleRef.current?.stop()
     }
   }, [nodes, edges, saveToSupabase])
+
+  // Cleanup agent on component unmount only
+  useEffect(() => {
+    return () => {
+      agentHandleRef.current?.stop()
+    }
+  }, [])
 
   // Warn before browser close / tab switch if unsaved changes
   useEffect(() => {
@@ -374,6 +383,8 @@ export default function Builder() {
       addLog({ nodeId: '', blockId: '', blockName: 'System', type: 'error', message: 'Connect wallet first' })
       return
     }
+
+    setLogOpen(true)
 
     agentHandleRef.current?.stop()
 
@@ -676,7 +687,7 @@ export default function Builder() {
 
           <AgentControls
             status={agentStatus}
-            onStart={() => setTransactionPanelOpen(true)}
+            onStart={handleStartAgent}
             onStop={() => agentHandleRef.current?.stop()}
             onPause={() => agentHandleRef.current?.pause()}
             onResume={() => agentHandleRef.current?.resume()}
@@ -710,8 +721,8 @@ export default function Builder() {
                 <button onClick={handleExport}><DownloadIcon /> Export JSON</button>
                 <button onClick={handleImport}><UploadIcon /> Import JSON</button>
                 <div className="z-dropdown-sep" />
-                <button onClick={() => { setTransactionPanelOpen(true); setMenuOpen(false) }}>
-                  <ZapIcon /> Run Workflow
+                <button onClick={() => { setTransactionPanelOpen(true); setMenuOpen(false) }} title="Test workflow manually - useful for debugging and testing before going live">
+                  <ZapIcon /> Run Workflow (Test)
                 </button>
                 <button onClick={() => { setLogOpen((o) => !o); setMenuOpen(false) }}>
                   <ActivityIcon /> Execution Log

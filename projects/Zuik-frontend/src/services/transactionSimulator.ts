@@ -163,8 +163,14 @@ export function buildStepDescription(
       return `Pool info: ${resolveAssetNameSync(config.asset1)} / ${resolveAssetNameSync(config.asset2)}`
     case 'portfolio-balance':
       return `Check portfolio balance`
-    case 'wallet-event':
-      return `Watch wallet for incoming ${resolveAssetNameSync(config.assetId)} transfers`
+    case 'wallet-event': {
+      const mode = String(config.amountMode ?? 'received')
+      const modeHint =
+        mode === 'total'
+          ? ' (amount = full balance when the agent runs)'
+          : ' (amount = net change since last check, default)'
+      return `Watch wallet for ${resolveAssetNameSync(config.assetId)} activity${modeHint}`
+    }
     case 'timer-loop':
       return `Timer: every ${config.interval ?? 60}s${config.maxIterations ? ` (max ${config.maxIterations})` : ''}`
     case 'webhook-receiver':
@@ -231,7 +237,7 @@ export function buildSimulationPreview(
   if (hasTriggerBlocks) {
     warnings.push({
       severity: 'info',
-      message: 'This workflow has trigger blocks. Run executes all steps once for testing. For live triggers (polling for wallet events, timers), use the agent Run button in the toolbar.',
+      message: 'This workflow has trigger blocks. When you click "Sign and execute", trigger amounts are set to 0 for testing (as if no event has been received yet). For live triggers that continuously monitor and auto-execute, use the agent "Run" button in the toolbar instead.',
     })
   }
 

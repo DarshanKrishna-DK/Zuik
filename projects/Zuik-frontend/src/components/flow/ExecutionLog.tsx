@@ -28,6 +28,7 @@ function getTypeIcon(type: LogEntry['type']) {
     case 'start': return <span style={{ color: 'var(--z-info)', flexShrink: 0 }}><PlayIcon /></span>
     case 'skip': return <span style={{ color: 'var(--z-warning)', flexShrink: 0 }}><SkipIcon /></span>
     case 'trigger-fire': return <span style={{ color: '#A78BFA', flexShrink: 0 }}><ZapIcon /></span>
+    case 'info': return <span style={{ color: 'var(--z-info)', flexShrink: 0 }}><PlayIcon /></span>
     default: return <span style={{ color: 'var(--z-text-muted)', flexShrink: 0 }}><PlayIcon /></span>
   }
 }

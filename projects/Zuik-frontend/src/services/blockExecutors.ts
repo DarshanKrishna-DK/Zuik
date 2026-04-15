@@ -29,6 +29,40 @@ function toBaseUnits(amount: number, decimals: number): number {
   return Math.round(amount * 10 ** decimals)
 }
 
+/**
+ * ALGO-in swaps cannot use the entire account balance: the same ALGO pays the swap amount
+ * and transaction fees (Tinyman V2 uses a 2-txn group with a higher app-call fee).
+ * Also avoids float drift (human ALGO -> microAlgos) exceeding on-chain balance.
+ */
+async function capAlgoSwapInputMicro(
+  sender: string,
+  requestedMicro: number,
+): Promise<number> {
+  const algod = getAlgodClient()
+  const [acct, params] = await Promise.all([
+    algod.accountInformation(sender).do(),
+    algod.getTransactionParams().do(),
+  ])
+  const balanceMicro = Number((acct as { amount?: number }).amount ?? 0)
+  const minFee = Number((params as { minFee?: number }).minFee ?? 1000)
+  // Tinyman direct swap: payment txn (minFee) + app call (2x minFee for fixed-input; see @tinymanorg/tinyman-js-sdk swap/v2)
+  const reservedForFees = minFee + 2 * minFee
+  const roundingBuffer = 2000
+  const maxIn = Math.max(0, balanceMicro - reservedForFees - roundingBuffer)
+  const want = Math.floor(Math.max(0, requestedMicro))
+  if (want <= maxIn) return want
+  console.warn(
+    `[Zuik Swap] Capping ALGO input from ${want} to ${maxIn} microAlgos (balance ${balanceMicro}, reserve ${reservedForFees + roundingBuffer} for fees + rounding).`,
+  )
+  if (maxIn <= 0) {
+    throw new Error(
+      'Swap Token: not enough ALGO left after reserving network fees for this swap. ' +
+      'Add ALGO or lower the amount so fees remain available (about 0.004 ALGO on testnet for a 2-txn swap).',
+    )
+  }
+  return maxIn
+}
+
 export interface ExecutorContext {
   sender: string
   signer: TransactionSigner
@@ -77,7 +111,7 @@ async function executeSendPayment(
   context: ExecutorContext
 ): Promise<Record<string, unknown>> {
   const recipient = config.recipient as string
-  const amount = config.amount as number
+  let amount = config.amount
   const asset = config.asset as number | undefined
   const note = config.note as string | undefined
   const assetId = asset ?? 0
@@ -86,10 +120,23 @@ async function executeSendPayment(
     throw new Error('Send Payment: recipient and amount are required')
   }
 
+  const numericAmount = Number(amount)
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    throw new Error(`Send Payment: amount "${amount}" is not a valid positive number`)
+  }
+
+  let baseAmount = numericAmount
+  if (assetId > 0) {
+    const decimals = await getAssetDecimals(assetId)
+    baseAmount = toBaseUnits(numericAmount, decimals)
+  } else {
+    baseAmount = toBaseUnits(numericAmount, 6)
+  }
+
   const result = await sendPayment({
     sender: context.sender,
     receiver: recipient,
-    amount: typeof amount === 'number' ? amount : Number(amount),
+    amount: baseAmount,
     assetId: assetId ? Number(assetId) : 0,
     note,
     signer: context.signer,
@@ -212,7 +259,11 @@ async function executeSwapToken(
 
   const fromAssetId = Number(fromAsset)
   const decimals = await getAssetDecimals(fromAssetId)
-  const baseAmount = toBaseUnits(numericAmount, decimals)
+  let baseAmount = toBaseUnits(numericAmount, decimals)
+
+  if (fromAssetId === 0) {
+    baseAmount = await capAlgoSwapInputMicro(context.sender, baseAmount)
+  }
 
   console.log('[Zuik Swap] sender:', context.sender, '| from:', fromAssetId, '| amount:', baseAmount)
   await preflight(context.sender, fromAssetId, baseAmount)
@@ -232,12 +283,12 @@ async function executeSwapToken(
     signer: context.signer,
     algodClient: getAlgodClient(),
   })
-  return { txId: result.txId, amountOut: result.amountOut }
+  return { txId: result.txId, amountOut: result.amountOut, sentAmount: result.amountOut }
 }
 
 async function executeGetQuote(
   config: BlockConfig,
-  _context: ExecutorContext
+  context: ExecutorContext
 ): Promise<Record<string, unknown>> {
   const fromAsset = config.fromAsset as number
   const toAsset = config.toAsset as number
@@ -260,7 +311,11 @@ async function executeGetQuote(
 
   const fromAssetId = Number(fromAsset)
   const decimals = await getAssetDecimals(fromAssetId)
-  const baseAmount = toBaseUnits(numericAmount, decimals)
+  let baseAmount = toBaseUnits(numericAmount, decimals)
+
+  if (fromAssetId === 0) {
+    baseAmount = await capAlgoSwapInputMicro(context.sender, baseAmount)
+  }
 
   const network = import.meta.env.VITE_ALGOD_NETWORK ?? 'testnet'
   const quote = await getSwapQuote({

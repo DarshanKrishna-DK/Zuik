@@ -35,7 +35,7 @@ export default function AgentControls({ status, onStart, onStop, onPause, onResu
       </div>
 
       {showRun && (
-        <button type="button" onClick={onStart} className="z-btn z-btn-primary z-btn-sm" title="Run Workflow">
+        <button type="button" onClick={onStart} className="z-btn z-btn-primary z-btn-sm" title="Start agent - continuously monitor and auto-execute triggers">
           <PlayIcon /> Run
         </button>
       )}

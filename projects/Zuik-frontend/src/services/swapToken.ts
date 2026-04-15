@@ -164,6 +164,9 @@ async function executeFolksSwap(
     }
   }
 
+  // Wait 2 seconds before requesting user signature to prevent Pera wallet conflicts
+  await new Promise(resolve => setTimeout(resolve, 2000))
+
   const indexesToSign = txns.map((_, i) => i)
   const signed = await signer(txns, indexesToSign)
   const combined = new Uint8Array(signed.reduce((acc, s) => acc + s.length, 0))

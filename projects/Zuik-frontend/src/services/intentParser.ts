@@ -124,13 +124,15 @@ ${buildUserContext(userContext)}
 
 ## PERCENTAGE / DYNAMIC AMOUNT WORKFLOWS:
 When the user says "swap X% of received amount", this is how to build it correctly:
-1. "wallet-event" trigger (watches for incoming tokens, set "address" to user's connected wallet from USER CONTEXT)
+1. "wallet-event" trigger (watches for incoming tokens, set "address" to user's connected wallet from USER CONTEXT). Always set "amountMode" to "received" unless the user explicitly wants to swap their entire on-chain balance of that asset (then use "total").
 2. "math-op" block with operation "percentage" and b = the percentage number (e.g. b=20 for 20%, b=50 for 50%). The math block receives the amount from upstream and calculates A * (B / 100).
 3. "swap-token" block - the amount field should be set to "{{math-op.result}}" (a dynamic variable referencing the math block's output)
 
 IMPORTANT: For the swap-token amount when it depends on a previous block's output, set it to the variable reference string "{{math-op.result}}" or "{{wallet-event.amount}}" - NOT to 0 or empty.
 
-When user says "swap it all" (100%), skip the math-op block and set the swap amount to "{{wallet-event.amount}}".
+With amountMode "received", "{{wallet-event.amount}}" is the net change in that asset since the last poll (approximates what just arrived), not the whole wallet balance. With "total", it is the full balance (rare; use only when the user asks to empty the wallet of that asset).
+
+When user says "swap it all" (100% of what arrived), skip the math-op block and set the swap amount to "{{wallet-event.amount}}" with amountMode "received".
 When user says "swap 50%", use math-op with operation="percentage" and b=50.
 
 ## AUTO-FILL RULES:
@@ -221,7 +223,7 @@ Return a JSON object with:
 5. DCA → timer-loop → swap-token.
 6. "Alert when price drops below X" → timer-loop → get-quote → comparator → send-telegram.
 7. ALWAYS fill ALL required config fields. Never leave amount, fromAsset, toAsset empty. Use dynamic variables like "{{wallet-event.amount}}" or "{{math-op.result}}" when the value depends on runtime data.
-8. When user says "swap it all to X" after a wallet-event trigger, set swap amount to "{{wallet-event.amount}}".
+8. When user says "swap it all to X" after a wallet-event trigger (meaning all of the incoming amount), set wallet-event amountMode to "received" and swap amount to "{{wallet-event.amount}}". Only use amountMode "total" if they clearly mean their entire balance of that asset.
 9. When user says "swap N% of it", use math-op with operation="percentage" and b=N, and set swap amount to "{{math-op.result}}".
 10. ALWAYS return valid JSON. No markdown fences.
 11. Be conversational in explanations. Suggest follow-ups like "Would you like me to add a Telegram alert for this?" or "I can also add a stop-loss."
@@ -253,10 +255,10 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'auto_swap_on_receive',
       steps: [
-        { action: 'wallet-event', params: { assetId: 10458941, address: '{{user_wallet}}', pollInterval: 15 } },
+        { action: 'wallet-event', params: { assetId: 10458941, address: '{{user_wallet}}', pollInterval: 15, amountMode: 'received' } },
         { action: 'swap-token', params: { fromAsset: 10458941, toAsset: 0, amount: '{{wallet-event.amount}}', slippage: 0.5 } },
       ],
-      explanation: 'Watching your connected wallet for incoming USDC. When USDC arrives, it automatically swaps the full received amount to ALGO via Tinyman. The wallet is checked every 15 seconds. Would you like me to add a Telegram alert when the swap executes?',
+      explanation: 'Watching your connected wallet for incoming USDC. When the balance of that asset increases between checks, the trigger passes that net amount as {{wallet-event.amount}} and swaps it to ALGO via Tinyman (not your whole wallet balance). The wallet is checked every 15 seconds. Would you like me to add a Telegram alert when the swap executes?',
       confidence: 0.92,
     }),
   },
@@ -269,7 +271,7 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'partial_swap_on_receive',
       steps: [
-        { action: 'wallet-event', params: { assetId: 10458941, address: '{{user_wallet}}', pollInterval: 15 } },
+        { action: 'wallet-event', params: { assetId: 10458941, address: '{{user_wallet}}', pollInterval: 15, amountMode: 'received' } },
         { action: 'math-op', params: { operation: 'percentage', b: 20 } },
         { action: 'swap-token', params: { fromAsset: 10458941, toAsset: 0, amount: '{{math-op.result}}', slippage: 0.5 } },
       ],
