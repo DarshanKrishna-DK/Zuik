@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { parseIntent, isGroqConfigured } from '../../services/intentParser'
 import type { ParsedIntent, CanvasBlock, UserContext } from '../../services/intentParser'
+import { 
+  useEnhancedSpeechRecognition, 
+  synthesizeSpeech, 
+  playAudio, 
+  checkVoiceServiceHealth 
+} from '../../services/voiceService'
 
 export interface ChatMessage {
   id: string
@@ -86,34 +92,89 @@ const RISK_COLORS: Record<string, string> = {
   aggressive: 'var(--z-error)',
 }
 
-function useSpeechRecognition() {
-  const [isListening, setIsListening] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const supported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
+function useEnhancedSpeechSynthesis() {
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [useServerTTS, setUseServerTTS] = useState(true) // Default to server-side TTS
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null)
+  const supported = typeof window !== 'undefined' && 'speechSynthesis' in window
 
-  const start = useCallback(() => {
-    if (!supported) return
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    const recognition = new SR()
-    recognition.continuous = false
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let text = ''
-      for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript
-      setTranscript(text)
+  const speak = useCallback(async (text: string, onEnd?: () => void) => {
+    // Stop any current playback
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current = null
     }
-    recognition.onend = () => setIsListening(false)
-    recognition.onerror = () => setIsListening(false)
-    recognitionRef.current = recognition
-    recognition.start()
-    setIsListening(true)
-    setTranscript('')
+    
+    if (useServerTTS) {
+      // Use server-side ElevenLabs TTS
+      try {
+        setIsSpeaking(true)
+        const audioData = await synthesizeSpeech(text, { autoDetectLanguage: true })
+        const audio = await playAudio(audioData)
+        currentAudioRef.current = audio
+        
+        audio.addEventListener('ended', () => {
+          setIsSpeaking(false)
+          currentAudioRef.current = null
+          onEnd?.()
+        }, { once: true })
+        
+        audio.addEventListener('error', () => {
+          setIsSpeaking(false)
+          currentAudioRef.current = null
+          onEnd?.()
+        }, { once: true })
+        
+      } catch (error) {
+        console.error('[EnhancedTTS] Server TTS failed, falling back to browser:', error)
+        setIsSpeaking(false)
+        
+        // Fallback to browser TTS
+        if (supported) {
+          fallbackToBrowserTTS(text, onEnd)
+        } else {
+          onEnd?.()
+        }
+      }
+    } else {
+      // Use browser TTS
+      fallbackToBrowserTTS(text, onEnd)
+    }
+  }, [useServerTTS, supported])
+
+  const fallbackToBrowserTTS = useCallback((text: string, onEnd?: () => void) => {
+    if (!supported) {
+      onEnd?.()
+      return
+    }
+    
+    window.speechSynthesis.cancel()
+    const cleaned = text.replace(/[*_#`]/g, '').replace(/\n+/g, '. ')
+    const utt = new SpeechSynthesisUtterance(cleaned)
+    const voices = window.speechSynthesis.getVoices()
+    const preferred = voices.find((v) => v.lang.startsWith('en') && v.name.includes('Google')) ??
+      voices.find((v) => v.lang.startsWith('en') && v.localService) ??
+      voices.find((v) => v.lang.startsWith('en'))
+    if (preferred) utt.voice = preferred
+    utt.rate = 1.0; utt.pitch = 1.05
+    utt.onstart = () => setIsSpeaking(true)
+    utt.onend = () => { setIsSpeaking(false); onEnd?.() }
+    utt.onerror = () => { setIsSpeaking(false); onEnd?.() }
+    window.speechSynthesis.speak(utt)
   }, [supported])
 
-  const stop = useCallback(() => { recognitionRef.current?.stop(); setIsListening(false) }, [])
-  return { isListening, transcript, start, stop, supported, clearTranscript: () => setTranscript('') }
+  const stop = useCallback(() => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current = null
+    }
+    if (supported) {
+      window.speechSynthesis.cancel()
+    }
+    setIsSpeaking(false)
+  }, [supported])
+
+  return { isSpeaking, speak, stop, supported: supported || true, useServerTTS, setUseServerTTS }
 }
 
 function useSpeechSynthesis() {
@@ -158,13 +219,19 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
   const [voiceMode, setVoiceMode] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const speech = useSpeechRecognition()
-  const synth = useSpeechSynthesis()
+  const speech = useEnhancedSpeechRecognition()
+  const synth = useEnhancedSpeechSynthesis()
+  const [voiceServiceHealth, setVoiceServiceHealth] = useState({ available: false, services: { groq: false, elevenlabs: false } })
   const voiceModeRef = useRef(false)
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   useEffect(() => { if (isOpen) inputRef.current?.focus() }, [isOpen])
   useEffect(() => { voiceModeRef.current = voiceMode }, [voiceMode])
+
+  // Check voice service health on mount
+  useEffect(() => {
+    checkVoiceServiceHealth().then(setVoiceServiceHealth)
+  }, [])
 
   const handleModeSwitch = (newMode: 'builder' | 'advisor') => {
     // Save current conversation to the appropriate ref
@@ -229,13 +296,16 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
   }, [isLoading, messages, onIntentParsed, mode, canvasBlocks, voiceMode, synth, speech])
 
   useEffect(() => {
-    if (!speech.isListening && speech.transcript) {
+    if (!speech.isListening && !speech.isTranscribing && speech.transcript) {
       const text = speech.transcript
       speech.clearTranscript()
-      if (voiceMode && text.trim()) sendMessage(text)
-      else setInput(text)
+      if (voiceMode && text.trim()) {
+        sendMessage(text)
+      } else {
+        setInput(text)
+      }
     }
-  }, [speech.isListening, speech.transcript, speech.clearTranscript, voiceMode, sendMessage])
+  }, [speech.isListening, speech.isTranscribing, speech.transcript, speech.clearTranscript, voiceMode, sendMessage])
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) } }
   const handleTemplate = (text: string) => { setInput(text); inputRef.current?.focus() }
@@ -287,9 +357,10 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
 
           <div className="zuik-call-status">
             {speech.isListening && <span className="zuik-call-status-text listening">Listening...</span>}
+            {speech.isTranscribing && <span className="zuik-call-status-text listening">Transcribing...</span>}
             {synth.isSpeaking && <span className="zuik-call-status-text speaking">Speaking...</span>}
             {isLoading && !synth.isSpeaking && <span className="zuik-call-status-text thinking">Thinking...</span>}
-            {!speech.isListening && !synth.isSpeaking && !isLoading && <span className="zuik-call-status-text">Connected</span>}
+            {!speech.isListening && !speech.isTranscribing && !synth.isSpeaking && !isLoading && <span className="zuik-call-status-text">Connected</span>}
           </div>
 
           {/* Last spoken text */}
@@ -417,7 +488,19 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
             {speech.isListening && <span className="zuik-mic-live-dot" />}
           </button>
         )}
-        <input ref={inputRef} className="zuik-chat-input" value={speech.isListening ? speech.transcript || input : input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder={speech.isListening ? 'Listening...' : mode === 'advisor' ? 'Ask for a strategy or advice...' : 'Describe your workflow...'} disabled={isLoading || speech.isListening} />
+        <input 
+          ref={inputRef} 
+          className="zuik-chat-input" 
+          value={speech.isListening || speech.isTranscribing ? speech.transcript || input : input} 
+          onChange={(e) => setInput(e.target.value)} 
+          onKeyDown={handleKeyDown} 
+          placeholder={
+            speech.isListening ? 'Listening...' : 
+            speech.isTranscribing ? 'Transcribing...' :
+            mode === 'advisor' ? 'Ask for a strategy or advice...' : 'Describe your workflow...'
+          } 
+          disabled={isLoading || speech.isListening || speech.isTranscribing} 
+        />
         <button className="zuik-chat-send" onClick={() => sendMessage(input)} disabled={!input.trim() || isLoading}><SendIcon /></button>
       </div>
     </div>

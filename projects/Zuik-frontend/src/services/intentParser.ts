@@ -79,6 +79,27 @@ const MAINNET_ASSETS: Record<string, number> = {
   goBTC: 386195940,
 }
 
+const EXAMPLE_USDC_ASA =
+  (import.meta.env.VITE_ALGOD_NETWORK || 'testnet').toLowerCase() === 'mainnet'
+    ? MAINNET_ASSETS.USDC
+    : WELL_KNOWN_ASSETS.USDC
+
+function buildWellKnownAssetsSection(): string {
+  const net = (import.meta.env.VITE_ALGOD_NETWORK || 'testnet').toLowerCase()
+  if (net === 'mainnet') {
+    return `## Well-known Algorand MainNet assets (use ONLY these ASA IDs for these names; never guess unknown ASA IDs):
+${Object.entries(MAINNET_ASSETS).map(([name, id]) => `- ${name} = ASA ID ${id}`).join('\n')}
+- ALGO = asset ID 0 (native token)`
+  }
+  const testLines = Object.entries(WELL_KNOWN_ASSETS)
+    .filter(([name]) => name !== 'USDt')
+    .map(([name, id]) => `- ${name} = ASA ID ${id}`)
+    .join('\n')
+  return `## Well-known Algorand TestNet assets:
+${testLines}
+- ALGO = asset ID 0 (native token)`
+}
+
 function buildCanvasSummary(canvasBlocks?: CanvasBlock[]): string {
   if (!canvasBlocks || canvasBlocks.length === 0) return '\n## CURRENT CANVAS STATE: Empty (no blocks on canvas)'
 
@@ -108,9 +129,7 @@ function buildSystemPrompt(canvasBlocks?: CanvasBlock[], userContext?: UserConte
 
 ${buildBlockSummary()}
 
-## Well-known Algorand TestNet Assets:
-${Object.entries(WELL_KNOWN_ASSETS).map(([name, id]) => `- ${name} = ASA ID ${id}`).join('\n')}
-- ALGO = asset ID 0 (native token)
+${buildWellKnownAssetsSection()}
 ${buildCanvasSummary(canvasBlocks)}
 ${buildUserContext(userContext)}
 
@@ -227,7 +246,8 @@ Return a JSON object with:
 9. When user says "swap N% of it", use math-op with operation="percentage" and b=N, and set swap amount to "{{math-op.result}}".
 10. ALWAYS return valid JSON. No markdown fences.
 11. Be conversational in explanations. Suggest follow-ups like "Would you like me to add a Telegram alert for this?" or "I can also add a stop-loss."
-12. After building a workflow, mention approximate execution time and fees.`
+12. After building a workflow, mention approximate execution time and fees.
+13. On mainnet, never invent ASA IDs. If the user names an asset not in the well-known list, ask them to provide the numeric ASA ID in your explanation and use a placeholder only if they confirm.`
 }
 
 const FEW_SHOT_EXAMPLES = [
@@ -240,7 +260,7 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'swap_tokens',
       steps: [
-        { action: 'swap-token', params: { fromAsset: 10458941, toAsset: 0, amount: 50, slippage: 0.5 } },
+        { action: 'swap-token', params: { fromAsset: EXAMPLE_USDC_ASA, toAsset: 0, amount: 50, slippage: 0.5 } },
       ],
       explanation: 'Swap 50 USDC to ALGO using Tinyman DEX. With 0.5% slippage protection, the swap executes in about 5 seconds with minimal fees. Would you like me to add a Telegram notification when the swap completes?',
       confidence: 0.95,
@@ -255,8 +275,8 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'auto_swap_on_receive',
       steps: [
-        { action: 'wallet-event', params: { assetId: 10458941, address: '{{user_wallet}}', pollInterval: 15, amountMode: 'received' } },
-        { action: 'swap-token', params: { fromAsset: 10458941, toAsset: 0, amount: '{{wallet-event.amount}}', slippage: 0.5 } },
+        { action: 'wallet-event', params: { assetId: EXAMPLE_USDC_ASA, address: '{{user_wallet}}', pollInterval: 15, amountMode: 'received' } },
+        { action: 'swap-token', params: { fromAsset: EXAMPLE_USDC_ASA, toAsset: 0, amount: '{{wallet-event.amount}}', slippage: 0.5 } },
       ],
       explanation: 'Watching your connected wallet for incoming USDC. When the balance of that asset increases between checks, the trigger passes that net amount as {{wallet-event.amount}} and swaps it to ALGO via Tinyman (not your whole wallet balance). The wallet is checked every 15 seconds. Would you like me to add a Telegram alert when the swap executes?',
       confidence: 0.92,
@@ -271,9 +291,9 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'partial_swap_on_receive',
       steps: [
-        { action: 'wallet-event', params: { assetId: 10458941, address: '{{user_wallet}}', pollInterval: 15, amountMode: 'received' } },
+        { action: 'wallet-event', params: { assetId: EXAMPLE_USDC_ASA, address: '{{user_wallet}}', pollInterval: 15, amountMode: 'received' } },
         { action: 'math-op', params: { operation: 'percentage', b: 20 } },
-        { action: 'swap-token', params: { fromAsset: 10458941, toAsset: 0, amount: '{{math-op.result}}', slippage: 0.5 } },
+        { action: 'swap-token', params: { fromAsset: EXAMPLE_USDC_ASA, toAsset: 0, amount: '{{math-op.result}}', slippage: 0.5 } },
       ],
       explanation: 'Watching your wallet for incoming USDC. When USDC arrives:\n1. The Math Operation block calculates 20% of the received amount\n2. The Swap block automatically swaps that 20% portion to ALGO\n\nFor example, if you receive 100 USDC, it will swap 20 USDC to ALGO. The remaining 80 USDC stays in your wallet. Would you like me to add a Telegram notification?',
       confidence: 0.93,
@@ -301,7 +321,7 @@ const FEW_SHOT_EXAMPLES = [
     content: JSON.stringify({
       intent: 'modify_block',
       steps: [],
-      modifications: [{ blockId: 'swap-token', configChanges: { toAsset: 10458941 } }],
+      modifications: [{ blockId: 'swap-token', configChanges: { toAsset: EXAMPLE_USDC_ASA } }],
       explanation: 'Updated the Swap Token block: changed the destination asset from ALGO to USDT. Your swap will now convert USDC to USDT instead. Both are stablecoins, so the swap should have minimal price impact.',
       confidence: 0.95,
     }),
@@ -327,9 +347,7 @@ function buildAdvisorPrompt(canvasBlocks?: CanvasBlock[], userContext?: UserCont
 
 ${buildBlockSummary()}
 
-## Well-known Algorand TestNet Assets:
-${Object.entries(WELL_KNOWN_ASSETS).map(([name, id]) => `- ${name} = ASA ID ${id}`).join('\n')}
-- ALGO = asset ID 0 (native token)
+${buildWellKnownAssetsSection()}
 ${buildCanvasSummary(canvasBlocks)}
 ${buildUserContext(userContext)}
 
@@ -361,6 +379,22 @@ JSON with:
 ALWAYS return valid JSON. No markdown fences.`
 }
 
+const MAX_CONVERSATION_MESSAGES = 24
+const MAX_MESSAGE_CHARS = 4000
+
+function truncateConversationHistory(
+  conversationHistory?: { role: 'user' | 'assistant'; content: string }[],
+): { role: 'user' | 'assistant'; content: string }[] {
+  if (!conversationHistory?.length) return []
+  return conversationHistory.slice(-MAX_CONVERSATION_MESSAGES).map((m) => ({
+    role: m.role,
+    content:
+      m.content.length > MAX_MESSAGE_CHARS
+        ? `${m.content.slice(0, MAX_MESSAGE_CHARS)}...[truncated]`
+        : m.content,
+  }))
+}
+
 export async function parseIntent(
   userMessage: string,
   conversationHistory?: { role: 'user' | 'assistant'; content: string }[],
@@ -381,10 +415,8 @@ export async function parseIntent(
     ...(advisorMode ? [] : FEW_SHOT_EXAMPLES),
   ]
 
-  if (conversationHistory) {
-    for (const msg of conversationHistory) {
-      messages.push({ role: msg.role, content: msg.content })
-    }
+  for (const msg of truncateConversationHistory(conversationHistory)) {
+    messages.push({ role: msg.role, content: msg.content })
   }
 
   messages.push({ role: 'user' as const, content: userMessage })

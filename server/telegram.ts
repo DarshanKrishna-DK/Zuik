@@ -11,6 +11,7 @@ const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 let lastUpdateId = 0
 let supabase: SupabaseClient
+let useWebhook = process.env.TELEGRAM_WEBHOOK_URL ? true : false
 
 // ── Telegram API helpers ────────────────────────────────
 
@@ -740,7 +741,39 @@ async function pollTelegram() {
   }
 }
 
-export function startTelegramBot(sb: SupabaseClient) {
+async function setWebhook() {
+  if (!TELEGRAM_TOKEN) return
+  
+  const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL || ''
+  if (!webhookUrl) return
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: webhookUrl,
+        allowed_updates: ['message', 'callback_query'],
+        max_connections: 40,
+      }),
+    })
+    
+    const result = await response.json()
+    if (result.ok) {
+      console.log('[Telegram] ✅ Webhook set successfully')
+    } else {
+      console.error('[Telegram] ❌ Failed to set webhook:', result.description)
+    }
+  } catch (error) {
+    console.error('[Telegram] ❌ Webhook setup error:', error)
+  }
+}
+
+export function handleTelegramWebhook(update: TelegramUpdate) {
+  handleUpdate(update)
+}
+
+export async function startTelegramBot(sb: SupabaseClient) {
   supabase = sb
 
   if (!TELEGRAM_TOKEN) {
@@ -748,10 +781,18 @@ export function startTelegramBot(sb: SupabaseClient) {
     return
   }
 
-  console.log('[Telegram] Bot starting with long polling...')
+  console.log('[Telegram] 🤖 Starting Telegram bot...')
   setBotCommands()
 
-  const poll = async () => {
+  if (useWebhook) {
+    console.log('[Telegram] 📡 Using webhook mode')
+    await setWebhook()
+  } else {
+    console.log('[Telegram] 🔄 Using polling mode')
+    pollUpdates()
+}
+
+const poll = async () => {
     while (true) {
       try {
         await pollTelegram()

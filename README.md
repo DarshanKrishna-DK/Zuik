@@ -71,11 +71,11 @@ flowchart LR
 | | Feature | What It Does |
 |-|---------|-------------|
 | **AI** | Intent Engine | Describe trades in plain English; AI generates the full workflow. Powered by Groq (Llama 3.3 70B). |
-| **Voice** | Conversation Mode | Talk to Zuik hands-free  - describe strategies, ask for advice, or command changes. |
+| **Voice** | Enhanced Conversation (Phase 7B ✨) | Production-grade voice with server-side Groq Whisper + ElevenLabs TTS. Multi-language (Hindi/English) support. |
 | **Visual** | Flow Builder | 30+ drag-and-drop blocks across triggers, actions, logic, notifications, and DeFi. |
 | **Safety** | Transaction Simulation | Every workflow is simulated before signing. See fees, slippage, and warnings upfront. |
 | **Execution** | Atomic Groups | All-or-nothing transaction groups. If any step fails, everything rolls back. |
-| **Alerts** | Telegram Bot | Monitor workflows, check balances, and receive alerts with interactive inline buttons. |
+| **Alerts** | Cloud-Ready Agent (Phase 7C ✨) | Production Telegram bot with webhook mode, deployed on Railway.app or Render.com. |
 | **Fiat** | On/Off-Ramp | Buy crypto with INR/USD/EUR or cash out to your bank via Saber Money. |
 
 ---
@@ -161,8 +161,9 @@ Open `.env` and fill in your keys:
 | `VITE_SUPABASE_URL` | Free at [supabase.com](https://supabase.com) |
 | `VITE_SUPABASE_ANON_KEY` | Supabase project settings |
 | `VITE_SABER_CLIENT_ID` | From Saber Money (optional - for fiat ramp) |
-| `VITE_SABER_CLIENT_SECRET` | From Saber Money (optional - for fiat ramp) |
+| `saber-sign` Edge Function secrets | Set `SABER_CLIENT_ID` and `SABER_CLIENT_SECRET` in Supabase (Dashboard - Edge Functions) after `supabase functions deploy saber-sign` |
 | `VITE_TELEGRAM_BOT_TOKEN` | Via [@BotFather](https://t.me/BotFather) (optional) |
+| `VITE_VOICE_SERVER_URL` | Voice processing server (Phase 7B) - `http://localhost:3002` for local dev |
 
 > Algorand TestNet node URLs are pre-configured via [Nodely](https://nodely.io) free tier. No changes needed.
 
@@ -240,7 +241,7 @@ Zuik/
 
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 

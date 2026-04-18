@@ -1,72 +1,212 @@
-# Zuik Local Agent
+# Zuik Cloud Agent & Voice Server
 
-A lightweight Node.js agent that runs on your laptop to enable persistent workflow execution, price monitoring, and Telegram bot integration for Zuik.
+A Node.js cloud service that provides:
+- **Agent execution**: Executes notification-only workflows (Telegram alerts, price monitoring)
+- **Voice processing**: Server-side audio transcription (Groq Whisper) and text-to-speech (ElevenLabs)
+- **Telegram bot**: Enhanced bot with webhook support and AI conversation
+- **Cloud deployment**: Production-ready for Railway.app, Render, or any cloud platform
 
-## What it does
+## Features
 
-- **Price Monitoring**: Polls CoinGecko for ALGO/USD prices at configurable intervals
-- **Condition Evaluation**: Safe comparison operators (no eval) to check price thresholds
-- **Telegram Notifications**: Sends alerts when conditions are met
-- **Discord Notifications**: Posts to webhooks when conditions are met
-- **Telegram Bot**: Commands for wallet linking, workflow listing, and AI chat
-- **Schedule Management**: Picks up active schedules from Supabase and runs them server-side
+### 🤖 Agent Execution
+- **Price monitoring**: Fetches ALGO/USD from CoinGecko, evaluates conditions
+- **Telegram notifications**: Sends formatted messages via Telegram Bot API
+- **Discord webhooks**: Posts to Discord channels when triggered
+- **Safe evaluation**: No `eval()` - uses whitelist of mathematical operators
+- **Schedule polling**: Checks Supabase for due workflow executions
+
+### 🎤 Voice Processing (Phase 7B)
+- **Groq Whisper**: Server-side audio transcription with language detection
+- **ElevenLabs TTS**: High-quality text-to-speech with multi-language support
+- **Production-ready**: RESTful API with proper error handling and health checks
+
+### 📱 Telegram Bot (Phase 7C)
+- **Webhook mode**: Production webhook support for cloud deployment
+- **AI conversation**: Natural language workflow creation via Groq
+- **Enhanced commands**: Voice message support, workflow management
+- **Multi-language**: Hindi + English support
+
+## Quick Start
+
+### Local Development
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Set up environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys
+   ```
+
+3. **Start development server:**
+   ```bash
+   npm run dev
+   ```
+
+### Production Deployment
+
+#### Railway.app (Recommended)
+1. **Deploy to Railway:**
+   ```bash
+   railway login
+   railway init
+   railway up
+   ```
+
+2. **Set environment variables in Railway dashboard:**
+   - `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`
+   - `TELEGRAM_BOT_TOKEN` (from @BotFather)
+   - `GROQ_API_KEY` (for voice transcription)
+   - `ELEVENLABS_API_KEY` (for voice synthesis)
+   - `TELEGRAM_WEBHOOK_URL` (your Railway app URL + `/telegram/webhook`)
+
+#### Render.com
+1. **Create new web service**
+2. **Connect GitHub repository**
+3. **Set environment variables**
+4. **Deploy**
+
+## Environment Variables
+
+### Required
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your-service-role-key
+```
+
+### Optional - Telegram Bot
+```env
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_WEBHOOK_URL=https://your-app.railway.app/telegram/webhook
+```
+
+### Optional - Voice Services (Phase 7B)
+```env
+GROQ_API_KEY=your-groq-api-key
+ELEVENLABS_API_KEY=your-elevenlabs-api-key
+ELEVENLABS_VOICE_ID=JBFqnCBsd6RMkjVDRZzb
+```
+
+### Optional - Configuration
+```env
+PORT=3001
+VOICE_SERVER_PORT=3002
+POLL_INTERVAL_MS=15000
+NODE_ENV=production
+```
+
+## API Endpoints
+
+### Health Check
+```http
+GET /health
+```
+
+### Voice Processing
+```http
+POST /api/voice/transcribe
+POST /api/voice/synthesize
+GET  /api/voice/voices
+POST /api/voice/detect-language
+```
+
+### Webhooks
+```http
+POST /telegram/webhook
+POST /webhook/:workflowId
+```
 
 ## Architecture
 
-The agent reads from the same Supabase database as the Zuik frontend. When you start a workflow with a Timer trigger in the web builder, it saves a schedule to Supabase. The agent picks up these schedules and executes the notification paths (price check, condition, Telegram/Discord alerts).
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Main Server   │    │  Voice Server   │    │ Telegram Bot    │
+│   (index.ts)    │    │ (voiceServer.ts)│    │ (telegram.ts)   │
+│                 │    │                 │    │                 │
+│ • Health checks │    │ • Groq Whisper  │    │ • Webhook mode  │
+│ • Webhooks      │    │ • ElevenLabs    │    │ • AI chat       │
+│ • Scheduling    │    │ • Multi-language│    │ • Commands      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+                    ┌─────────────────┐
+                    │   Supabase      │
+                    │   Database      │
+                    └─────────────────┘
+```
 
-On-chain actions (swaps, payments) are skipped because they require a wallet signer in the browser.
+## Workflow Support
 
-## Setup
+| Block | Support | Notes |
+|-------|---------|-------|
+| timer-loop | ✅ Trigger | Cloud-ready scheduling |
+| price-feed, get-quote | ✅ | CoinGecko integration |
+| comparator, filter | ✅ | Safe condition evaluation |
+| send-telegram | ✅ | Bot API + webhook mode |
+| send-discord | ✅ | Webhook URLs |
+| delay | ✅ | Production timeouts |
+| log, http-request | ✅ | Cloud logging |
+| **wallet blocks** | ❌ | Requires user signatures |
 
-1. Install dependencies:
+## Phase 7 Implementation Status
+
+### ✅ Completed
+- [x] Bug fixes (BUG-001 through BUG-010)
+- [x] Basic voice conversation (browser TTS/STT)
+- [x] Local agent with Telegram bot
+
+### 🚧 In Progress (Phase 7B & 7C)
+- [x] Groq Whisper server-side transcription
+- [x] ElevenLabs TTS server-side synthesis
+- [x] Enhanced voice conversation loop
+- [x] Multi-language support (Hindi + English)
+- [x] Cloud deployment configuration (Railway/Render)
+- [x] Telegram webhook mode
+- [x] Production server architecture
+
+### 🔄 Next Steps
+- [ ] Deploy to Railway.app
+- [ ] Set up production environment variables
+- [ ] Test voice services in production
+- [ ] Performance monitoring and scaling
+
+## Development Scripts
 
 ```bash
-cd server
-npm install
+npm run dev          # Development mode with auto-reload
+npm start            # Production mode
+npm run agent        # Agent only (local mode)
+npm run voice        # Voice server only
+npm run voice:dev    # Voice server development mode
 ```
 
-2. Copy `.env.example` to `.env` and fill in your credentials:
+## Troubleshooting
 
-```bash
-cp .env.example .env
-```
+### Voice Services
+- **No audio**: Check `ELEVENLABS_API_KEY` and account credits
+- **Transcription fails**: Verify `GROQ_API_KEY` and audio format
+- **Language detection**: Server auto-detects Hindi/English
 
-3. Create the `telegram_links` table in Supabase (run in SQL editor):
+### Telegram Bot
+- **Commands not working**: Check bot token and webhook URL
+- **Webhook issues**: Verify HTTPS and correct endpoint URL
+- **AI chat failing**: Check `GROQ_API_KEY` in environment
 
-```sql
-CREATE TABLE IF NOT EXISTS telegram_links (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  wallet_address TEXT NOT NULL,
-  telegram_chat_id TEXT NOT NULL UNIQUE,
-  linked_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE telegram_links ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Open access" ON telegram_links FOR ALL USING (true);
-```
+### Deployment
+- **Health check failing**: Ensure all required env vars are set
+- **Service crash**: Check logs for missing dependencies or API keys
+- **Port issues**: Verify `PORT` environment variable
 
-4. Start the agent:
+## Telegram Commands
 
-```bash
-npm start
-```
-
-For development with auto-reload:
-
-```bash
-npm run dev
-```
-
-## Telegram Bot Commands
-
-| Command | Description |
-|---------|-------------|
-| `/start` | Welcome message |
-| `/link <address>` | Link your Algorand wallet to this Telegram chat |
-| `/workflows` | List your saved workflows |
-| `/workflow_build <text>` | AI builds a workflow from your description and saves it to your linked wallet in Supabase (requires `GROQ_API_KEY`) |
-| `/run_workflow` | Inline picker to run a saved workflow. Server can execute price checks and Telegram alerts only; swaps and wallet triggers open `ZUIK_APP_URL/builder?wf=...` |
-| `/status` | Show active schedules |
-| Free text | AI-powered DeFi advice via Groq |
-
-Environment: set `ZUIK_APP_URL` to your Zuik web app base URL (default `https://zuik.vercel.app`) for deep links from `/run_workflow`.
+- `/start` - Register and link wallet
+- `/link <algorand-address>` - Link Algorand wallet
+- `/workflows` - List saved workflows
+- `/run_workflow` - Execute a workflow
+- `/status` - Active schedules
+- `/price` - Current ALGO price
+- `/help` - Show all commands

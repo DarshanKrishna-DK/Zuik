@@ -1,0 +1,2 @@
+web: tsx agent.ts
+voice: tsx voiceServer.ts

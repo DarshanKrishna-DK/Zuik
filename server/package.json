@@ -4,15 +4,29 @@
   "description": "Zuik local execution agent - monitors prices, evaluates conditions, sends notifications",
   "type": "module",
   "scripts": {
-    "start": "tsx agent.ts",
-    "dev": "tsx watch agent.ts"
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts",
+    "agent": "tsx agent.ts",
+    "agent:dev": "tsx watch agent.ts",
+    "voice": "tsx voiceServer.ts",
+    "voice:dev": "tsx watch voiceServer.ts",
+    "build": "echo 'Build completed'",
+    "postinstall": "echo 'Dependencies installed'"
   },
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.41.1",
     "@supabase/supabase-js": "^2.103.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "groq-sdk": "^1.1.2",
+    "multer": "^2.0.0-alpha.4",
     "node-telegram-bot-api": "^0.67.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/multer": "^1.4.12",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"

@@ -24,7 +24,8 @@ interface ImportMetaEnv {
   readonly VITE_GROQ_MODEL: string
 
   readonly VITE_SABER_CLIENT_ID: string
-  readonly VITE_SABER_CLIENT_SECRET: string
+  /** @deprecated Set SABER_CLIENT_SECRET only in Supabase Edge Function secrets for saber-sign */
+  readonly VITE_SABER_CLIENT_SECRET?: string
   readonly VITE_SABER_BASE_URL: string
   readonly VITE_SABER_WIDGET_URL: string
 
@@ -61,8 +62,10 @@ interface SpeechRecognitionAlternative {
 declare class SpeechRecognition extends EventTarget {
   continuous: boolean
   interimResults: boolean
+  maxAlternatives: number
   lang: string
   onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onstart: (() => void) | null
   onend: (() => void) | null
   onerror: ((event: Event) => void) | null
   start(): void

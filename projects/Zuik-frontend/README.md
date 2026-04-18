@@ -44,7 +44,7 @@ Open `.env` and set these values:
 |:---------|:---------|:----------------|
 | `VITE_GROQ_API_KEY` | Yes (for AI assistant) | Free at [console.groq.com/keys](https://console.groq.com/keys) |
 | `VITE_SABER_CLIENT_ID` | Optional | From Saber Money representative |
-| `VITE_SABER_CLIENT_SECRET` | Optional | From Saber Money representative |
+| Saber signing | Optional | Deploy `supabase/functions/saber-sign` and set `SABER_CLIENT_ID` + `SABER_CLIENT_SECRET` as Edge Function secrets (never put the secret in Vite env) |
 
 The Algorand TestNet node URLs are pre-filled and work out of the box.
 

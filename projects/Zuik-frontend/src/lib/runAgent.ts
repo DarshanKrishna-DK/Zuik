@@ -57,6 +57,49 @@ function createBgInterval(
   }
 }
 
+/**
+ * Chained setTimeout aligned to an anchor clock so slow async callbacks do not permanently drift the schedule
+ * (unlike fixed setInterval ticks that ignore handler duration).
+ */
+function createDriftAwareRepeatingTimer(
+  callback: () => void | Promise<void>,
+  intervalMs: number,
+  options?: { awaitAsync?: boolean },
+): { clear: () => void } {
+  const awaitAsync = options?.awaitAsync ?? false
+  let cleared = false
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  const anchor = Date.now()
+  let tickIndex = 0
+
+  const scheduleNext = () => {
+    if (cleared) return
+    tickIndex += 1
+    const nextDue = anchor + tickIndex * intervalMs
+    const delay = Math.max(0, nextDue - Date.now())
+    timeoutId = setTimeout(() => {
+      const run = async () => {
+        if (cleared) return
+        if (awaitAsync) {
+          await Promise.resolve(callback()).catch(() => {})
+        } else {
+          void Promise.resolve(callback()).catch(() => {})
+        }
+        if (!cleared) scheduleNext()
+      }
+      void run()
+    }, delay)
+  }
+
+  scheduleNext()
+  return {
+    clear() {
+      cleared = true
+      if (timeoutId != null) clearTimeout(timeoutId)
+    },
+  }
+}
+
 export type AgentStatus = 'idle' | 'running' | 'paused' | 'error' | 'stopped'
 
 export interface LogEntry {
@@ -92,6 +135,27 @@ export interface FlowEdge {
   target: string
   sourceHandle?: string | null
   targetHandle?: string | null
+}
+
+/**
+ * Comparator blocks must tag outgoing edges with sourceHandle "true" or "false".
+ * If exactly two edges from a comparator lack handles, assign "true" / "false" by target id order so only one branch runs.
+ */
+export function normalizeComparatorEdgesForRun(nodes: FlowNode[], edges: FlowEdge[]): FlowEdge[] {
+  const comparatorNodeIds = new Set(
+    nodes.filter((n) => n.data.blockId === 'comparator').map((n) => n.id),
+  )
+  const next = edges.map((e) => ({ ...e }))
+  for (const cid of comparatorNodeIds) {
+    const fromComp = next
+      .map((e, idx) => ({ e, idx }))
+      .filter(({ e }) => e.source === cid && (e.sourceHandle == null || e.sourceHandle === ''))
+    if (fromComp.length !== 2) continue
+    fromComp.sort((a, b) => a.e.target.localeCompare(b.e.target))
+    next[fromComp[0].idx] = { ...next[fromComp[0].idx], sourceHandle: 'true' }
+    next[fromComp[1].idx] = { ...next[fromComp[1].idx], sourceHandle: 'false' }
+  }
+  return next
 }
 
 /** Set by subscribeAgent so wallet-event exposes "received since last poll", not full balance */
@@ -221,7 +285,7 @@ function getUpstreamOutputs(
       }
     }
   }
-  return merged
+  return { ...merged }
 }
 
 function resolveConfig(
@@ -246,9 +310,10 @@ export async function runFlowOnce(
   startFromNodeId?: string
 ): Promise<void> {
   setBlockIdMapping(nodes)
+  const execEdges = normalizeComparatorEdgesForRun(nodes, edges)
   const nodeMap = new Map(nodes.map((n) => [n.id, n]))
   const allNodeIds = nodes.map((n) => n.id)
-  const sorted = topologicalSort(allNodeIds, edges)
+  const sorted = topologicalSort(allNodeIds, execEdges)
 
   const skipSet = new Set<string>()
 
@@ -289,11 +354,11 @@ export async function runFlowOnce(
       continue
     }
 
-    const upstreamNodes = edges.filter((e) => e.target === nodeId).map((e) => e.source)
+    const upstreamNodes = execEdges.filter((e) => e.target === nodeId).map((e) => e.source)
     const hasUpstreamOutput = upstreamNodes.some((uid) => context.blockOutputs.has(uid))
     if (upstreamNodes.length > 0 && !hasUpstreamOutput && !startFromNodeId) {
       skipSet.add(nodeId)
-      const downstream = getDownstreamNodes(nodeId, edges)
+      const downstream = getDownstreamNodes(nodeId, execEdges)
       downstream.forEach((d) => skipSet.add(d))
       context.log({ nodeId, blockId, blockName, type: 'skip', message: 'Skipped (no upstream data)' })
       continue
@@ -302,7 +367,7 @@ export async function runFlowOnce(
     context.onNodeStatusChange(nodeId, 'running')
     context.log({ nodeId, blockId, blockName, type: 'start', message: 'Executing...' })
 
-    const upstreamOutputs = getUpstreamOutputs(nodeId, edges, context.blockOutputs)
+    const upstreamOutputs = getUpstreamOutputs(nodeId, execEdges, context.blockOutputs)
     const resolvedConfig = resolveConfig(node.data.config, context)
 
     const executor = allExecutors[blockId]
@@ -318,7 +383,7 @@ export async function runFlowOnce(
       if (output === null) {
         context.log({ nodeId, blockId, blockName, type: 'skip', message: 'Filtered out (no downstream)' })
         context.onNodeStatusChange(nodeId, 'idle')
-        const downstream = getDownstreamNodes(nodeId, edges)
+        const downstream = getDownstreamNodes(nodeId, execEdges)
         downstream.forEach((d) => skipSet.add(d))
         continue
       }
@@ -329,7 +394,7 @@ export async function runFlowOnce(
       if (blockId === 'comparator') {
         const branch = output.branch as string
         const otherBranch = branch === 'true' ? 'false' : 'true'
-        const skippedDownstream = getDownstreamNodes(nodeId, edges, otherBranch)
+        const skippedDownstream = getDownstreamNodes(nodeId, execEdges, otherBranch)
         skippedDownstream.forEach((d) => skipSet.add(d))
       }
 
@@ -345,7 +410,7 @@ export async function runFlowOnce(
       const message = err instanceof Error ? err.message : String(err)
       context.onNodeStatusChange(nodeId, 'error')
       context.log({ nodeId, blockId, blockName, type: 'error', message })
-      const downstream = getDownstreamNodes(nodeId, edges)
+      const downstream = getDownstreamNodes(nodeId, execEdges)
       downstream.forEach((d) => skipSet.add(d))
     }
   }
@@ -420,7 +485,7 @@ export function subscribeAgent(
         }).catch(() => {})
       }
 
-      const handle = createBgInterval(async () => {
+      const handle = createDriftAwareRepeatingTimer(async () => {
         if (paused || abortController.signal.aborted) return
         if (iteration >= maxIterations) {
           context.log({

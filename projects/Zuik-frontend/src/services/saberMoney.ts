@@ -1,58 +1,29 @@
+import { getSupabase, isSupabaseConfigured } from './supabase'
+
 const SABER_BASE_URL =
   import.meta.env.VITE_SABER_BASE_URL || 'https://api.sandbox.saber.money'
 const SABER_WIDGET_URL =
   import.meta.env.VITE_SABER_WIDGET_URL || 'https://app.sandbox.saber.money'
 const SABER_CLIENT_ID = import.meta.env.VITE_SABER_CLIENT_ID || ''
-const SABER_CLIENT_SECRET = import.meta.env.VITE_SABER_CLIENT_SECRET || ''
 
-async function hmacSha256(message: string, secret: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(message))
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-    .toUpperCase()
-}
+type SaberSignKind = 'admin' | 'user' | 'sdk'
 
-function getTimestamp(): string {
-  return Math.floor(Date.now() / 1000).toString()
-}
-
-async function generateAdminSignature(): Promise<{
-  signature: string
-  timestamp: string
-}> {
-  const timestamp = getTimestamp()
-  const sigString = SABER_CLIENT_ID + timestamp
-  const signature = await hmacSha256(sigString, SABER_CLIENT_SECRET)
-  return { signature, timestamp }
-}
-
-async function generateUserSignature(userId: string): Promise<{
-  signature: string
-  timestamp: string
-}> {
-  const timestamp = getTimestamp()
-  const sigString = SABER_CLIENT_ID + timestamp + userId
-  const signature = await hmacSha256(sigString, SABER_CLIENT_SECRET)
-  return { signature, timestamp }
-}
-
-async function generateSdkSignature(userId: string): Promise<{
-  signature: string
-  timestamp: string
-}> {
-  const timestamp = getTimestamp()
-  const sigString = SABER_CLIENT_ID + timestamp + 'sdk' + userId
-  const signature = await hmacSha256(sigString, SABER_CLIENT_SECRET)
-  return { signature, timestamp }
+async function fetchSaberSignature(
+  kind: SaberSignKind,
+  userId?: string,
+): Promise<{ signature: string; timestamp: string } | null> {
+  if (!isSupabaseConfigured()) return null
+  try {
+    const sb = getSupabase()
+    const { data, error } = await sb.functions.invoke<{ signature?: string; timestamp?: string; error?: string }>(
+      'saber-sign',
+      { body: { kind, userId: userId ?? undefined } },
+    )
+    if (error || !data?.signature || !data?.timestamp) return null
+    return { signature: data.signature, timestamp: data.timestamp }
+  } catch {
+    return null
+  }
 }
 
 function saberHeaders(
@@ -84,11 +55,16 @@ export async function createSaberUser(params: {
   phone: string
   clientUserId?: string
 }): Promise<{ success: boolean; userId?: string; error?: string }> {
-  if (!SABER_CLIENT_ID || !SABER_CLIENT_SECRET) {
-    return { success: false, error: 'Saber API credentials not configured' }
+  if (!SABER_CLIENT_ID) {
+    return { success: false, error: 'Saber API client id not configured' }
   }
 
-  const { signature, timestamp } = await generateAdminSignature()
+  const signed = await fetchSaberSignature('admin')
+  if (!signed) {
+    return { success: false, error: 'Saber signing unavailable. Deploy saber-sign edge function and set secrets.' }
+  }
+
+  const { signature, timestamp } = signed
   const userUuid = crypto.randomUUID()
 
   try {
@@ -119,7 +95,11 @@ export function getKycWidgetUrl(userId: string): string {
 export async function getKycWidgetUrlSigned(
   userId: string,
 ): Promise<string> {
-  const { signature, timestamp } = await generateSdkSignature(userId)
+  const signed = await fetchSaberSignature('sdk', userId)
+  if (!signed) {
+    return getKycWidgetUrl(userId)
+  }
+  const { signature, timestamp } = signed
   const params = new URLSearchParams({
     client_id: SABER_CLIENT_ID,
     user_id: userId,
@@ -155,11 +135,16 @@ export async function getFiatBuyQuote(params: {
   toAmount?: number
   userId: string
 }): Promise<{ success: boolean; quote?: BuyQuote; error?: string }> {
-  if (!SABER_CLIENT_ID || !SABER_CLIENT_SECRET) {
-    return { success: false, error: 'Saber API credentials not configured' }
+  if (!SABER_CLIENT_ID) {
+    return { success: false, error: 'Saber API client id not configured' }
   }
 
-  const { signature, timestamp } = await generateUserSignature(params.userId)
+  const signed = await fetchSaberSignature('user', params.userId)
+  if (!signed) {
+    return { success: false, error: 'Saber signing unavailable. Deploy saber-sign edge function and set secrets.' }
+  }
+
+  const { signature, timestamp } = signed
 
   const qp = new URLSearchParams({
     from_currency: params.fromCurrency,
@@ -221,11 +206,16 @@ export interface OnRampWidgetParams {
 export async function generateOnRampWidgetUrl(
   params: OnRampWidgetParams,
 ): Promise<{ success: boolean; url?: string; error?: string }> {
-  if (!SABER_CLIENT_ID || !SABER_CLIENT_SECRET) {
-    return { success: false, error: 'Saber API credentials not configured' }
+  if (!SABER_CLIENT_ID) {
+    return { success: false, error: 'Saber API client id not configured' }
   }
 
-  const { signature, timestamp } = await generateSdkSignature(params.userId)
+  const signed = await fetchSaberSignature('sdk', params.userId)
+  if (!signed) {
+    return { success: false, error: 'Saber signing unavailable. Deploy saber-sign edge function and set secrets.' }
+  }
+
+  const { signature, timestamp } = signed
   const transactionId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
 
   const qp = new URLSearchParams({
@@ -265,11 +255,16 @@ export async function initiateSellTransaction(params: {
   exchangeRate?: number
   error?: string
 }> {
-  if (!SABER_CLIENT_ID || !SABER_CLIENT_SECRET) {
-    return { success: false, error: 'Saber API credentials not configured' }
+  if (!SABER_CLIENT_ID) {
+    return { success: false, error: 'Saber API client id not configured' }
   }
 
-  const { signature, timestamp } = await generateUserSignature(params.userId)
+  const signed = await fetchSaberSignature('user', params.userId)
+  if (!signed) {
+    return { success: false, error: 'Saber signing unavailable. Deploy saber-sign edge function and set secrets.' }
+  }
+
+  const { signature, timestamp } = signed
 
   const body: Record<string, unknown> = {
     source_id: params.sourceId,
@@ -313,11 +308,16 @@ export async function getDepositAddress(params: {
   addresses?: { network: string; address: string; tag: string }[]
   error?: string
 }> {
-  if (!SABER_CLIENT_ID || !SABER_CLIENT_SECRET) {
-    return { success: false, error: 'Saber API credentials not configured' }
+  if (!SABER_CLIENT_ID) {
+    return { success: false, error: 'Saber API client id not configured' }
   }
 
-  const { signature, timestamp } = await generateUserSignature(params.userId)
+  const signed = await fetchSaberSignature('user', params.userId)
+  if (!signed) {
+    return { success: false, error: 'Saber signing unavailable. Deploy saber-sign edge function and set secrets.' }
+  }
+
+  const { signature, timestamp } = signed
 
   try {
     const resp = await fetch(
@@ -350,5 +350,5 @@ export async function getDepositAddress(params: {
 }
 
 export function isSaberConfigured(): boolean {
-  return Boolean(SABER_CLIENT_ID && SABER_CLIENT_SECRET)
+  return Boolean(SABER_CLIENT_ID && isSupabaseConfigured())
 }

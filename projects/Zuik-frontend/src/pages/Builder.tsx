@@ -189,6 +189,13 @@ export default function Builder() {
     [nodes],
   )
 
+  const onNodeDragStop = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      rfInstance.current?.updateNodeInternals(node.id)
+    },
+    [],
+  )
+
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -234,6 +241,8 @@ export default function Builder() {
     viewBootDone.current = false
     setFlowHydrated(false)
     if (wfParam && isSupabaseConfigured()) {
+      setNodes([])
+      setEdges([])
       getWorkflow(wfParam)
         .then((wf) => {
           if (wf) {
@@ -788,6 +797,7 @@ export default function Builder() {
           isValidConnection={isConnectionValid}
           onDrop={onDrop}
           onDragOver={onDragOver}
+          onNodeDragStop={onNodeDragStop}
           onInit={(inst) => {
             rfInstance.current = inst
             setRfReady(true)

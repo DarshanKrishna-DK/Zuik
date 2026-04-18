@@ -1,4 +1,5 @@
 import type { TransactionSigner } from 'algosdk'
+import { waitForConfirmation } from 'algosdk'
 import { getAlgodClient, getAlgorandClient } from './algorand'
 
 export interface OptInToAsaParams {
@@ -50,8 +51,13 @@ export async function optInToAsa(params: OptInToAsaParams): Promise<OptInToAsaRe
       amount: 0n,
     })
 
+    const txId = result.txIds[0] ?? ''
+    if (txId) {
+      await waitForConfirmation(algod, txId, 8)
+    }
+
     return {
-      txId: result.txIds[0] ?? '',
+      txId,
       assetId,
       alreadyOptedIn: false,
     }
