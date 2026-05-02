@@ -16,7 +16,6 @@ ACTIONS: swap-token (fromAsset, toAsset, amount, slippage), send-payment (recipi
 LOGIC: comparator (operator, threshold), delay (duration sec), math-op (operation, b), filter, rate-limiter, variable-set
 NOTIFICATIONS: send-telegram (chatId, message), send-discord, browser-notify
 DATA: get-quote, price-monitor, pool-info, portfolio-balance, constant, merge, transform-data, http-request, log-debug
-FIAT: fiat-onramp, fiat-offramp, fiat-quote
 
 TestNet assets: ALGO=0, USDC=10458941. Amounts in human units (e.g. 10 for 10 USDC unless using template vars).
 Use timer-loop as first block when the user wants a recurring or "run this" automation without a wallet-event.

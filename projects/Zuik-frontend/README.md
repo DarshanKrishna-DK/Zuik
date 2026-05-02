@@ -12,7 +12,7 @@ The React web application for Zuik. This is the visual interface where users bui
 | `src/components/flow/` | Visual flow components: nodes, sidebar, execution log, chat panel |
 | `src/components/layout/` | Navigation bar and wallet connection |
 | `src/lib/` | Block registry (30 blocks), flow execution engine, intent materializer |
-| `src/services/` | Algorand transaction services, Saber Money API, AI intent parser |
+| `src/services/` | Algorand transaction services, market data, AI intent parser |
 | `src/utils/` | Network configuration helpers |
 
 ---
@@ -43,8 +43,6 @@ Open `.env` and set these values:
 | Variable | Required | Where to Get It |
 |:---------|:---------|:----------------|
 | `VITE_GROQ_API_KEY` | Yes (for AI assistant) | Free at [console.groq.com/keys](https://console.groq.com/keys) |
-| `VITE_SABER_CLIENT_ID` | Optional | From Saber Money representative |
-| Saber signing | Optional | Deploy `supabase/functions/saber-sign` and set `SABER_CLIENT_ID` + `SABER_CLIENT_SECRET` as Edge Function secrets (never put the secret in Vite env) |
 
 The Algorand TestNet node URLs are pre-filled and work out of the box.
 

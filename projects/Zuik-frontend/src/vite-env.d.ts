@@ -23,12 +23,6 @@ interface ImportMetaEnv {
   readonly VITE_GROQ_API_KEY: string
   readonly VITE_GROQ_MODEL: string
 
-  readonly VITE_SABER_CLIENT_ID: string
-  /** @deprecated Set SABER_CLIENT_SECRET only in Supabase Edge Function secrets for saber-sign */
-  readonly VITE_SABER_CLIENT_SECRET?: string
-  readonly VITE_SABER_BASE_URL: string
-  readonly VITE_SABER_WIDGET_URL: string
-
   readonly VITE_SUPABASE_URL: string
   readonly VITE_SUPABASE_ANON_KEY: string
 }

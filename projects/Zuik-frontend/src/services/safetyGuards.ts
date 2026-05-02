@@ -145,26 +145,6 @@ export async function runSafetyChecks(
         if (!config.url) errors.push({ severity: 'error', message: 'HTTP Request: URL is required.', field: 'url' })
         break
       }
-
-      case 'fiat-onramp': {
-        if (!config.userId) errors.push({ severity: 'error', message: 'Fiat On-Ramp: user ID is required.', field: 'userId' })
-        if (!config.walletAddress) errors.push({ severity: 'error', message: 'Fiat On-Ramp: wallet address is required.', field: 'walletAddress' })
-        break
-      }
-
-      case 'fiat-offramp': {
-        if (!config.userId) errors.push({ severity: 'error', message: 'Fiat Off-Ramp: user ID is required.', field: 'userId' })
-        if (!config.sourceId) errors.push({ severity: 'error', message: 'Fiat Off-Ramp: bank account (source ID) is required.', field: 'sourceId' })
-        break
-      }
-
-      case 'fiat-quote': {
-        if (!config.userId) errors.push({ severity: 'error', message: 'Fiat Quote: user ID is required.', field: 'userId' })
-        if (!config.amount || Number(config.amount) <= 0) {
-          errors.push({ severity: 'error', message: 'Fiat Quote: amount must be greater than zero.', field: 'amount' })
-        }
-        break
-      }
     }
   }
 

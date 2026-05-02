@@ -1,8 +1,10 @@
 import 'dotenv/config'
 import express from 'express'
+import cors from 'cors'
 import { startTelegramBot, handleTelegramWebhook } from './telegram.js'
+import { executeWorkflowHeadless } from './workflowRunner.js'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { startVoiceServer } from './voiceServer.js'
+import { createVoiceRouter, startVoiceServer } from './voiceServer.js'
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const VOICE_SERVER_PORT = parseInt(process.env.VOICE_SERVER_PORT || '3002', 10)
@@ -10,6 +12,8 @@ const VOICE_SERVER_PORT = parseInt(process.env.VOICE_SERVER_PORT || '3002', 10)
 const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS ?? '15000', 10)
+const INLINE_VOICE = process.env.NODE_ENV === 'production'
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL ?? 'http://localhost:5173'
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('[Server] Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in .env')
@@ -18,8 +22,13 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const sb: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY)
 
-// Import agent functions
-import { executeWorkflowHeadless } from './agent.js'
+async function getLinkedTelegramChats(walletAddress: string): Promise<string[]> {
+  const { data } = await sb
+    .from('telegram_links')
+    .select('telegram_chat_id')
+    .eq('wallet_address', walletAddress)
+  return (data ?? []).map((r: { telegram_chat_id: string }) => r.telegram_chat_id)
+}
 
 interface ScheduleRow {
   id: string
@@ -31,12 +40,27 @@ interface ScheduleRow {
   next_run_at: string
   is_active: boolean
   requires_signer: boolean
+  schedule_type?: 'interval' | 'start_at'
   flow_json: { nodes: any[]; edges: any[] }
 }
 
 // Main HTTP server for health checks and webhooks
 const app = express()
+const corsOrigins = CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true)
+    if (corsOrigins.includes('*') || corsOrigins.includes(origin)) {
+      return callback(null, true)
+    }
+    return callback(new Error('Not allowed by CORS'))
+  },
+  credentials: true,
+}))
 app.use(express.json())
+if (INLINE_VOICE) {
+  app.use('/api/voice', createVoiceRouter())
+}
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -84,7 +108,8 @@ app.post('/webhook/:workflowId', async (req, res) => {
     await executeWorkflowHeadless(
       workflow.flow_json,
       workflow.wallet_address,
-      `webhook-${workflowId}`
+      `webhook-${workflowId}`,
+      getLinkedTelegramChats,
     )
 
     res.json({ success: true, executed: workflowId })
@@ -120,19 +145,21 @@ async function pollSchedules(): Promise<void> {
       await executeWorkflowHeadless(
         schedule.flow_json,
         schedule.wallet_address,
-        schedule.workflow_id
+        schedule.workflow_id,
+        getLinkedTelegramChats,
       )
 
       const maxIter = schedule.max_iterations
       const newCount = schedule.iterations_completed + 1
+      const isStartAt = schedule.schedule_type === 'start_at'
       const done = maxIter !== null && newCount >= maxIter
 
-      if (done) {
+      if (done || isStartAt) {
         await sb
           .from('workflow_schedules')
           .update({ is_active: false, iterations_completed: newCount, updated_at: now })
           .eq('id', schedule.id)
-        console.log(`[Server] Schedule ${schedule.id} completed (${newCount}/${maxIter})`)
+        console.log(`[Server] Schedule ${schedule.id} completed (${newCount}/${maxIter ?? 1})`)
       } else {
         const nextRun = new Date(Date.now() + schedule.interval_sec * 1000).toISOString()
         await sb
@@ -152,7 +179,7 @@ async function startServer() {
   console.log('║        Zuik Cloud Server v1.0.0      ║')
   console.log('╚══════════════════════════════════════╝')
   console.log(`[Server] Main server port: ${PORT}`)
-  console.log(`[Server] Voice server port: ${VOICE_SERVER_PORT}`)
+  console.log(`[Server] Voice server: ${INLINE_VOICE ? 'inline' : `port ${VOICE_SERVER_PORT}`}`)
   console.log(`[Server] Polling interval: ${POLL_INTERVAL}ms`)
   console.log(`[Server] Supabase: ${SUPABASE_URL}`)
 
@@ -161,11 +188,12 @@ async function startServer() {
     console.log(`[Server] 🌐 Main server running on port ${PORT}`)
   })
 
-  // Start voice server
-  try {
-    startVoiceServer()
-  } catch (error) {
-    console.warn('[Server] Voice server failed to start:', error)
+  if (!INLINE_VOICE) {
+    try {
+      startVoiceServer()
+    } catch (error) {
+      console.warn('[Server] Voice server failed to start:', error)
+    }
   }
 
   // Start Telegram bot

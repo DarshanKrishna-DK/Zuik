@@ -5,7 +5,9 @@ import {
   MessageCircle, Bell,
   TrendingDown, Droplets, PieChart,
   Hash, Merge, RefreshCw, Globe, Search, Bug,
-  Banknote, Landmark, BadgeDollarSign,
+  // Multi-Agent Icons
+  Zap, Split, Combine, Users, Radio, RadioIcon, 
+  Eye, Settings, Network,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -313,6 +315,246 @@ const blocks: BlockDefinition[] = [
     ],
   },
 
+  // ─── Multi-Agent Orchestration ─────────────────────────────
+  {
+    id: 'merge_gate',
+    name: 'Merge Gate',
+    description: 'Combines multiple triggers with AND/OR/SEQUENCE logic. Fires downstream only when condition is met within time window.',
+    category: 'logic',
+    icon: Combine,
+    inputs: [
+      { id: 'trigger_1', label: 'Trigger 1', type: 'any' },
+      { id: 'trigger_2', label: 'Trigger 2', type: 'any' },
+      { id: 'trigger_3', label: 'Trigger 3', type: 'any' },
+      { id: 'trigger_4', label: 'Trigger 4', type: 'any' },
+      { id: 'trigger_5', label: 'Trigger 5', type: 'any' },
+    ],
+    outputs: [{ id: 'out', label: 'Execute', type: 'any' }],
+    config: [
+      { 
+        id: 'mode', 
+        label: 'Gate Mode', 
+        type: 'select',
+        options: [
+          { value: 'ALL', label: 'ALL (AND) - All triggers must fire' },
+          { value: 'ANY', label: 'ANY (OR) - Any trigger can fire' },
+          { value: 'SEQUENCE', label: 'SEQUENCE - Triggers must fire in order' }
+        ],
+        defaultValue: 'ALL'
+      },
+      { 
+        id: 'window_seconds', 
+        label: 'Time Window (seconds)', 
+        type: 'number', 
+        defaultValue: 300,
+        min: 10,
+        max: 3600
+      },
+      { 
+        id: 'reset_after_fire', 
+        label: 'Reset after firing', 
+        type: 'select',
+        options: [
+          { value: 'true', label: 'Yes - Reset gate after each execution' },
+          { value: 'false', label: 'No - Fire only once until manual reset' }
+        ],
+        defaultValue: 'true'
+      },
+    ],
+  },
+  {
+    id: 'fork',
+    name: 'Fork',
+    description: 'Splits execution into multiple parallel branches. All branches run simultaneously.',
+    category: 'logic',
+    icon: Split,
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [
+      { id: 'branch_1', label: 'Branch 1', type: 'any' },
+      { id: 'branch_2', label: 'Branch 2', type: 'any' },
+      { id: 'branch_3', label: 'Branch 3', type: 'any' },
+      { id: 'branch_4', label: 'Branch 4', type: 'any' },
+      { id: 'branch_5', label: 'Branch 5', type: 'any' },
+    ],
+    config: [
+      { 
+        id: 'branch_count', 
+        label: 'Number of Branches', 
+        type: 'select',
+        options: [
+          { value: '2', label: '2 branches' },
+          { value: '3', label: '3 branches' },
+          { value: '4', label: '4 branches' },
+          { value: '5', label: '5 branches' }
+        ],
+        defaultValue: '2'
+      },
+    ],
+  },
+  {
+    id: 'join',
+    name: 'Join',
+    description: 'Waits for multiple branches to complete before proceeding. Collects all outputs.',
+    category: 'logic',
+    icon: Merge,
+    inputs: [
+      { id: 'branch_1', label: 'Branch 1', type: 'any' },
+      { id: 'branch_2', label: 'Branch 2', type: 'any' },
+      { id: 'branch_3', label: 'Branch 3', type: 'any' },
+      { id: 'branch_4', label: 'Branch 4', type: 'any' },
+      { id: 'branch_5', label: 'Branch 5', type: 'any' },
+    ],
+    outputs: [{ id: 'output', label: 'All Complete', type: 'object' }],
+    config: [
+      { 
+        id: 'strategy', 
+        label: 'Join Strategy', 
+        type: 'select',
+        options: [
+          { value: 'all', label: 'ALL - Wait for all branches' },
+          { value: 'any', label: 'ANY - First branch to complete' },
+          { value: 'n_of_m', label: 'N of M - Wait for N branches' }
+        ],
+        defaultValue: 'all'
+      },
+      { 
+        id: 'n', 
+        label: 'Required Branches (for N of M)', 
+        type: 'number', 
+        defaultValue: 2,
+        min: 1,
+        max: 5
+      },
+    ],
+  },
+  {
+    id: 'spawn_agent',
+    name: 'Spawn Agent',
+    description: 'Spawns a child sub-workflow as an independent agent running in parallel.',
+    category: 'logic',
+    icon: Users,
+    inputs: [{ id: 'input', label: 'Input Context', type: 'object' }],
+    outputs: [
+      { id: 'spawned', label: 'Agent Spawned', type: 'object' },
+      { id: 'completed', label: 'Agent Completed', type: 'object' }
+    ],
+    config: [
+      { 
+        id: 'sub_flow_id', 
+        label: 'Sub-Workflow', 
+        type: 'select',
+        options: [], // Will be populated with available workflows
+        placeholder: 'Select a workflow to spawn'
+      },
+      { 
+        id: 'mode', 
+        label: 'Execution Mode', 
+        type: 'select',
+        options: [
+          { value: 'parallel', label: 'Parallel - Run alongside main workflow' },
+          { value: 'sequential', label: 'Sequential - Wait for completion' },
+          { value: 'race', label: 'Race - First to complete wins' }
+        ],
+        defaultValue: 'parallel'
+      },
+      { 
+        id: 'pass_context', 
+        label: 'Pass Context', 
+        type: 'select',
+        options: [
+          { value: 'true', label: 'Yes - Share variables and state' },
+          { value: 'false', label: 'No - Independent execution' }
+        ],
+        defaultValue: 'true'
+      },
+    ],
+  },
+  {
+    id: 'event_trigger',
+    name: 'Event Trigger',
+    description: 'Listens for named events published by other agents or external sources.',
+    category: 'trigger',
+    icon: Radio,
+    inputs: [],
+    outputs: [{ id: 'triggered', label: 'Event Received', type: 'object' }],
+    config: [
+      { 
+        id: 'event_name', 
+        label: 'Event Name', 
+        type: 'text',
+        placeholder: 'e.g. price_alert, trade_completed'
+      },
+      { 
+        id: 'filter_key', 
+        label: 'Filter Key (optional)', 
+        type: 'text',
+        placeholder: 'e.g. asset_id, user_id'
+      },
+      { 
+        id: 'filter_value', 
+        label: 'Filter Value (optional)', 
+        type: 'text',
+        placeholder: 'e.g. ALGO, 31566704'
+      },
+    ],
+  },
+  {
+    id: 'event_emit',
+    name: 'Emit Event',
+    description: 'Publishes a named event with payload to the event bus for other agents.',
+    category: 'action',
+    icon: RadioIcon,
+    inputs: [{ id: 'payload', label: 'Event Data', type: 'object' }],
+    outputs: [{ id: 'published', label: 'Event Published', type: 'object' }],
+    config: [
+      { 
+        id: 'event_name', 
+        label: 'Event Name', 
+        type: 'text',
+        placeholder: 'e.g. dip_bought, alert_triggered'
+      },
+      { 
+        id: 'payload_template', 
+        label: 'Payload Template (JSON)', 
+        type: 'textarea',
+        placeholder: '{"asset": "{{asset_id}}", "price": "{{price}}", "timestamp": "{{timestamp}}"}'
+      },
+    ],
+  },
+  {
+    id: 'watchdog',
+    name: 'Watchdog',
+    description: 'Monitors a running agent sub-tree. Triggers error branch if child exceeds timeout.',
+    category: 'logic',
+    icon: Eye,
+    inputs: [{ id: 'monitored', label: 'Monitor This', type: 'any' }],
+    outputs: [
+      { id: 'success', label: 'Completed Successfully', type: 'any' },
+      { id: 'timeout', label: 'Timeout/Error', type: 'object' }
+    ],
+    config: [
+      { 
+        id: 'timeout_seconds', 
+        label: 'Timeout (seconds)', 
+        type: 'number', 
+        defaultValue: 300,
+        min: 10,
+        max: 3600
+      },
+      { 
+        id: 'on_timeout', 
+        label: 'On Timeout Action', 
+        type: 'select',
+        options: [
+          { value: 'cancel', label: 'Cancel - Stop the monitored workflow' },
+          { value: 'retry', label: 'Retry - Restart the monitored workflow' },
+          { value: 'alert', label: 'Alert - Send notification but continue' }
+        ],
+        defaultValue: 'cancel'
+      },
+    ],
+  },
+
   // ─── Notifications ─────────────────────────────
   {
     id: 'send-telegram',
@@ -511,106 +753,6 @@ const blocks: BlockDefinition[] = [
     ],
   },
 
-  // ─── Saber Money - Fiat ↔ Crypto ─────────────
-  {
-    id: 'fiat-onramp',
-    name: 'Fiat On-Ramp',
-    description: 'Buy crypto using your local currency (INR, USD, EUR) - converts your money into tokens via Saber Money',
-    category: 'action',
-    icon: Banknote,
-    inputs: [{ id: 'trigger', label: 'Trigger', type: 'any' }],
-    outputs: [
-      { id: 'widgetUrl', label: 'Widget URL', type: 'string' },
-      { id: 'transactionId', label: 'Transaction ID', type: 'string' },
-    ],
-    config: [
-      { id: 'userId', label: 'Saber User ID', type: 'text', placeholder: 'UUID from Saber user creation' },
-      { id: 'walletAddress', label: 'Wallet Address', type: 'address' },
-      { id: 'fiatAmount', label: 'Fiat Amount', type: 'number' },
-      { id: 'fiatCurrency', label: 'Fiat Currency', type: 'select', options: [
-        { value: 'INR', label: 'INR - Indian Rupee' },
-        { value: 'USD', label: 'USD - US Dollar' },
-        { value: 'EUR', label: 'EUR - Euro' },
-        { value: 'GBP', label: 'GBP - British Pound' },
-        { value: 'AED', label: 'AED - UAE Dirham' },
-      ], defaultValue: 'INR' },
-      { id: 'cryptoSymbol', label: 'Crypto Token', type: 'select', options: [
-        { value: 'USDT', label: 'USDT' },
-        { value: 'USDC', label: 'USDC' },
-      ], defaultValue: 'USDT' },
-      { id: 'network', label: 'Network', type: 'select', options: [
-        { value: 'ALGORAND', label: 'Algorand' },
-        { value: 'MATIC', label: 'Polygon' },
-        { value: 'BSC', label: 'BSC' },
-        { value: 'ETH', label: 'Ethereum' },
-      ], defaultValue: 'ALGORAND' },
-    ],
-  },
-  {
-    id: 'fiat-offramp',
-    name: 'Fiat Off-Ramp',
-    description: 'Cash out your crypto to your bank account - converts tokens back to your local currency',
-    category: 'action',
-    icon: Landmark,
-    inputs: [{ id: 'trigger', label: 'Trigger', type: 'any' }],
-    outputs: [
-      { id: 'transactionId', label: 'Transaction ID', type: 'string' },
-      { id: 'status', label: 'Status', type: 'string' },
-      { id: 'exchangeRate', label: 'Exchange Rate', type: 'number' },
-    ],
-    config: [
-      { id: 'userId', label: 'Saber User ID', type: 'text', placeholder: 'UUID from Saber user creation' },
-      { id: 'sourceId', label: 'Bank Source ID', type: 'text', placeholder: 'Linked bank account UUID' },
-      { id: 'fiatAmount', label: 'Fiat Amount', type: 'number' },
-      { id: 'fiatCurrency', label: 'Fiat Currency', type: 'select', options: [
-        { value: 'INR', label: 'INR - Indian Rupee' },
-        { value: 'USD', label: 'USD - US Dollar' },
-        { value: 'EUR', label: 'EUR - Euro' },
-        { value: 'GBP', label: 'GBP - British Pound' },
-      ], defaultValue: 'INR' },
-      { id: 'cryptoSymbol', label: 'Crypto Token', type: 'select', options: [
-        { value: 'USDT', label: 'USDT' },
-        { value: 'USDC', label: 'USDC' },
-      ], defaultValue: 'USDT' },
-      { id: 'paymentMethod', label: 'Payment Method', type: 'select', options: [
-        { value: 'bank_transfer', label: 'Bank Transfer' },
-        { value: 'upi_transfer', label: 'UPI Transfer', description: 'India only' },
-      ], defaultValue: 'bank_transfer' },
-    ],
-  },
-  {
-    id: 'fiat-quote',
-    name: 'Fiat Price Quote',
-    description: 'Check live exchange rates between your currency and crypto before buying or selling',
-    category: 'defi',
-    icon: BadgeDollarSign,
-    inputs: [{ id: 'trigger', label: 'Trigger', type: 'any' }],
-    outputs: [
-      { id: 'fromAmount', label: 'Fiat Amount', type: 'number' },
-      { id: 'toAmount', label: 'Crypto Amount', type: 'number' },
-      { id: 'exchangeRate', label: 'Exchange Rate', type: 'number' },
-      { id: 'totalFee', label: 'Total Fee', type: 'number' },
-    ],
-    config: [
-      { id: 'userId', label: 'Saber User ID', type: 'text', placeholder: 'UUID from Saber user creation' },
-      { id: 'fromCurrency', label: 'Fiat Currency', type: 'select', options: [
-        { value: 'INR', label: 'INR' },
-        { value: 'USD', label: 'USD' },
-        { value: 'EUR', label: 'EUR' },
-        { value: 'GBP', label: 'GBP' },
-      ], defaultValue: 'INR' },
-      { id: 'toCurrency', label: 'Crypto Token', type: 'select', options: [
-        { value: 'USDT', label: 'USDT' },
-        { value: 'USDC', label: 'USDC' },
-      ], defaultValue: 'USDT' },
-      { id: 'amount', label: 'Fiat Amount', type: 'number' },
-      { id: 'network', label: 'Network', type: 'select', options: [
-        { value: 'ALGORAND', label: 'Algorand' },
-        { value: 'MATIC', label: 'Polygon' },
-        { value: 'BSC', label: 'BSC' },
-      ], defaultValue: 'ALGORAND' },
-    ],
-  },
 ]
 
 export function getBlocksByCategory(): Record<BlockCategory, BlockDefinition[]> {

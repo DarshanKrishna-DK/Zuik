@@ -177,6 +177,14 @@ export interface AgentContext {
   abortSignal: AbortSignal
   /** When set, `wallet-event` executor uses this instead of querying total balance (agent monitoring only) */
   walletEventOverride?: WalletEventAmountOverride
+  /** Optional workflow ID for multi-agent coordination */
+  workflowId?: string
+  /** Optional parent agent ID for spawned agents */
+  parentId?: string
+  /** When a child workflow runs, the parent workflow UUID (for agent_events.parent_workflow_id) */
+  parentWorkflowId?: string
+  /** Optional current node ID for logging */
+  currentNodeId?: string
 }
 
 /**
@@ -271,7 +279,7 @@ function getDownstreamNodes(
     .map((e) => e.target)
 }
 
-function getUpstreamOutputs(
+export function getUpstreamOutputs(
   nodeId: string,
   edges: FlowEdge[],
   blockOutputs: Map<string, Record<string, unknown>>
@@ -288,7 +296,7 @@ function getUpstreamOutputs(
   return { ...merged }
 }
 
-function resolveConfig(
+export function resolveConfig(
   config: Record<string, string | number | undefined>,
   ctx: AgentContext
 ): Record<string, string | number | undefined> {
@@ -434,7 +442,11 @@ export function subscribeAgent(
   const bgIntervals: { clear: () => void }[] = []
   let paused = false
   const abortController = new AbortController()
-  const ctxWithSignal: AgentContext = { ...context, abortSignal: abortController.signal }
+  const ctxWithSignal: AgentContext = {
+    ...context,
+    abortSignal: abortController.signal,
+    workflowId: workflowId ?? undefined,
+  }
 
   const triggerNodes = nodes.filter((n) => {
     const def = getBlockById(n.data.blockId)
@@ -508,7 +520,7 @@ export function subscribeAgent(
         }
 
         try {
-          await runFlowOnce(nodes, edges, ctxWithSignal, triggerNode.id)
+          await runMultiAgentWorkflow(nodes, edges, ctxWithSignal, triggerNode.id)
         } catch (err) {
           context.log({
             nodeId: triggerNode.id, blockId, blockName: 'Timer Loop',
@@ -614,7 +626,7 @@ export function subscribeAgent(
               amountBaseUnits,
             }
             try {
-              await runFlowOnce(nodes, edges, ctxWithSignal)
+              await runMultiAgentWorkflow(nodes, edges, ctxWithSignal)
               const allTxIds = Array.from(ctxWithSignal.blockOutputs.values())
                 .map((output) => (output as Record<string, unknown>)?.txId as string | undefined)
                 .filter((txId): txId is string => !!txId)
@@ -656,7 +668,7 @@ export function subscribeAgent(
   }
 
   if (triggerNodes.length === 0) {
-    runFlowOnce(nodes, edges, ctxWithSignal).then(() => {
+    runMultiAgentWorkflow(nodes, edges, ctxWithSignal).then(() => {
       onStatusChange('idle')
     }).catch(() => {
       onStatusChange('error')
@@ -688,5 +700,34 @@ export function subscribeAgent(
       paused = false
       onStatusChange('running')
     },
+  }
+}
+
+/**
+ * Enhanced workflow execution with multi-agent orchestration support.
+ * Use this for workflows containing multi-agent blocks (merge_gate, fork, join, etc.)
+ */
+export async function runMultiAgentWorkflow(
+  nodes: FlowNode[],
+  edges: FlowEdge[],
+  context: AgentContext,
+  startFromNodeId?: string
+): Promise<void> {
+  // Check if workflow contains multi-agent blocks
+  const hasMultiAgentBlocks = nodes.some(node => {
+    const blockId = node.data.blockId
+    return [
+      'merge_gate', 'fork', 'join', 'spawn_agent', 
+      'event_trigger', 'event_emit', 'watchdog'
+    ].includes(blockId)
+  })
+  
+  if (hasMultiAgentBlocks) {
+    // Use enhanced multi-agent executor
+    const { runMultiAgentFlow } = await import('./multiAgentExecutor')
+    await runMultiAgentFlow(nodes, edges, context, startFromNodeId)
+  } else {
+    // Use standard executor for simple workflows
+    await runFlowOnce(nodes, edges, context, startFromNodeId)
   }
 }

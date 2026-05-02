@@ -36,7 +36,7 @@ function getCatColor(blockId: string): string {
   const cat = blockId.match(/timer|webhook|wallet/) ? 'trigger'
     : blockId.match(/comparator|filter|delay|calculator|variable/) ? 'logic'
     : blockId.match(/telegram|discord|browser-notify/) ? 'notification'
-    : blockId.match(/swap|quote|liquidity|portfolio|price|fiat/) ? 'defi'
+    : blockId.match(/swap|quote|liquidity|portfolio|price/) ? 'defi'
     : 'action'
   return BLOCK_CATEGORY_COLOR[cat] ?? '#38BDF8'
 }

@@ -1,8 +1,18 @@
 import { SupportedWallet, WalletId, WalletManager, WalletProvider } from '@txnlab/use-wallet-react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SnackbarProvider } from 'notistack'
 import { BrowserRouter } from 'react-router-dom'
 import { getAlgodConfigFromViteEnvironment, getKmdConfigFromViteEnvironment } from './utils/network/getAlgoClientConfigs'
 import AppShell from './AppShell'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
 let supportedWallets: SupportedWallet[]
 if (import.meta.env.VITE_ALGOD_NETWORK === 'localnet') {
@@ -46,12 +56,14 @@ export default function App() {
   })
 
   return (
-    <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-      <WalletProvider manager={walletManager}>
-        <BrowserRouter>
-          <AppShell />
-        </BrowserRouter>
-      </WalletProvider>
-    </SnackbarProvider>
+    <QueryClientProvider client={queryClient}>
+      <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <WalletProvider manager={walletManager}>
+          <BrowserRouter>
+            <AppShell />
+          </BrowserRouter>
+        </WalletProvider>
+      </SnackbarProvider>
+    </QueryClientProvider>
   )
 }

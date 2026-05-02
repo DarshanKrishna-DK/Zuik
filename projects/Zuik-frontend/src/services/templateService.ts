@@ -185,24 +185,6 @@ const TEMPLATES: WorkflowTemplate[] = [
     ],
   },
   {
-    id: 'fiat-onramp-swap',
-    name: 'Fiat to ALGO',
-    description: 'Buy crypto with fiat via Saber Money on-ramp, then automatically swap USDT to ALGO.',
-    category: 'trading',
-    tags: ['fiat', 'onramp', 'Saber', 'swap'],
-    difficulty: 'intermediate',
-    estimatedFee: '~0.002 ALGO + fiat fees',
-    nodes: [
-      { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'fiat-onramp', config: { fiatAmount: 1000, fiatCurrency: 'INR', cryptoSymbol: 'USDT' }, label: 'Buy USDT' } },
-      { id: 'n2', type: 'generic', position: { x: 350, y: 100 }, data: { blockId: 'swap-token', config: { fromAsset: 10458941, toAsset: 0, amount: 10, slippage: 0.5 }, label: 'Swap USDT to ALGO' } },
-      { id: 'n3', type: 'generic', position: { x: 650, y: 100 }, data: { blockId: 'browser-notify', config: { title: 'Fiat to ALGO Complete', message: 'Your fiat has been converted to ALGO.' }, label: 'Done' } },
-    ],
-    edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'result', targetHandle: 'in' },
-      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'result', targetHandle: 'in' },
-    ],
-  },
-  {
     id: 'portfolio-rebalance',
     name: 'Portfolio Rebalance',
     description: 'Periodically check your portfolio balance and rebalance between ALGO and USDC to maintain your target allocation.',

@@ -10,6 +10,7 @@ import Landing from './pages/Landing'
 const Builder = lazy(() => import('./pages/Builder'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Settings = lazy(() => import('./pages/Settings'))
+const MarketExplorer = lazy(() => import('./pages/Market/MarketExplorer'))
 
 export default function AppShell() {
   const [walletModalOpen, setWalletModalOpen] = useState(false)
@@ -54,6 +55,7 @@ export default function AppShell() {
                 />
               } />
               <Route path="/builder" element={<Builder />} />
+              <Route path="/market" element={<MarketExplorer />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { sendTelegram, fetchPrice, executeWorkflowHeadless } from './agent.js'
+import { sendTelegram, fetchPrice, executeWorkflowHeadless } from './workflowRunner.js'
 import { buildWorkflowFromText } from './workflowIntentGroq.js'
 import { workflowNeedsZuikApp } from './flowSigner.js'
 
@@ -263,7 +263,7 @@ async function handleStatus(chatId: number) {
 
   const { data: schedules } = await supabase
     .from('workflow_schedules')
-    .select('id, workflow_id, interval_sec, iterations_completed, max_iterations, next_run_at, is_active')
+    .select('id, workflow_id, interval_sec, iterations_completed, max_iterations, next_run_at, is_active, schedule_type')
     .eq('wallet_address', walletAddress)
     .eq('is_active', true)
     .order('next_run_at', { ascending: true })
@@ -273,12 +273,15 @@ async function handleStatus(chatId: number) {
     return
   }
 
-  const lines = schedules.map((s: { interval_sec: number; iterations_completed: number; max_iterations: number | null; next_run_at: string }) => {
+  const lines = schedules.map((s: { interval_sec: number; iterations_completed: number; max_iterations: number | null; next_run_at: string; schedule_type?: string }) => {
     const interval = s.interval_sec >= 3600 ? `${Math.round(s.interval_sec / 3600)}h`
       : s.interval_sec >= 60 ? `${Math.round(s.interval_sec / 60)}m`
       : `${s.interval_sec}s`
     const iter = s.max_iterations ? `${s.iterations_completed}/${s.max_iterations}` : `${s.iterations_completed}`
-    const next = new Date(s.next_run_at).toLocaleTimeString()
+    const next = new Date(s.next_run_at).toLocaleString()
+    if (s.schedule_type === 'start_at') {
+      return `  Once at <b>${next}</b> | Runs: ${iter}`
+    }
     return `  Every <b>${interval}</b> | Runs: ${iter} | Next: ${next}`
   })
 
@@ -539,7 +542,12 @@ async function handleRunWorkflowExecute(chatId: number, workflowId: string) {
   await sendReply(chatId, `Running <b>${escapeHtml(wf.name || 'workflow')}</b> on the server…`)
 
   try {
-    await executeWorkflowHeadless(flowJson as Parameters<typeof executeWorkflowHeadless>[0], walletAddress, wf.name)
+    await executeWorkflowHeadless(
+      flowJson as Parameters<typeof executeWorkflowHeadless>[0],
+      walletAddress,
+      wf.name,
+      getLinkedTelegramChats,
+    )
     await sendReply(chatId, `Done. Finished running "${escapeHtml(wf.name || 'workflow')}".`)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -642,6 +650,14 @@ async function getWalletForChat(chatId: number): Promise<string | null> {
     .eq('telegram_chat_id', String(chatId))
     .single()
   return (data as { wallet_address: string } | null)?.wallet_address ?? null
+}
+
+async function getLinkedTelegramChats(walletAddress: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('telegram_links')
+    .select('telegram_chat_id')
+    .eq('wallet_address', walletAddress)
+  return (data ?? []).map((r: { telegram_chat_id: string }) => r.telegram_chat_id)
 }
 
 // ── Main polling loop ───────────────────────────────────
@@ -787,12 +803,11 @@ export async function startTelegramBot(sb: SupabaseClient) {
   if (useWebhook) {
     console.log('[Telegram] 📡 Using webhook mode')
     await setWebhook()
-  } else {
-    console.log('[Telegram] 🔄 Using polling mode')
-    pollUpdates()
+    return
 }
 
-const poll = async () => {
+  console.log('[Telegram] 🔄 Using polling mode')
+  const poll = async () => {
     while (true) {
       try {
         await pollTelegram()

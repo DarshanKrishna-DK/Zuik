@@ -71,12 +71,13 @@ flowchart LR
 | | Feature | What It Does |
 |-|---------|-------------|
 | **AI** | Intent Engine | Describe trades in plain English; AI generates the full workflow. Powered by Groq (Llama 3.3 70B). |
-| **Voice** | Enhanced Conversation (Phase 7B ✨) | Production-grade voice with server-side Groq Whisper + ElevenLabs TTS. Multi-language (Hindi/English) support. |
+| **Voice** | Enhanced Conversation ✨ | Production-grade voice with server-side Groq Whisper + ElevenLabs TTS. Multi-language (Hindi/English) support. |
+| **Multi-Agent** | Orchestration 🚀 | Multi-trigger workflows with merge gates, fork/join blocks, and event-driven automation. |
+| **Cloud Agent** | 24/7 Execution 🌐 | Deploy persistent agents to Railway.app for continuous workflow monitoring and execution. |
 | **Visual** | Flow Builder | 30+ drag-and-drop blocks across triggers, actions, logic, notifications, and DeFi. |
 | **Safety** | Transaction Simulation | Every workflow is simulated before signing. See fees, slippage, and warnings upfront. |
 | **Execution** | Atomic Groups | All-or-nothing transaction groups. If any step fails, everything rolls back. |
 | **Alerts** | Cloud-Ready Agent (Phase 7C ✨) | Production Telegram bot with webhook mode, deployed on Railway.app or Render.com. |
-| **Fiat** | On/Off-Ramp | Buy crypto with INR/USD/EUR or cash out to your bank via Saber Money. |
 
 ---
 
@@ -105,7 +106,6 @@ graph TB
         ALGO["Algorand TestNet<br/><i>via Nodely</i>"]
         SUPA["Supabase<br/><i>Persistence</i>"]
         DEX["DEX Layer<br/><i>Folks Router + Tinyman</i>"]
-        FIAT["Saber Money<br/><i>Fiat On/Off-Ramp</i>"]
     end
 
     subgraph SERVER["Server Agent - Node.js"]
@@ -118,7 +118,6 @@ graph TB
     TC --> DEX
     WALLET --> ALGO
     DASH --> SUPA
-    WALLET --> FIAT
     SERVER --> SUPA
     SERVER --> ALGO
     TBOT --> ALGO
@@ -134,10 +133,11 @@ graph TB
 
 ### Prerequisites
 
-| Tool | Install |
-|------|---------|
-| **Node.js** 20+ | [nodejs.org](https://nodejs.org) |
-| **npm** 9+ | Comes with Node.js |
+| Tool | Install | Purpose |
+|------|---------|---------|
+| **Node.js** 20+ | [nodejs.org](https://nodejs.org) | Frontend development |
+| **npm** 9+ | Comes with Node.js | Package management |
+| **Railway CLI** | [railway.app/cli](https://docs.railway.app/develop/cli) | Cloud deployment (optional) |
 
 ### 1. Clone and install frontend
 
@@ -155,15 +155,13 @@ cp .env.template .env
 
 Open `.env` and fill in your keys:
 
-| Variable | Source |
-|----------|--------|
-| `VITE_GROQ_API_KEY` | Free at [console.groq.com/keys](https://console.groq.com/keys) |
-| `VITE_SUPABASE_URL` | Free at [supabase.com](https://supabase.com) |
-| `VITE_SUPABASE_ANON_KEY` | Supabase project settings |
-| `VITE_SABER_CLIENT_ID` | From Saber Money (optional - for fiat ramp) |
-| `saber-sign` Edge Function secrets | Set `SABER_CLIENT_ID` and `SABER_CLIENT_SECRET` in Supabase (Dashboard - Edge Functions) after `supabase functions deploy saber-sign` |
-| `VITE_TELEGRAM_BOT_TOKEN` | Via [@BotFather](https://t.me/BotFather) (optional) |
-| `VITE_VOICE_SERVER_URL` | Voice processing server (Phase 7B) - `http://localhost:3002` for local dev |
+| Variable | Source | Required |
+|----------|--------|----------|
+| `VITE_GROQ_API_KEY` | Free at [console.groq.com/keys](https://console.groq.com/keys) | ✅ Core AI |
+| `VITE_SUPABASE_URL` | Free at [supabase.com](https://supabase.com) | ✅ Database |
+| `VITE_SUPABASE_ANON_KEY` | Supabase project settings | ✅ Database |
+| `VITE_VOICE_SERVER_URL` | Your Railway deployment URL | ⭕ Enhanced voice |
+| `VITE_TELEGRAM_BOT_TOKEN` | Via [@BotFather](https://t.me/BotFather) | ⭕ Telegram bot |
 
 > Algorand TestNet node URLs are pre-configured via [Nodely](https://nodely.io) free tier. No changes needed.
 
@@ -175,30 +173,50 @@ npm run dev
 
 Open **[http://localhost:5173](http://localhost:5173)** and connect your wallet (Pera, Defly, or Exodus) on **Algorand TestNet**.
 
-> Free TestNet ALGO: [Algorand Dispenser](https://dispenser.testnet.aws.algodev.network/)
+> 💡 **Get Free TestNet ALGO:** [Algorand Dispenser](https://dispenser.testnet.aws.algodev.network/)
 
-### 4. Start the server agent (optional)
+### 4. Deploy cloud agent (for 24/7 automation)
 
-The server agent handles background tasks: Telegram bot, price monitoring, scheduled workflow execution.
+The cloud agent enables persistent workflow execution, voice processing, and Telegram integration.
+
+#### Option A: Deploy to Railway.app (Recommended)
 
 ```bash
-cd server
+cd projects/server
+railway login
+railway init
+railway up
+```
+
+#### Option B: Run locally (Development only)
+
+```bash
+cd projects/server
 npm install
 cp .env.example .env
+npm run dev
 ```
 
-Fill in `server/.env`:
+Configure your deployment environment:
 
-| Variable | Source |
-|----------|--------|
-| `SUPABASE_URL` | Same as frontend |
-| `SUPABASE_SERVICE_KEY` | Supabase project settings (service role key) |
-| `TELEGRAM_BOT_TOKEN` | Same token as frontend |
-| `GROQ_API_KEY` | Same key as frontend |
+| Variable | Source | Purpose |
+|----------|--------|---------|
+| `SUPABASE_URL` | Same as frontend | Database connection |
+| `SUPABASE_SERVICE_KEY` | Supabase project settings (service role key) | Database admin access |
+| `TELEGRAM_BOT_TOKEN` | [@BotFather](https://t.me/BotFather) | Telegram bot integration |
+| `GROQ_API_KEY` | [console.groq.com/keys](https://console.groq.com/keys) | AI + voice processing |
+| `ELEVENLABS_API_KEY` | [elevenlabs.io](https://elevenlabs.io) | High-quality TTS |
+| `TELEGRAM_WEBHOOK_URL` | Your Railway app URL + `/telegram/webhook` | Telegram webhook mode |
+| `PORT` | Automatically set by Railway | Server port |
+
+**Start the agent:**
 
 ```bash
-npm start
+npm start  # Production mode (Railway)
+npm run dev  # Development mode (local)
 ```
+
+> 📚 **Detailed deployment guide:** See `reference_docs/RAILWAY_DEPLOYMENT_GUIDE.md`
 
 ---
 
@@ -213,7 +231,6 @@ npm start
 | **AI Engine** | [Groq](https://groq.com)  - Llama 3.3 70B |
 | **Voice** | Web Speech API |
 | **DEX** | [Folks Router](https://folksrouter.io) + [Tinyman](https://tinyman.org) |
-| **Fiat** | [Saber Money](https://docs.saber.money) |
 | **Database** | [Supabase](https://supabase.com) |
 | **Notifications** | Telegram Bot API + Discord |
 | **Server** | Node.js + tsx |
@@ -232,7 +249,7 @@ Zuik/
 │   │   ├── pages/                   Landing, Builder, Dashboard, Settings
 │   │   └── styles/                  Global CSS with design tokens
 │   └── public/
-├── server/                          Node.js agent (Telegram, price monitor)
+├── projects/server/                 Node.js agent (Telegram, price monitor)
 ├── docs/                            Architecture diagrams
 └── ZUIK_DEVELOPMENT_PLAN.md         Development roadmap
 ```

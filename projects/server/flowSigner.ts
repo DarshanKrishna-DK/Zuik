@@ -8,9 +8,6 @@ const SIGNER_BLOCKS = new Set([
   'opt-in-asa',
   'create-asa',
   'call-contract',
-  'fiat-onramp',
-  'fiat-offramp',
-  'fiat-quote',
 ])
 
 /** Triggers that only work in the browser agent / hosted runner, not in the headless server loop. */

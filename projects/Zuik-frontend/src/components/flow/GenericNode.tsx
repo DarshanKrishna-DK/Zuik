@@ -1,6 +1,7 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { getBlockById, CATEGORY_META, PORT_COLORS, type BlockDefinition, type Port } from '../../lib/blockRegistry'
+import { useWorkflowSelectOptions } from '../../context/WorkflowSelectOptionsContext'
 import BlockInputs from './BlockInputs'
 
 export interface GenericNodeData {
@@ -38,6 +39,14 @@ export default function GenericNode({ id, data, selected }: NodeProps) {
   const nodeData = data as unknown as GenericNodeData
   const def: BlockDefinition | undefined = getBlockById(nodeData.blockId)
   const { setNodes, setEdges } = useReactFlow()
+  const workflowSelectOptions = useWorkflowSelectOptions()
+  const spawnExtraSelect = useMemo(
+    () =>
+      nodeData.blockId === 'spawn_agent' && workflowSelectOptions.length > 0
+        ? { sub_flow_id: workflowSelectOptions }
+        : undefined,
+    [nodeData.blockId, workflowSelectOptions],
+  )
   if (!def) return <div className="zuik-node">Unknown block</div>
 
   const catMeta = CATEGORY_META[def.category]
@@ -84,7 +93,12 @@ export default function GenericNode({ id, data, selected }: NodeProps) {
 
       {def.config.length > 0 && (
         <div className="zuik-node-body">
-          <BlockInputs fields={def.config} values={nodeData.config} onChange={onConfigChange} />
+          <BlockInputs
+            fields={def.config}
+            values={nodeData.config}
+            onChange={onConfigChange}
+            extraSelectOptions={spawnExtraSelect}
+          />
         </div>
       )}
 

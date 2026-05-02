@@ -22,6 +22,15 @@ function DashboardIcon() {
   )
 }
 
+function MarketIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 3v18h18" />
+      <path d="m7 14 3-3 3 3 4-4" />
+    </svg>
+  )
+}
+
 function SettingsIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -42,6 +51,7 @@ function WalletIcon() {
 
 const navItems = [
   { path: '/builder', label: 'Builder', Icon: WorkflowIcon },
+  { path: '/market', label: 'Market', Icon: MarketIcon },
   { path: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
   { path: '/settings', label: 'Settings', Icon: SettingsIcon },
 ]

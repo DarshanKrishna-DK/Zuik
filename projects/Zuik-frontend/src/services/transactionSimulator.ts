@@ -120,12 +120,6 @@ export function buildStepDescription(
       const toLabel = resolveAssetNameSync(config.toAsset)
       return `Fetch swap quote: ${config.amount ?? '?'} ${fromLabel} → ${toLabel}`
     }
-    case 'fiat-onramp':
-      return `Fiat On-Ramp: ${config.fiatAmount ?? '?'} ${config.fiatCurrency ?? 'INR'} → crypto`
-    case 'fiat-offramp':
-      return `Fiat Off-Ramp: sell crypto → ${config.fiatCurrency ?? 'INR'}`
-    case 'fiat-quote':
-      return `Fiat Price Quote: ${config.amount ?? '?'} ${config.fromCurrency ?? 'INR'} → ${config.toCurrency ?? 'USDT'}`
     case 'webhook-action':
       return `HTTP ${config.method ?? 'GET'} → ${config.url ?? '(not set)'}`
     case 'log-debug':

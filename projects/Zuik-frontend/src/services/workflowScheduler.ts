@@ -14,6 +14,8 @@
 
 import { isSupabaseConfigured, getSupabase } from './supabase'
 
+export type ScheduleType = 'interval' | 'start_at'
+
 export interface ScheduleEntry {
   id: string
   workflow_id: string
@@ -24,6 +26,7 @@ export interface ScheduleEntry {
   next_run_at: string
   is_active: boolean
   requires_signer: boolean
+  schedule_type: ScheduleType
   flow_json: { nodes: unknown[]; edges: unknown[] }
   created_at: string
   updated_at: string
@@ -58,8 +61,9 @@ export async function saveSchedule(params: {
         next_run_at: nextRunAt,
         is_active: true,
         requires_signer: params.requiresSigner,
+        schedule_type: 'interval',
         flow_json: params.flowJson,
-      }, { onConflict: 'workflow_id' })
+      }, { onConflict: 'workflow_id,schedule_type' })
       .select('id')
       .single()
 
@@ -77,14 +81,69 @@ export async function saveSchedule(params: {
 /**
  * Deactivate a schedule when the workflow is stopped.
  */
-export async function deactivateSchedule(workflowId: string): Promise<void> {
+export async function deactivateSchedule(workflowId: string, scheduleType?: ScheduleType): Promise<void> {
+  if (!isSupabaseConfigured()) return
+  try {
+    const sb = getSupabase()
+    const query = sb
+      .from('workflow_schedules')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('workflow_id', workflowId)
+    if (scheduleType) query.eq('schedule_type', scheduleType)
+    await query
+  } catch { /* non-blocking */ }
+}
+
+export async function scheduleWorkflowStart(params: {
+  workflowId: string
+  walletAddress: string
+  runAtIso: string
+  requiresSigner: boolean
+  flowJson: { nodes: unknown[]; edges: unknown[] }
+}): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null
+  try {
+    const sb = getSupabase()
+    const { data, error } = await sb
+      .from('workflow_schedules')
+      .upsert({
+        workflow_id: params.workflowId,
+        wallet_address: params.walletAddress,
+        interval_sec: 60,
+        max_iterations: 1,
+        iterations_completed: 0,
+        next_run_at: params.runAtIso,
+        is_active: true,
+        requires_signer: params.requiresSigner,
+        schedule_type: 'start_at',
+        flow_json: params.flowJson,
+      }, { onConflict: 'workflow_id,schedule_type' })
+      .select('id')
+      .single()
+
+    if (error) {
+      console.warn('Failed to schedule run:', error.message)
+      return null
+    }
+    return (data as { id: string }).id
+  } catch (err) {
+    console.warn('Schedule start error:', err)
+    return null
+  }
+}
+
+export async function completeSchedule(scheduleId: string): Promise<void> {
   if (!isSupabaseConfigured()) return
   try {
     const sb = getSupabase()
     await sb
       .from('workflow_schedules')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('workflow_id', workflowId)
+      .update({
+        is_active: false,
+        iterations_completed: 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', scheduleId)
   } catch { /* non-blocking */ }
 }
 
@@ -172,10 +231,11 @@ CREATE TABLE IF NOT EXISTS workflow_schedules (
   next_run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   is_active BOOLEAN NOT NULL DEFAULT true,
   requires_signer BOOLEAN NOT NULL DEFAULT true,
+  schedule_type TEXT NOT NULL DEFAULT 'interval',
   flow_json JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(workflow_id)
+  UNIQUE(workflow_id, schedule_type)
 );
 
 ALTER TABLE workflow_schedules ENABLE ROW LEVEL SECURITY;

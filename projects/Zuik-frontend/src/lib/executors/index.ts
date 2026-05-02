@@ -2,6 +2,7 @@ import type { AgentContext } from '../runAgent'
 import { triggerExecutors } from './triggerExecutors'
 import { logicExecutors } from './logicExecutors'
 import { notificationExecutors } from './notificationExecutors'
+import { multiAgentExecutors } from './multiAgentExecutors'
 import { blockExecutors } from '../../services/blockExecutors'
 import type { ExecutorContext } from '../../services/blockExecutors'
 
@@ -32,5 +33,6 @@ export const allExecutors: Record<string, ExecutorFn> = {
   ...triggerExecutors,
   ...logicExecutors,
   ...notificationExecutors,
+  ...multiAgentExecutors,
   ...wrappedActionExecutors,
 }

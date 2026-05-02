@@ -29,6 +29,7 @@ interface ScheduleRow {
   next_run_at: string
   is_active: boolean
   requires_signer: boolean
+  schedule_type?: 'interval' | 'start_at'
   flow_json: {
     nodes: Array<{
       id: string
@@ -104,15 +105,24 @@ Deno.serve(async () => {
       }
     }
 
-    const nextRunAt = new Date(
-      Date.now() + schedule.interval_sec * 1000
-    ).toISOString()
+    const newCount = schedule.iterations_completed + 1
+    if (schedule.schedule_type === 'start_at') {
+      await sb.from('workflow_schedules').update({
+        iterations_completed: newCount,
+        is_active: false,
+        updated_at: new Date().toISOString(),
+      }).eq('id', schedule.id)
+    } else {
+      const nextRunAt = new Date(
+        Date.now() + schedule.interval_sec * 1000
+      ).toISOString()
 
-    await sb.from('workflow_schedules').update({
-      iterations_completed: schedule.iterations_completed + 1,
-      next_run_at: nextRunAt,
-      updated_at: new Date().toISOString(),
-    }).eq('id', schedule.id)
+      await sb.from('workflow_schedules').update({
+        iterations_completed: newCount,
+        next_run_at: nextRunAt,
+        updated_at: new Date().toISOString(),
+      }).eq('id', schedule.id)
+    }
 
     executed++
   }

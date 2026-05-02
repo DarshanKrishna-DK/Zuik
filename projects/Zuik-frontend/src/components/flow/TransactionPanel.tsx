@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getExecutableBlocksInOrder } from '../../services/blockExecutors'
 import { getAlgorandClient } from '../../services/algorand'
 import { getBlockById } from '../../lib/blockRegistry'
-import { runFlowOnce, createVariableContext } from '../../lib/runAgent'
+import { runMultiAgentWorkflow, createVariableContext } from '../../lib/runAgent'
 import type { FlowNode, FlowEdge } from '../../lib/runAgent'
 import {
   buildSimulationPreview,
@@ -257,12 +257,13 @@ export default function TransactionPanel({
     let errorMessage: string | null = null
 
     try {
-      await runFlowOnce(flowNodes, flowEdges, {
+      await runMultiAgentWorkflow(flowNodes, flowEdges, {
         sender: activeAddress,
         signer: transactionSigner,
         algorand,
         variables,
         blockOutputs,
+        workflowId: workflowId ?? undefined,
         log: (entry) => {
           const stepIdx = nodeIdToStepIndex.get(entry.nodeId)
           if (!stepIdx) return

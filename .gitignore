@@ -175,6 +175,7 @@ DEMO_SCRIPT.md
 .cursorrules
 .cursor/
 reference_docs/
+.firecrawl/
 
 # ===== IDE =====
 .vscode/

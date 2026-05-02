@@ -22,6 +22,7 @@ interface Props {
   onIntentParsed: (intent: ParsedIntent) => void
   canvasBlocks?: CanvasBlock[]
   userContext?: UserContext
+  prefillMessage?: string
 }
 
 /* ── Inline SVG Icons ─────────────────────────────────── */
@@ -74,7 +75,6 @@ const INTENT_TEMPLATES = [
   { label: 'Price alert', text: 'Alert me on Telegram if ALGO price drops below 0.15 USDC' },
   { label: 'Auto-swap on receive', text: 'When I receive USDC, swap it all to ALGO' },
   { label: 'Send payment', text: 'Send 10 ALGO to ' },
-  { label: 'Buy crypto with fiat', text: 'Buy 1000 INR worth of USDT via Saber on-ramp' },
   { label: 'Describe workflow', text: 'Describe what my current workflow does' },
 ]
 
@@ -205,7 +205,7 @@ function useSpeechSynthesis() {
 const BUILDER_WELCOME = 'Describe what you want to do in plain language - or pick a template below. I will build the workflow for you.'
 const ADVISOR_WELCOME = 'I am your Smart Trading Advisor. Tell me about your goals, risk tolerance, or what you want to achieve. I can also show amounts in INR or your preferred currency.'
 
-export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlocks, userContext }: Props) {
+export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlocks, userContext, prefillMessage }: Props) {
   const [mode, setMode] = useState<'builder' | 'advisor'>('builder')
   const builderMsgs = useRef<ChatMessage[]>([
     { id: 'welcome_builder', role: 'system', content: BUILDER_WELCOME },
@@ -227,6 +227,15 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   useEffect(() => { if (isOpen) inputRef.current?.focus() }, [isOpen])
   useEffect(() => { voiceModeRef.current = voiceMode }, [voiceMode])
+  const prefillRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!isOpen || !prefillMessage) return
+    if (prefillRef.current === prefillMessage) return
+    prefillRef.current = prefillMessage
+    setInput(prefillMessage)
+    inputRef.current?.focus()
+  }, [isOpen, prefillMessage])
 
   // Check voice service health on mount
   useEffect(() => {

@@ -5,6 +5,8 @@ interface BlockInputsProps {
   fields: ConfigField[]
   values: Record<string, string | number>
   onChange: (fieldId: string, value: string | number) => void
+  /** Merged after static `field.options` (deduped by value). */
+  extraSelectOptions?: Record<string, { value: string; label: string }[]>
 }
 
 /**
@@ -19,7 +21,7 @@ function hasTemplateExpr(val: unknown): boolean {
   return typeof val === 'string' && /\{\{.*\}\}/.test(val)
 }
 
-export default function BlockInputs({ fields, values, onChange }: BlockInputsProps) {
+export default function BlockInputs({ fields, values, onChange, extraSelectOptions }: BlockInputsProps) {
   const [hoveredOption, setHoveredOption] = useState<string | null>(null)
 
   const handleChange = useCallback(
@@ -38,6 +40,13 @@ export default function BlockInputs({ fields, values, onChange }: BlockInputsPro
     <>
       {fields.map((field) => {
         const currentVal = values[field.id] ?? field.defaultValue ?? ''
+        const staticOpts = field.options ?? []
+        const extra = field.type === 'select' ? (extraSelectOptions?.[field.id] ?? []) : []
+        const seenVals = new Set(staticOpts.map((o) => o.value))
+        const mergedSelectOpts =
+          field.type === 'select'
+            ? [...staticOpts, ...extra.filter((o) => !seenVals.has(o.value))]
+            : []
 
         return (
           <div key={field.id} className="zuik-node-field">
@@ -52,7 +61,7 @@ export default function BlockInputs({ fields, values, onChange }: BlockInputsPro
                   onMouseLeave={() => setHoveredOption(null)}
                 >
                   <option value="">- select -</option>
-                  {field.options?.map((opt) => (
+                  {mergedSelectOpts.map((opt) => (
                     <option key={opt.value} value={opt.value}
                       onMouseEnter={() => opt.description && setHoveredOption(opt.value)}
                       onMouseLeave={() => setHoveredOption(null)}>
@@ -60,13 +69,13 @@ export default function BlockInputs({ fields, values, onChange }: BlockInputsPro
                     </option>
                   ))}
                 </select>
-                {hoveredOption && field.options?.find(o => o.value === hoveredOption)?.description && (
+                {hoveredOption && mergedSelectOpts.find((o) => o.value === hoveredOption)?.description && (
                   <div style={{
                     position: 'absolute', bottom: '100%', left: 0, marginBottom: 4,
                     padding: '6px 8px', background: 'var(--z-bg)', border: '1px solid var(--z-border)',
                     borderRadius: 6, fontSize: '0.6875rem', color: 'var(--z-text-muted)', whiteSpace: 'nowrap', zIndex: 20,
                   }}>
-                    {field.options?.find(o => o.value === hoveredOption)?.description}
+                    {mergedSelectOpts.find((o) => o.value === hoveredOption)?.description}
                   </div>
                 )}
               </div>

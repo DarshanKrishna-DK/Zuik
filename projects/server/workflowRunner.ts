@@ -1,39 +1,13 @@
 import 'dotenv/config'
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { startTelegramBot } from './telegram.js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
-const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS ?? '15000', 10)
-
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('[Agent] Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in .env')
-  process.exit(1)
-}
-
-const sb: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY)
-
-interface ScheduleRow {
-  id: string
-  workflow_id: string
-  wallet_address: string
-  interval_sec: number
-  max_iterations: number | null
-  iterations_completed: number
-  next_run_at: string
-  is_active: boolean
-  requires_signer: boolean
-  flow_json: { nodes: FlowNode[]; edges: FlowEdge[] }
-}
-
-interface FlowNode {
+export interface FlowNode {
   id: string
   type: string
   position: { x: number; y: number }
   data: { blockId: string; config: Record<string, string | number>; label?: string }
 }
 
-interface FlowEdge {
+export interface FlowEdge {
   id: string
   source: string
   target: string
@@ -41,7 +15,7 @@ interface FlowEdge {
   targetHandle?: string
 }
 
-// ── Price fetching ──────────────────────────────────────
+export type LinkedChatResolver = (walletAddress: string) => Promise<string[]>
 
 const priceCache = new Map<string, { price: number; ts: number }>()
 const PRICE_CACHE_TTL = 30_000
@@ -66,8 +40,6 @@ export async function fetchPrice(coinId: string): Promise<number> {
   return cached?.price ?? 0
 }
 
-// ── Safe condition evaluation ───────────────────────────
-
 const OPERATORS: Record<string, (a: number, b: number) => boolean> = {
   '<': (a, b) => a < b,
   '<=': (a, b) => a <= b,
@@ -85,8 +57,6 @@ function evaluateCondition(value: number, operator: string, threshold: number): 
   }
   return fn(value, threshold)
 }
-
-// ── Notification senders ────────────────────────────────
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? ''
 
@@ -119,8 +89,6 @@ async function sendDiscord(webhookUrl: string, message: string): Promise<boolean
   }
 }
 
-// ── Topological sort ────────────────────────────────────
-
 function topoSort(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[] {
   const graph = new Map<string, string[]>()
   const inDegree = new Map<string, number>()
@@ -152,13 +120,11 @@ function topoSort(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[] {
   return sorted
 }
 
-// ── Workflow execution ──────────────────────────────────
-
-/** Run notification / price / logic flows without a wallet (used by schedule poller and Telegram). */
 export async function executeWorkflowHeadless(
   flowJson: { nodes: FlowNode[]; edges: FlowEdge[] },
   walletAddress: string,
   workflowLabel?: string,
+  resolveLinkedChats?: LinkedChatResolver,
 ): Promise<void> {
   const { nodes, edges } = flowJson
   if (!nodes || nodes.length === 0) return
@@ -225,8 +191,8 @@ export async function executeWorkflowHeadless(
         if (chatId) {
           await sendTelegram(chatId, msg)
           console.log(`  [send-telegram] Sent to ${chatId}`)
-        } else {
-          const linked = await getLinkedTelegramChats(walletAddress)
+        } else if (resolveLinkedChats) {
+          const linked = await resolveLinkedChats(walletAddress)
           for (const chat of linked) {
             await sendTelegram(chat, msg)
             console.log(`  [send-telegram] Sent to linked chat ${chat}`)
@@ -241,7 +207,7 @@ export async function executeWorkflowHeadless(
         const webhookUrl = String(config.webhookUrl ?? '')
         if (webhookUrl) {
           await sendDiscord(webhookUrl, msg)
-          console.log(`  [send-discord] Sent`)
+          console.log('  [send-discord] Sent')
         }
         break
       }
@@ -255,7 +221,7 @@ export async function executeWorkflowHeadless(
             context.httpResponse = await res.text()
             console.log(`  [http-request] ${method} ${url} -> ${res.status}`)
           } catch (e) {
-            console.warn(`  [http-request] Failed:`, e)
+            console.warn('  [http-request] Failed:', e)
           }
         }
         break
@@ -276,7 +242,7 @@ export async function executeWorkflowHeadless(
       }
 
       default:
-        if (blockId?.match(/swap|send-payment|opt-in|create-asa|call-contract|fiat/)) {
+        if (blockId?.match(/swap|send-payment|opt-in|create-asa|call-contract/)) {
           console.log(`  [${blockId}] Skipped (requires wallet signer)`)
         } else {
           console.log(`  [${blockId}] No server executor, skipped`)
@@ -284,83 +250,3 @@ export async function executeWorkflowHeadless(
     }
   }
 }
-
-async function executeWorkflow(schedule: ScheduleRow): Promise<void> {
-  await executeWorkflowHeadless(schedule.flow_json, schedule.wallet_address, schedule.workflow_id)
-}
-
-// ── Telegram link helpers ───────────────────────────────
-
-async function getLinkedTelegramChats(walletAddress: string): Promise<string[]> {
-  const { data } = await sb
-    .from('telegram_links')
-    .select('telegram_chat_id')
-    .eq('wallet_address', walletAddress)
-  return (data ?? []).map((r: { telegram_chat_id: string }) => r.telegram_chat_id)
-}
-
-// ── Main polling loop ───────────────────────────────────
-
-async function pollSchedules(): Promise<void> {
-  const now = new Date().toISOString()
-
-  const { data: schedules, error } = await sb
-    .from('workflow_schedules')
-    .select('*')
-    .eq('is_active', true)
-    .eq('requires_signer', false)
-    .lte('next_run_at', now)
-    .order('next_run_at', { ascending: true })
-
-  if (error) {
-    console.error('[Agent] Schedule fetch error:', error.message)
-    return
-  }
-
-  if (!schedules || schedules.length === 0) return
-
-  console.log(`[Agent] Found ${schedules.length} due schedule(s)`)
-
-  for (const schedule of schedules as ScheduleRow[]) {
-    try {
-      await executeWorkflow(schedule)
-
-      const maxIter = schedule.max_iterations
-      const newCount = schedule.iterations_completed + 1
-      const done = maxIter !== null && newCount >= maxIter
-
-      if (done) {
-        await sb.from('workflow_schedules').update({ is_active: false, iterations_completed: newCount, updated_at: now }).eq('id', schedule.id)
-        console.log(`[Agent] Schedule ${schedule.id} completed (${newCount}/${maxIter})`)
-      } else {
-        const nextRun = new Date(Date.now() + schedule.interval_sec * 1000).toISOString()
-        await sb.from('workflow_schedules').update({ iterations_completed: newCount, next_run_at: nextRun, updated_at: now }).eq('id', schedule.id)
-      }
-    } catch (e) {
-      console.error(`[Agent] Workflow ${schedule.workflow_id} error:`, e)
-    }
-  }
-}
-
-// ── Startup ─────────────────────────────────────────────
-
-async function main() {
-  console.log('╔══════════════════════════════════════╗')
-  console.log('║       Zuik Local Agent v1.0.0        ║')
-  console.log('╚══════════════════════════════════════╝')
-  console.log(`[Agent] Polling interval: ${POLL_INTERVAL}ms`)
-  console.log(`[Agent] Supabase: ${SUPABASE_URL}`)
-
-  startTelegramBot(sb)
-
-  while (true) {
-    try {
-      await pollSchedules()
-    } catch (e) {
-      console.error('[Agent] Poll error:', e)
-    }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL))
-  }
-}
-
-main().catch(console.error)

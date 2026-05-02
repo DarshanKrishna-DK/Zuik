@@ -36,7 +36,7 @@ function persistViewportFrom(inst: ReactFlowInstance<Node, Edge> | null) {
 }
 import '@xyflow/react/dist/style.css'
 import { useWallet } from '@txnlab/use-wallet-react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom'
 
 import Sidebar from '../components/flow/Sidebar'
 import GenericNode from '../components/flow/GenericNode'
@@ -44,6 +44,7 @@ import TransactionPanel from '../components/flow/TransactionPanel'
 import AgentControls from '../components/flow/AgentControls'
 import ExecutionLog from '../components/flow/ExecutionLog'
 import ChatPanel from '../components/flow/ChatPanel'
+import SchedulePanel from '../components/flow/SchedulePanel'
 import TemplateGallery from '../components/flow/TemplateGallery'
 import type { TemplateNode, TemplateEdge } from '../services/templateService'
 import { getBlockById } from '../lib/blockRegistry'
@@ -57,16 +58,18 @@ import {
   type FlowEdge,
   createVariableContext,
   subscribeAgent,
-  runFlowOnce,
+  runMultiAgentWorkflow,
 } from '../lib/runAgent'
 import { getAlgorandClient } from '../services/algorand'
 import { materializeIntent, addNodesToCanvas } from '../lib/intentMaterializer'
 import type { ParsedIntent, CanvasBlock, UserContext } from '../services/intentParser'
 import {
   isSupabaseConfigured, getWorkflow, createWorkflow, updateWorkflow,
-  recordExecution, completeExecution,
+  recordExecution, completeExecution, listWorkflows,
 } from '../services/supabase'
+import { WorkflowSelectOptionsProvider } from '../context/WorkflowSelectOptionsContext'
 import { fetchAlgoUsdPrice, estimateStepFee } from '../services/transactionSimulator'
+import { scheduleWorkflowStart, deactivateSchedule } from '../services/workflowScheduler'
 
 /* ── Inline SVG Icons ─────────────────────────────────── */
 
@@ -103,6 +106,9 @@ function LayoutGridIcon() {
 function ActivityIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" /></svg>
 }
+function ClockIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+}
 
 const nodeTypes = { generic: GenericNode }
 
@@ -117,6 +123,7 @@ export default function Builder() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [transactionPanelOpen, setTransactionPanelOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [logOpen, setLogOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false)
@@ -126,6 +133,7 @@ export default function Builder() {
   const [workflowId, setWorkflowId] = useState<string | null>(null)
   const workflowIdRef = useRef<string | null>(null)
   const [workflowName, setWorkflowName] = useState('Untitled Workflow')
+  const [workflowSpawnSelectOptions, setWorkflowSpawnSelectOptions] = useState<{ value: string; label: string }[]>([])
   const [saveIndicator, setSaveIndicator] = useState<'idle' | 'saving' | 'saved'>('idle')
   const savingRef = useRef(false)
   const [isDirty, setIsDirty] = useState(false)
@@ -139,6 +147,39 @@ export default function Builder() {
   const prevWfParamRef = useRef<string | null>(null)
   const { transactionSigner, activeAddress } = useWallet()
   const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [prefillIntent, setPrefillIntent] = useState<string | null>(null)
+  const prefillAppliedRef = useRef<string | null>(null)
+
+  const refreshSpawnWorkflowOptions = useCallback(async () => {
+    if (!activeAddress || !isSupabaseConfigured()) {
+      setWorkflowSpawnSelectOptions([])
+      return
+    }
+    try {
+      const rows = await listWorkflows(activeAddress)
+      setWorkflowSpawnSelectOptions(
+        rows.map((r) => ({ value: r.id, label: r.name?.trim() ? r.name : r.id })),
+      )
+    } catch {
+      setWorkflowSpawnSelectOptions([])
+    }
+  }, [activeAddress])
+
+  useEffect(() => {
+    void refreshSpawnWorkflowOptions()
+  }, [refreshSpawnWorkflowOptions])
+
+  useEffect(() => {
+    const state = location.state as { prefillIntent?: string } | null
+    if (state?.prefillIntent && state.prefillIntent !== prefillAppliedRef.current) {
+      setChatOpen(true)
+      setPrefillIntent(state.prefillIntent)
+      prefillAppliedRef.current = state.prefillIntent
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
+    }
+  }, [location, navigate])
 
   // Undo/Redo history
   const undoStack = useRef<{ nodes: Node[]; edges: Edge[] }[]>([])
@@ -195,6 +236,27 @@ export default function Builder() {
     },
     [],
   )
+
+  const buildFlowJson = useCallback(() => {
+    return {
+      nodes: nodes.map((n) => ({
+        id: n.id,
+        data: n.data as FlowNode['data'],
+      })),
+      edges: edges.map((e) => ({
+        source: e.source,
+        target: e.target,
+      })),
+    }
+  }, [nodes, edges])
+
+  const requiresSigner = useMemo(() => {
+    const signerBlocks = new Set(['swap-token', 'send-payment', 'opt-in-asa', 'create-asa', 'call-contract'])
+    return nodes.some((node) => {
+      const blockId = (node.data as Record<string, unknown>)?.blockId as string | undefined
+      return blockId ? signerBlocks.has(blockId) : false
+    })
+  }, [nodes])
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -300,6 +362,7 @@ export default function Builder() {
       }
       setIsDirty(false)
       setSaveIndicator('saved')
+      await refreshSpawnWorkflowOptions()
       setTimeout(() => setSaveIndicator('idle'), 2000)
     } catch (err) {
       console.error('Supabase save failed:', err)
@@ -307,7 +370,7 @@ export default function Builder() {
     } finally {
       savingRef.current = false
     }
-  }, [activeAddress, nodes, edges, workflowName])
+  }, [activeAddress, nodes, edges, workflowName, refreshSpawnWorkflowOptions])
 
   useEffect(() => {
     if (nodes.length === 0) return
@@ -465,6 +528,7 @@ export default function Builder() {
         log: wrappedLog,
         onNodeStatusChange: updateNodeStatus,
         abortSignal: abortController.signal,
+        workflowId: workflowId ?? undefined,
       }, setAgentStatus, workflowId, (evResult) => {
         setAgentStatus('idle')
         if (evResult.success) {
@@ -481,7 +545,7 @@ export default function Builder() {
       agentHandleRef.current = handle
     } else {
       setAgentStatus('running')
-      runFlowOnce(flowNodes, flowEdges, {
+      runMultiAgentWorkflow(flowNodes, flowEdges, {
         sender: activeAddress,
         signer: transactionSigner,
         algorand,
@@ -490,6 +554,7 @@ export default function Builder() {
         log: wrappedLog,
         onNodeStatusChange: updateNodeStatus,
         abortSignal: abortController.signal,
+        workflowId: workflowId ?? undefined,
       }).then(() => {
         setAgentStatus('idle')
         void finishExecution('success')
@@ -508,6 +573,72 @@ export default function Builder() {
       }
     }
   }, [nodes, edges, transactionSigner, activeAddress, addLog, updateNodeStatus, workflowId])
+
+  const handleScheduleRun = useCallback(async (runAtLocal: string) => {
+    if (!activeAddress) {
+      return { ok: false, message: 'Connect your wallet to schedule a run.' }
+    }
+    if (!isSupabaseConfigured()) {
+      return { ok: false, message: 'Supabase is not configured for this project.' }
+    }
+    if (nodes.length === 0) {
+      return { ok: false, message: 'Add blocks to the workflow before scheduling.' }
+    }
+
+    const runAt = new Date(runAtLocal)
+    if (Number.isNaN(runAt.getTime())) {
+      return { ok: false, message: 'Pick a valid date and time.' }
+    }
+    if (runAt.getTime() < Date.now()) {
+      return { ok: false, message: 'Scheduled time must be in the future.' }
+    }
+
+    if (!workflowIdRef.current) {
+      await saveToSupabase()
+    }
+    const id = workflowIdRef.current
+    if (!id) {
+      return { ok: false, message: 'Save the workflow before scheduling.' }
+    }
+
+    const flowJson = buildFlowJson()
+    const scheduleId = await scheduleWorkflowStart({
+      workflowId: id,
+      walletAddress: activeAddress,
+      runAtIso: runAt.toISOString(),
+      requiresSigner,
+      flowJson,
+    })
+    if (!scheduleId) {
+      return { ok: false, message: 'Could not save schedule. Check Supabase connection.' }
+    }
+
+    addLog({
+      nodeId: '',
+      blockId: 'schedule-start',
+      blockName: 'Scheduler',
+      type: 'info',
+      message: `Scheduled run at ${runAt.toLocaleString()}`,
+    })
+    return { ok: true, message: `Scheduled for ${runAt.toLocaleString()}` }
+  }, [activeAddress, addLog, buildFlowJson, nodes.length, requiresSigner, saveToSupabase])
+
+  const handleCancelSchedule = useCallback(async () => {
+    const id = workflowIdRef.current
+    if (!id) return { ok: false, message: 'Save the workflow before cancelling.' }
+    if (!isSupabaseConfigured()) {
+      return { ok: false, message: 'Supabase is not configured for this project.' }
+    }
+    await deactivateSchedule(id, 'start_at')
+    addLog({
+      nodeId: '',
+      blockId: 'schedule-start',
+      blockName: 'Scheduler',
+      type: 'info',
+      message: 'Cancelled scheduled run.',
+    })
+    return { ok: true, message: 'Schedule cancelled.' }
+  }, [addLog])
 
   const userContext: UserContext = useMemo(() => {
     const tgChatId = typeof window !== 'undefined' ? localStorage.getItem('zuik_telegram_chat_id') || '' : ''
@@ -700,9 +831,11 @@ export default function Builder() {
   }, [])
 
   return (
+    <WorkflowSelectOptionsProvider options={workflowSpawnSelectOptions}>
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       <Sidebar />
       <div ref={wrapperRef} style={{ flex: 1, position: 'relative' }}>
+        <div className="zuik-dashboard-mesh" aria-hidden />
         {/* Toolbar */}
         <div className="zuik-canvas-toolbar">
           <input
@@ -750,6 +883,9 @@ export default function Builder() {
                 <button onClick={handleExport}><DownloadIcon /> Export JSON</button>
                 <button onClick={handleImport}><UploadIcon /> Import JSON</button>
                 <div className="z-dropdown-sep" />
+                <button onClick={() => { setScheduleOpen(true); setMenuOpen(false) }} title="Schedule this workflow to run later">
+                  <ClockIcon /> Schedule Run
+                </button>
                 <button onClick={() => { setTransactionPanelOpen(true); setMenuOpen(false) }} title="Test workflow manually - useful for debugging and testing before going live">
                   <ZapIcon /> Run Workflow (Test)
                 </button>
@@ -776,12 +912,24 @@ export default function Builder() {
           logs={logs}
           onClear={() => setLogs([])}
         />
+        <SchedulePanel
+          isOpen={scheduleOpen}
+          onClose={() => setScheduleOpen(false)}
+          workflowId={workflowId}
+          workflowName={workflowName}
+          walletAddress={activeAddress}
+          supabaseReady={isSupabaseConfigured()}
+          requiresSigner={requiresSigner}
+          onSchedule={handleScheduleRun}
+          onCancel={handleCancelSchedule}
+        />
         <ChatPanel
           isOpen={chatOpen}
           onClose={() => setChatOpen(false)}
           onIntentParsed={handleIntentParsed}
           canvasBlocks={canvasBlocks}
           userContext={userContext}
+          prefillMessage={prefillIntent ?? undefined}
         />
         <TemplateGallery
           isOpen={templateGalleryOpen}
@@ -809,7 +957,7 @@ export default function Builder() {
           deleteKeyCode={['Backspace', 'Delete']}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#2A2A30" />
+          <Background variant={BackgroundVariant.Dots} gap={22} size={1.6} color="rgba(110, 231, 255, 0.35)" />
           <Controls />
           <MiniMap
             nodeColor={minimapNodeColor}
@@ -819,5 +967,6 @@ export default function Builder() {
         </ReactFlow>
       </div>
     </div>
+    </WorkflowSelectOptionsProvider>
   )
 }
