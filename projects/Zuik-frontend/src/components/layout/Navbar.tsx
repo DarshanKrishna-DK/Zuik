@@ -1,6 +1,8 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import zuikLogo from '../../assets/zuik-logo.png'
+import { getAlgodClient } from '../../services/algorand'
 
 interface NavbarProps {
   onConnectWallet: () => void
@@ -49,6 +51,14 @@ function WalletIcon() {
   )
 }
 
+function ChevronIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  )
+}
+
 const navItems = [
   { path: '/builder', label: 'Builder', Icon: WorkflowIcon },
   { path: '/market', label: 'Market', Icon: MarketIcon },
@@ -59,10 +69,87 @@ const navItems = [
 export default function Navbar({ onConnectWallet }: NavbarProps) {
   const location = useLocation()
   const { activeAddress } = useWallet()
+  const [balances, setBalances] = useState<Array<{ assetId: number; label: string; amount: number }>>([])
+  const [selectedAssetId, setSelectedAssetId] = useState(0)
+  const [loadingBalances, setLoadingBalances] = useState(false)
+  const [walletMenuOpen, setWalletMenuOpen] = useState(false)
+  const walletMenuRef = useRef<HTMLDivElement>(null)
 
   const shortAddr = activeAddress
     ? `${activeAddress.slice(0, 4)}...${activeAddress.slice(-4)}`
     : null
+
+  useEffect(() => {
+    if (!activeAddress) {
+      setBalances([])
+      setSelectedAssetId(0)
+      return
+    }
+
+    let cancelled = false
+    const load = async () => {
+      try {
+        setLoadingBalances(true)
+        const algod = getAlgodClient()
+        const info = await algod.accountInformation(activeAddress).do()
+        const algoBalance = Number(info.amount ?? 0) / 1_000_000
+        const assets = Array.isArray(info.assets) ? info.assets : []
+        const assetDetails = await Promise.all(
+          assets.map(async (asset: { ['asset-id']: number; amount: number }) => {
+            try {
+              const details = await algod.getAssetByID(asset['asset-id']).do()
+              const params = details?.params as { name?: string; ['unit-name']?: string; decimals?: number }
+              const decimals = params?.decimals ?? 0
+              const amount = Number(asset.amount ?? 0) / Math.pow(10, decimals)
+              const label = params?.['unit-name'] || params?.name || `ASA ${asset['asset-id']}`
+              return { assetId: asset['asset-id'], label, amount }
+            } catch {
+              return { assetId: asset['asset-id'], label: `ASA ${asset['asset-id']}`, amount: Number(asset.amount ?? 0) }
+            }
+          }),
+        )
+        if (cancelled) return
+        const nextBalances = [
+          { assetId: 0, label: 'ALGO', amount: algoBalance },
+          ...assetDetails.filter((asset) => asset.amount > 0),
+        ]
+        setBalances(nextBalances)
+        setSelectedAssetId((prev) => nextBalances.find((b) => b.assetId === prev)?.assetId ?? 0)
+      } catch {
+        if (!cancelled) {
+          setBalances([{ assetId: 0, label: 'ALGO', amount: 0 }])
+        }
+      } finally {
+        if (!cancelled) setLoadingBalances(false)
+      }
+    }
+
+    void load()
+    const interval = window.setInterval(load, 30_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [activeAddress])
+
+  useEffect(() => {
+    if (!walletMenuOpen) return
+    const handleClick = (event: MouseEvent) => {
+      if (!walletMenuRef.current?.contains(event.target as Node)) {
+        setWalletMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [walletMenuOpen])
+
+  const selectedBalance = useMemo(() => (
+    balances.find((b) => b.assetId === selectedAssetId) ?? balances[0]
+  ), [balances, selectedAssetId])
+
+  const formatAmount = (value: number) => new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: value < 1 ? 6 : 3,
+  }).format(value)
 
   return (
     <nav className="zuik-navbar">
@@ -89,10 +176,35 @@ export default function Navbar({ onConnectWallet }: NavbarProps) {
 
       <div className="zuik-nav-right">
         {shortAddr ? (
-          <button className="zuik-btn zuik-btn-ghost zuik-btn-sm" onClick={onConnectWallet}>
-            <WalletIcon />
-            {shortAddr}
-          </button>
+          <div className="zuik-wallet-dropdown" ref={walletMenuRef}>
+            <button className="zuik-btn zuik-btn-ghost zuik-btn-sm zuik-wallet-trigger" onClick={() => setWalletMenuOpen((open) => !open)}>
+              <WalletIcon />
+              {shortAddr}
+              <span className="wallet-balance-pill">
+                {loadingBalances ? 'Loading...' : selectedBalance ? `${selectedBalance.label} ${formatAmount(selectedBalance.amount)}` : '0'}
+              </span>
+              <ChevronIcon />
+            </button>
+            {walletMenuOpen && (
+              <div className="zuik-wallet-menu">
+                <div className="zuik-wallet-menu-title">Balances</div>
+                {balances.map((balance) => (
+                  <button
+                    key={balance.assetId}
+                    className={`zuik-wallet-item${balance.assetId === selectedAssetId ? ' active' : ''}`}
+                    onClick={() => { setSelectedAssetId(balance.assetId); setWalletMenuOpen(false) }}
+                  >
+                    <span>{balance.label}</span>
+                    <strong>{formatAmount(balance.amount)}</strong>
+                  </button>
+                ))}
+                <div className="zuik-wallet-menu-divider" />
+                <button className="zuik-wallet-item" onClick={onConnectWallet}>
+                  Manage Wallet
+                </button>
+              </div>
+            )}
+          </div>
         ) : (
           <button className="zuik-btn zuik-btn-primary zuik-btn-sm" onClick={onConnectWallet}>
             <WalletIcon />

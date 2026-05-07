@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { searchTokens, type MarketToken } from '../../../services/vestigeApi'
+import { searchTokens, type MarketToken, type MarketTokenId } from '../../../services/vestigeApi'
 import { formatUsd } from '../utils'
 
 interface TokenSearchProps {
   onSelect: (token: MarketToken) => void
-  activeId?: number | null
+  activeId?: MarketTokenId | null
 }
 
 function SearchIcon() {
@@ -38,7 +38,7 @@ export default function TokenSearch({ onSelect, activeId }: TokenSearchProps) {
       <div className="market-search-row">
         <SearchIcon />
         <input
-          placeholder="Search ASA by name or symbol"
+          placeholder="Search token by name or symbol"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />

@@ -1,10 +1,10 @@
-import type { MarketToken } from '../../../services/vestigeApi'
+import type { MarketToken, MarketTokenId } from '../../../services/vestigeApi'
 import { formatPercent, formatUsd } from '../utils'
 
 interface TopMoversProps {
   movers: MarketToken[]
   isLoading: boolean
-  activeId?: number | null
+  activeId?: MarketTokenId | null
   onSelect: (token: MarketToken) => void
 }
 

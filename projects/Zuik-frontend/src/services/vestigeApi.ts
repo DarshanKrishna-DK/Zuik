@@ -1,7 +1,10 @@
 const VESTIGE_BASE = 'https://free-api.vestige.fi'
+const COINGECKO_BASE = 'https://api.coingecko.com/api/v3'
+
+export type MarketTokenId = number | string
 
 export interface MarketToken {
-  id: number
+  id: MarketTokenId
   name: string
   unitName: string
   priceUsd: number | null
@@ -28,6 +31,20 @@ type RawRow = Record<string, unknown>
 
 const SEARCH_CACHE_KEY = 'zuik_market_search_cache_v1'
 const SEARCH_TTL_MS = 10 * 60_000
+
+const COINGECKO_PREFIX = 'cg:'
+
+function isCoingeckoId(id: MarketTokenId): id is string {
+  return typeof id === 'string' && id.startsWith(COINGECKO_PREFIX)
+}
+
+function toCoingeckoId(id: string): string {
+  return `${COINGECKO_PREFIX}${id}`
+}
+
+function stripCoingeckoId(id: string): string {
+  return id.replace(COINGECKO_PREFIX, '')
+}
 
 function readNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -84,10 +101,65 @@ function normalizeToken(row: RawRow): MarketToken {
   }
 }
 
+function normalizeCoingeckoSearch(row: RawRow): MarketToken {
+  const id = pickString(row, ['id']) ?? 'unknown'
+  const name = pickString(row, ['name']) ?? id
+  const unitName = (pickString(row, ['symbol']) ?? name).toUpperCase()
+  const logoUrl = pickString(row, ['large', 'thumb'])
+  return {
+    id: toCoingeckoId(id),
+    name,
+    unitName,
+    priceUsd: null,
+    change1h: null,
+    change24h: null,
+    change7d: null,
+    volume24h: null,
+    liquidityUsd: null,
+    marketCapUsd: null,
+    logoUrl,
+    decimals: null,
+  }
+}
+
+function normalizeCoingeckoDetails(id: string, row: RawRow): MarketToken {
+  const market = row.market_data as RawRow | undefined
+  const priceUsd = readNumber((market?.current_price as RawRow | undefined)?.usd)
+  const volume24h = readNumber((market?.total_volume as RawRow | undefined)?.usd)
+  const marketCapUsd = readNumber((market?.market_cap as RawRow | undefined)?.usd)
+  const change24h = readNumber(market?.price_change_percentage_24h)
+  const change7d = readNumber(market?.price_change_percentage_7d)
+  const name = pickString(row, ['name']) ?? id
+  const unitName = (pickString(row, ['symbol']) ?? name).toUpperCase()
+  const logoUrl = pickString(row, ['image', 'large', 'thumb'])
+  return {
+    id: toCoingeckoId(id),
+    name,
+    unitName,
+    priceUsd,
+    change1h: null,
+    change24h,
+    change7d,
+    volume24h,
+    liquidityUsd: null,
+    marketCapUsd,
+    logoUrl,
+    decimals: null,
+  }
+}
+
 async function fetchVestige<T>(path: string): Promise<T> {
   const res = await fetch(`${VESTIGE_BASE}${path}`)
   if (!res.ok) {
     throw new Error(`Vestige API error: ${res.status}`)
+  }
+  return res.json() as Promise<T>
+}
+
+async function fetchCoingecko<T>(path: string): Promise<T> {
+  const res = await fetch(`${COINGECKO_BASE}${path}`)
+  if (!res.ok) {
+    throw new Error(`CoinGecko API error: ${res.status}`)
   }
   return res.json() as Promise<T>
 }
@@ -120,9 +192,23 @@ function writeSearchCache(query: string, results: MarketToken[]) {
 }
 
 export async function getTopMovers(): Promise<MarketToken[]> {
-  const data = await fetchVestige<unknown>('/asset/trending')
-  const rows = Array.isArray(data) ? data : (data as RawRow).data ?? []
-  return Array.isArray(rows) ? rows.map((row) => normalizeToken(row as RawRow)) : []
+  try {
+    const data = await fetchVestige<unknown>('/asset/trending')
+    const rows = Array.isArray(data) ? data : (data as RawRow).data ?? []
+    const results = Array.isArray(rows) ? rows.map((row) => normalizeToken(row as RawRow)) : []
+    if (results.length > 0) return results
+  } catch {
+    // fall back to CoinGecko trending
+  }
+
+  try {
+    const data = await fetchCoingecko<unknown>('/search/trending')
+    const rows = (data as RawRow).coins ?? []
+    if (!Array.isArray(rows)) return []
+    return rows.map((row) => normalizeCoingeckoSearch((row as RawRow).item as RawRow))
+  } catch {
+    return []
+  }
 }
 
 export async function searchTokens(query: string): Promise<MarketToken[]> {
@@ -130,14 +216,51 @@ export async function searchTokens(query: string): Promise<MarketToken[]> {
   if (!trimmed) return []
   const cached = readSearchCache(trimmed)
   if (cached) return cached
-  const data = await fetchVestige<unknown>(`/asset/search?query=${encodeURIComponent(trimmed)}`)
-  const rows = Array.isArray(data) ? data : (data as RawRow).data ?? []
-  const results = Array.isArray(rows) ? rows.map((row) => normalizeToken(row as RawRow)) : []
+
+  const [vestigeResult, coingeckoResult] = await Promise.allSettled([
+    fetchVestige<unknown>(`/asset/search?query=${encodeURIComponent(trimmed)}`),
+    fetchCoingecko<unknown>(`/search?query=${encodeURIComponent(trimmed)}`),
+  ])
+
+  const vestigeRows = vestigeResult.status === 'fulfilled'
+    ? (Array.isArray(vestigeResult.value) ? vestigeResult.value : (vestigeResult.value as RawRow).data ?? [])
+    : []
+  const vestigeTokens = Array.isArray(vestigeRows)
+    ? vestigeRows.map((row) => normalizeToken(row as RawRow))
+    : []
+
+  const coingeckoRows = coingeckoResult.status === 'fulfilled'
+    ? ((coingeckoResult.value as RawRow).coins ?? [])
+    : []
+  const coingeckoTokens = Array.isArray(coingeckoRows)
+    ? coingeckoRows.map((row) => normalizeCoingeckoSearch(row as RawRow))
+    : []
+
+  const deduped = new Map<string, MarketToken>()
+  for (const token of [...vestigeTokens, ...coingeckoTokens]) {
+    const key = `${token.name.toLowerCase()}_${token.unitName.toLowerCase()}`
+    if (!deduped.has(key)) deduped.set(key, token)
+  }
+  const results = Array.from(deduped.values())
   writeSearchCache(trimmed, results)
   return results
 }
 
-export async function getTokenDetails(assetId: number): Promise<MarketToken | null> {
+export async function getTokenDetails(assetId: MarketTokenId): Promise<MarketToken | null> {
+  if (isCoingeckoId(assetId)) {
+    const geckoId = stripCoingeckoId(assetId)
+    try {
+      const data = await fetchCoingecko<unknown>(`/coins/${geckoId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`)
+      if (data && typeof data === 'object') {
+        return normalizeCoingeckoDetails(geckoId, data as RawRow)
+      }
+    } catch {
+      return null
+    }
+  }
+
+  if (typeof assetId !== 'number') return null
+
   try {
     const data = await fetchVestige<unknown>(`/asset/${assetId}`)
     if (data && typeof data === 'object') {
@@ -150,10 +273,52 @@ export async function getTokenDetails(assetId: number): Promise<MarketToken | nu
 }
 
 export async function getTokenOHLCV(
-  assetId: number,
+  assetId: MarketTokenId,
   interval: string,
   limit: number,
 ): Promise<OhlcvPoint[]> {
+  if (isCoingeckoId(assetId)) {
+    const days = interval === '1d' ? 30 : interval === '4h' ? 7 : 1
+    const geckoId = stripCoingeckoId(assetId)
+    try {
+      const res = await fetch(`${COINGECKO_BASE}/coins/${geckoId}/ohlc?vs_currency=usd&days=${days}`)
+      if (!res.ok) return []
+      const raw = await res.json() as Array<[number, number, number, number, number]>
+      const rows = Array.isArray(raw) ? raw.slice(-limit) : []
+      return rows.map((row) => ({
+        timestamp: row[0],
+        open: row[1],
+        high: row[2],
+        low: row[3],
+        close: row[4],
+        volume: 0,
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  if (assetId === 0) {
+    const days = interval === '1d' ? 30 : interval === '4h' ? 7 : 1
+    try {
+      const res = await fetch(`https://api.coingecko.com/api/v3/coins/algorand/ohlc?vs_currency=usd&days=${days}`)
+      if (!res.ok) return []
+      const raw = await res.json() as Array<[number, number, number, number, number]>
+      const rows = Array.isArray(raw) ? raw.slice(-limit) : []
+      return rows.map((row) => ({
+        timestamp: row[0],
+        open: row[1],
+        high: row[2],
+        low: row[3],
+        close: row[4],
+        volume: 0,
+      }))
+    } catch {
+      return []
+    }
+  }
+  if (typeof assetId !== 'number') return []
+
   const data = await fetchVestige<unknown>(`/asset/${assetId}/prices?interval=${interval}&limit=${limit}`)
   const rows = Array.isArray(data)
     ? data

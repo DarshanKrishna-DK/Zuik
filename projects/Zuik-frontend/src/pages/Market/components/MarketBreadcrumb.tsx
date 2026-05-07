@@ -1,9 +1,13 @@
 import type { MarketToken } from '../../../services/vestigeApi'
-import { formatUsd } from '../utils'
+import { formatFiat, formatUsd } from '../utils'
 
 interface MarketBreadcrumbProps {
   algoPrice: number | null
   selectedToken?: MarketToken | null
+  fiatCurrency: string
+  fiatRate: number | null
+  fiatOptions: string[]
+  onFiatChange: (currency: string) => void
 }
 
 function TrendIcon() {
@@ -15,7 +19,16 @@ function TrendIcon() {
   )
 }
 
-export default function MarketBreadcrumb({ algoPrice, selectedToken }: MarketBreadcrumbProps) {
+export default function MarketBreadcrumb({
+  algoPrice,
+  selectedToken,
+  fiatCurrency,
+  fiatRate,
+  fiatOptions,
+  onFiatChange,
+}: MarketBreadcrumbProps) {
+  const fiatValue = selectedToken?.priceUsd != null && fiatRate ? selectedToken.priceUsd * fiatRate : null
+
   return (
     <div className="market-breadcrumb">
       <div>
@@ -28,10 +41,23 @@ export default function MarketBreadcrumb({ algoPrice, selectedToken }: MarketBre
           <strong>{formatUsd(algoPrice)}</strong>
         </div>
         {selectedToken && (
-          <div className="market-pill">
-            <span>{selectedToken.unitName || selectedToken.name}</span>
-            <strong>{formatUsd(selectedToken.priceUsd)}</strong>
-          </div>
+          <>
+            <div className="market-pill">
+              <span>{selectedToken.unitName || selectedToken.name} / USD</span>
+              <strong>{formatUsd(selectedToken.priceUsd)}</strong>
+            </div>
+            <div className="market-pill market-pill-select">
+              <span>Convert to</span>
+              <div className="market-pill-row">
+                <select value={fiatCurrency} onChange={(event) => onFiatChange(event.target.value)}>
+                  {fiatOptions.map((code) => (
+                    <option key={code} value={code}>{code}</option>
+                  ))}
+                </select>
+                <strong>{formatFiat(fiatValue, fiatCurrency)}</strong>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

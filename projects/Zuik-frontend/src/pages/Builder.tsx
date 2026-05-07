@@ -46,7 +46,8 @@ import ExecutionLog from '../components/flow/ExecutionLog'
 import ChatPanel from '../components/flow/ChatPanel'
 import SchedulePanel from '../components/flow/SchedulePanel'
 import TemplateGallery from '../components/flow/TemplateGallery'
-import type { TemplateNode, TemplateEdge } from '../services/templateService'
+import * as XLSX from 'xlsx'
+import type { WorkflowTemplate, TemplateNode, TemplateEdge } from '../services/templateService'
 import { getBlockById } from '../lib/blockRegistry'
 import { isValidConnection } from '../lib/connectionValidator'
 import { saveFlowToLocal, loadFlowFromLocal, clearFlowLocal, exportFlowJSON, importFlowJSON } from '../lib/flowSerializer'
@@ -85,6 +86,9 @@ function DownloadIcon() {
 function UploadIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></svg>
 }
+function PlusIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" x2="12" y1="5" y2="19" /><line x1="5" x2="19" y1="12" y2="12" /></svg>
+}
 function TrashIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
 }
@@ -118,6 +122,32 @@ function nextNodeId() {
 }
 
 const MAX_HISTORY = 50
+const PAYROLL_TEMPLATE_ID = 'employee-payroll'
+
+type PayrollRow = {
+  id: string
+  name: string
+  wallet: string
+  amount: number
+  assetId: number
+}
+
+const DEFAULT_PAYROLL_ROWS: PayrollRow[] = [
+  { id: 'row_1', name: 'Ava Patel', wallet: 'REPLACE_WITH_ADDRESS_1', amount: 12, assetId: 0 },
+  { id: 'row_2', name: 'Noah Kim', wallet: 'REPLACE_WITH_ADDRESS_2', amount: 8, assetId: 0 },
+  { id: 'row_3', name: 'Maya Singh', wallet: 'REPLACE_WITH_ADDRESS_3', amount: 15, assetId: 0 },
+]
+
+function createPayrollRow(overrides: Partial<PayrollRow> = {}): PayrollRow {
+  return {
+    id: `row_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    name: '',
+    wallet: '',
+    amount: 0,
+    assetId: 0,
+    ...overrides,
+  }
+}
 
 export default function Builder() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
@@ -127,6 +157,8 @@ export default function Builder() {
   const [logOpen, setLogOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [templateGalleryOpen, setTemplateGalleryOpen] = useState(false)
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null)
+  const [payrollRows, setPayrollRows] = useState<PayrollRow[]>([])
   const [menuOpen, setMenuOpen] = useState(false)
   const [agentStatus, setAgentStatus] = useState<AgentStatus>('idle')
   const [logs, setLogs] = useState<LogEntry[]>([])
@@ -739,6 +771,8 @@ export default function Builder() {
         if (data) {
           setNodes(data.nodes)
           setEdges(data.edges)
+          setActiveTemplateId(null)
+          setPayrollRows([])
         }
       }
       reader.readAsText(file)
@@ -758,40 +792,173 @@ export default function Builder() {
     setWorkflowName('Untitled Workflow')
     clearFlowLocal()
     window.history.replaceState(null, '', '/builder')
+    setActiveTemplateId(null)
+    setPayrollRows([])
     setMenuOpen(false)
     try { sessionStorage.removeItem(VIEWPORT_STORAGE_KEY) } catch { /* ignore */ }
     viewBootDone.current = false
   }
 
-  const handleUseTemplate = useCallback((templateNodes: TemplateNode[], templateEdges: TemplateEdge[], name: string) => {
-    const suffix = `_${Date.now()}`
-    const idMap = new Map<string, string>()
-    const newNodes = templateNodes.map((n) => {
-      const newId = `${n.id}${suffix}`
-      idMap.set(n.id, newId)
-      return { ...n, id: newId, data: { ...n.data } }
+  const buildPayrollTemplate = useCallback((rows: PayrollRow[]) => {
+    const nodes: TemplateNode[] = [
+      {
+        id: 'payroll_timer',
+        type: 'generic',
+        position: { x: 60, y: 120 },
+        data: {
+          blockId: 'timer-loop',
+          config: { interval: 2592000 },
+          label: 'Monthly Payroll',
+        },
+      },
+    ]
+
+    const edges: TemplateEdge[] = []
+    const perColumn = 4
+    rows.forEach((row, index) => {
+      const col = Math.floor(index / perColumn)
+      const rowIdx = index % perColumn
+      const nodeId = `payroll_send_${index + 1}`
+      nodes.push({
+        id: nodeId,
+        type: 'generic',
+        position: { x: 380 + col * 260, y: 40 + rowIdx * 160 },
+        data: {
+          blockId: 'send-payment',
+          config: {
+            recipient: row.wallet || 'REPLACE_WITH_ADDRESS',
+            amount: row.amount || 0,
+            asset: row.assetId ?? 0,
+          },
+          label: row.name ? `Pay ${row.name}` : `Pay employee #${index + 1}`,
+        },
+      })
+      edges.push({
+        id: `edge_${nodeId}`,
+        source: 'payroll_timer',
+        target: nodeId,
+        sourceHandle: 'tick',
+        targetHandle: 'trigger',
+      })
     })
-    const newEdges = templateEdges.map((e) => ({
-      ...e,
-      id: `${e.id}${suffix}`,
-      source: idMap.get(e.source) ?? e.source,
-      target: idMap.get(e.target) ?? e.target,
-    }))
 
-    setNodes(newNodes as Node[])
-    setEdges(newEdges as Edge[])
-    setWorkflowName(name)
-    workflowIdRef.current = null
-    setWorkflowId(null)
-    clearFlowLocal()
-    window.history.replaceState(null, '', '/builder')
+    return { nodes, edges }
+  }, [])
 
-    setTimeout(() => {
-      const inst = rfInstance.current
-      inst?.fitView({ padding: 0.2, duration: 500 })
-      setTimeout(() => persistViewportFrom(rfInstance.current), 560)
-    }, 100)
-  }, [setNodes, setEdges])
+  const applyTemplate = useCallback(
+    (templateNodes: TemplateNode[], templateEdges: TemplateEdge[], name: string, options?: { resetWorkflow?: boolean }) => {
+      const suffix = `_${Date.now()}`
+      const idMap = new Map<string, string>()
+      const newNodes = templateNodes.map((n) => {
+        const newId = `${n.id}${suffix}`
+        idMap.set(n.id, newId)
+        return { ...n, id: newId, data: { ...n.data } }
+      })
+      const newEdges = templateEdges.map((e) => ({
+        ...e,
+        id: `${e.id}${suffix}`,
+        source: idMap.get(e.source) ?? e.source,
+        target: idMap.get(e.target) ?? e.target,
+      }))
+
+      setNodes(newNodes as Node[])
+      setEdges(newEdges as Edge[])
+      setWorkflowName(name)
+
+      if (options?.resetWorkflow !== false) {
+        workflowIdRef.current = null
+        setWorkflowId(null)
+        clearFlowLocal()
+        window.history.replaceState(null, '', '/builder')
+      }
+
+      setTimeout(() => {
+        const inst = rfInstance.current
+        inst?.fitView({ padding: 0.2, duration: 500 })
+        setTimeout(() => persistViewportFrom(rfInstance.current), 560)
+      }, 100)
+    },
+    [setNodes, setEdges],
+  )
+
+  const handleUseTemplate = useCallback((template: WorkflowTemplate) => {
+    if (template.id === PAYROLL_TEMPLATE_ID) {
+      setActiveTemplateId(PAYROLL_TEMPLATE_ID)
+      const seededRows = DEFAULT_PAYROLL_ROWS.map((row) => createPayrollRow(row))
+      setPayrollRows(seededRows)
+      const { nodes: payrollNodes, edges: payrollEdges } = buildPayrollTemplate(seededRows)
+      applyTemplate(payrollNodes, payrollEdges, template.name)
+      return
+    }
+
+    setActiveTemplateId(null)
+    setPayrollRows([])
+    applyTemplate(template.nodes, template.edges, template.name)
+  }, [applyTemplate, buildPayrollTemplate])
+
+  const handleApplyPayroll = useCallback((rows: PayrollRow[]) => {
+    const { nodes: payrollNodes, edges: payrollEdges } = buildPayrollTemplate(rows)
+    applyTemplate(payrollNodes, payrollEdges, workflowName, { resetWorkflow: false })
+  }, [applyTemplate, buildPayrollTemplate, workflowName])
+
+  const handlePayrollUpload = useCallback(() => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.xlsx,.xls'
+    input.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const data = new Uint8Array(reader.result as ArrayBuffer)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const sheetName = workbook.SheetNames[0]
+        const sheet = workbook.Sheets[sheetName]
+        const rows = XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet, { defval: '' })
+        const parsed = rows.map((row) => {
+          const name = String(row.Name ?? row.name ?? '').trim()
+          const wallet = String(row.Wallet ?? row.wallet ?? row.Address ?? '').trim()
+          const amount = Number(row.Amount ?? row.amount ?? 0)
+          const assetId = Number(row.AssetId ?? row.assetId ?? row.Asset ?? 0)
+          return createPayrollRow({
+            name,
+            wallet,
+            amount: Number.isFinite(amount) ? amount : 0,
+            assetId: Number.isFinite(assetId) ? assetId : 0,
+          })
+        }).filter((row) => row.wallet)
+        if (parsed.length > 0) {
+          setPayrollRows(parsed)
+          handleApplyPayroll(parsed)
+        }
+      }
+      reader.readAsArrayBuffer(file)
+    }
+    input.click()
+  }, [handleApplyPayroll])
+
+  const handlePayrollAi = useCallback(() => {
+    const summary = payrollRows.length
+      ? payrollRows.map((row) => `${row.name || 'Employee'} - ${row.wallet} - ${row.amount || 0} - asset ${row.assetId ?? 0}`).join('\n')
+      : 'No employees yet.'
+    setPrefillIntent(
+      `Update the payroll workflow. Current employees:\n${summary}\n` +
+      'Add or remove employees, adjust amounts, and keep the workflow as monthly payroll.',
+    )
+    setChatOpen(true)
+  }, [payrollRows])
+
+  const updatePayrollRow = useCallback((rowId: string, patch: Partial<PayrollRow>) => {
+    setPayrollRows((rows) => rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)))
+  }, [])
+
+  const removePayrollRow = useCallback((rowId: string) => {
+    setPayrollRows((rows) => rows.filter((row) => row.id !== rowId))
+  }, [])
+
+  const addPayrollRow = useCallback(() => {
+    setPayrollRows((rows) => [...rows, createPayrollRow()])
+  }, [])
 
   const handleHighlightNode = useCallback((nodeId: string) => {
     setNodes((nds) => nds.map((n) => ({
@@ -896,6 +1063,67 @@ export default function Builder() {
             )}
           </div>
         </div>
+
+        {activeTemplateId === PAYROLL_TEMPLATE_ID && (
+          <div className="payroll-panel">
+            <div className="payroll-panel-header">
+              <div>
+                <div className="payroll-panel-title">Employee Payroll</div>
+                <div className="payroll-panel-subtitle">Add employees or upload an Excel file to generate payments.</div>
+              </div>
+              <button className="z-btn z-btn-ghost z-btn-sm" onClick={handlePayrollUpload}>
+                <UploadIcon /> Upload Excel
+              </button>
+            </div>
+            <div className="payroll-panel-note">
+              Expected columns: <strong>Name</strong>, <strong>Wallet</strong>, <strong>Amount</strong>, <strong>AssetId</strong>. Use ALGO (asset 0) when empty.
+            </div>
+            <div className="payroll-row-list">
+              {payrollRows.map((row) => (
+                <div key={row.id} className="payroll-row">
+                  <input
+                    placeholder="Name"
+                    value={row.name}
+                    onChange={(event) => updatePayrollRow(row.id, { name: event.target.value })}
+                  />
+                  <input
+                    placeholder="Wallet address"
+                    value={row.wallet}
+                    onChange={(event) => updatePayrollRow(row.id, { wallet: event.target.value })}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Amount"
+                    value={row.amount || ''}
+                    onChange={(event) => updatePayrollRow(row.id, { amount: Number(event.target.value) || 0 })}
+                  />
+                  <input
+                    type="number"
+                    placeholder="AssetId"
+                    value={row.assetId || ''}
+                    onChange={(event) => updatePayrollRow(row.id, { assetId: Number(event.target.value) || 0 })}
+                  />
+                  <button className="payroll-row-remove" onClick={() => removePayrollRow(row.id)} title="Remove employee">
+                    <TrashIcon />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="payroll-panel-actions">
+              <div className="payroll-panel-actions-left">
+                <button className="z-btn z-btn-ghost z-btn-sm" onClick={addPayrollRow}>
+                  <PlusIcon /> Add employee
+                </button>
+                <button className="z-btn z-btn-ghost z-btn-sm" onClick={handlePayrollAi}>
+                  <BrainCircuitIcon /> Edit with AI
+                </button>
+              </div>
+              <button className="z-btn z-btn-primary z-btn-sm" onClick={() => handleApplyPayroll(payrollRows)} disabled={payrollRows.length === 0}>
+                Apply to canvas
+              </button>
+            </div>
+          </div>
+        )}
 
         <TransactionPanel
           isOpen={transactionPanelOpen}

@@ -27,6 +27,15 @@ export function formatUsdCompact(value?: number | null): string {
   }).format(value)
 }
 
+export function formatFiat(value: number | null | undefined, currency: string): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '--'
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: value < 1 ? 4 : 2,
+  }).format(value)
+}
+
 export function formatPercent(value?: number | null): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '--'
   const sign = value > 0 ? '+' : ''

@@ -176,6 +176,7 @@ DEMO_SCRIPT.md
 .cursor/
 reference_docs/
 .firecrawl/
+employee-payroll-demo.xlsx
 
 # ===== IDE =====
 .vscode/

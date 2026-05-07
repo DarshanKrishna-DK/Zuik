@@ -21,9 +21,10 @@ function StatsIcon() {
 export default function TokenStats({ token }: TokenStatsProps) {
   const { data: holderCount } = useQuery({
     queryKey: ['indexer', 'holders', token.id],
-    queryFn: () => getHolderCount(token.id),
+    queryFn: () => getHolderCount(typeof token.id === 'number' ? token.id : 0),
     staleTime: 60_000,
-    enabled: token.id !== undefined && token.id !== null,
+    refetchInterval: 60_000,
+    enabled: typeof token.id === 'number' && token.id > 0,
   })
 
   return (

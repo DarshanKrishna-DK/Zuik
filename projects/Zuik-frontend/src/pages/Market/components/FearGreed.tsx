@@ -15,6 +15,7 @@ export default function FearGreed() {
     queryKey: ['market', 'fear-greed'],
     queryFn: getFearGreedIndex,
     staleTime: 60 * 60_000,
+    refetchInterval: 30 * 60_000,
   })
 
   const value = data?.value ?? null

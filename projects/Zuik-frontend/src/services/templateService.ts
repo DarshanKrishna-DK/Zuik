@@ -48,8 +48,8 @@ const TEMPLATES: WorkflowTemplate[] = [
       { id: 'n3', type: 'generic', position: { x: 650, y: 100 }, data: { blockId: 'send-telegram', config: { message: 'DCA executed: swapped 5 USDC to ALGO' }, label: 'Notify' } },
     ],
     edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'in' },
-      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'result', targetHandle: 'in' },
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'trigger' },
+      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'txId', targetHandle: 'trigger' },
     ],
   },
   {
@@ -67,9 +67,9 @@ const TEMPLATES: WorkflowTemplate[] = [
       { id: 'n4', type: 'generic', position: { x: 800, y: 100 }, data: { blockId: 'send-telegram', config: { message: 'ALGO price dropped below $0.15!' }, label: 'Alert' } },
     ],
     edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'in' },
-      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'quote', targetHandle: 'in' },
-      { id: 'e3', source: 'n3', target: 'n4', sourceHandle: 'true', targetHandle: 'in' },
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'trigger' },
+      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'quoteAmount', targetHandle: 'value' },
+      { id: 'e3', source: 'n3', target: 'n4', sourceHandle: 'true', targetHandle: 'trigger' },
     ],
   },
   {
@@ -86,8 +86,8 @@ const TEMPLATES: WorkflowTemplate[] = [
       { id: 'n3', type: 'generic', position: { x: 350, y: 200 }, data: { blockId: 'send-payment', config: { recipient: 'REPLACE_WITH_ADDRESS_2', amount: 5, asset: 0 }, label: 'Send 50% to Partner B' } },
     ],
     edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'payment', targetHandle: 'in' },
-      { id: 'e2', source: 'n1', target: 'n3', sourceHandle: 'payment', targetHandle: 'in' },
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'txn', targetHandle: 'trigger' },
+      { id: 'e2', source: 'n1', target: 'n3', sourceHandle: 'txn', targetHandle: 'trigger' },
     ],
   },
   {
@@ -99,13 +99,13 @@ const TEMPLATES: WorkflowTemplate[] = [
     difficulty: 'intermediate',
     estimatedFee: '~0.1 ALGO (create + transfers)',
     nodes: [
-      { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'create-asa', config: { name: 'MyToken', unit: 'MYT', total: 1000000, decimals: 6 }, label: 'Create ASA' } },
+      { id: 'n1', type: 'generic', position: { x: 50, y: 100 }, data: { blockId: 'create-asa', config: { name: 'MyToken', unitName: 'MYT', totalSupply: 1000000, decimals: 6 }, label: 'Create ASA' } },
       { id: 'n2', type: 'generic', position: { x: 350, y: 100 }, data: { blockId: 'send-payment', config: { recipient: 'REPLACE_WITH_RECIPIENT', amount: 100, asset: 0 }, label: 'Send Tokens' } },
       { id: 'n3', type: 'generic', position: { x: 650, y: 100 }, data: { blockId: 'send-telegram', config: { message: 'Airdrop complete! Sent tokens to recipient.' }, label: 'Notify' } },
     ],
     edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'asaId', targetHandle: 'in' },
-      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'result', targetHandle: 'in' },
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'txId', targetHandle: 'trigger' },
+      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'txId', targetHandle: 'trigger' },
     ],
   },
   {
@@ -121,7 +121,7 @@ const TEMPLATES: WorkflowTemplate[] = [
       { id: 'n2', type: 'generic', position: { x: 400, y: 100 }, data: { blockId: 'send-telegram', config: { message: 'Swap complete: 10 USDC -> ALGO' }, label: 'Telegram Alert' } },
     ],
     edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'result', targetHandle: 'in' },
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'txId', targetHandle: 'trigger' },
     ],
   },
   {
@@ -138,8 +138,26 @@ const TEMPLATES: WorkflowTemplate[] = [
       { id: 'n3', type: 'generic', position: { x: 650, y: 100 }, data: { blockId: 'browser-notify', config: { title: 'Payment Sent', message: 'Recurring payment of 1 ALGO sent.' }, label: 'Confirm' } },
     ],
     edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'in' },
-      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'result', targetHandle: 'in' },
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'trigger' },
+      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'txId', targetHandle: 'trigger' },
+    ],
+  },
+  {
+    id: 'employee-payroll',
+    name: 'Send Money to Employees',
+    description: 'Schedule monthly payroll runs and distribute payments to multiple employees in one workflow.',
+    category: 'payments',
+    tags: ['payroll', 'salary', 'schedule', 'batch'],
+    difficulty: 'intermediate',
+    estimatedFee: '~0.001 ALGO/payment',
+    nodes: [
+      { id: 'n1', type: 'generic', position: { x: 60, y: 120 }, data: { blockId: 'timer-loop', config: { interval: 2592000 }, label: 'Monthly Payroll' } },
+      { id: 'n2', type: 'generic', position: { x: 360, y: 40 }, data: { blockId: 'send-payment', config: { recipient: 'REPLACE_WITH_EMPLOYEE_1', amount: 10, asset: 0 }, label: 'Pay Employee A' } },
+      { id: 'n3', type: 'generic', position: { x: 360, y: 200 }, data: { blockId: 'send-payment', config: { recipient: 'REPLACE_WITH_EMPLOYEE_2', amount: 8, asset: 0 }, label: 'Pay Employee B' } },
+    ],
+    edges: [
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'trigger' },
+      { id: 'e2', source: 'n1', target: 'n3', sourceHandle: 'tick', targetHandle: 'trigger' },
     ],
   },
   {
@@ -157,9 +175,9 @@ const TEMPLATES: WorkflowTemplate[] = [
       { id: 'n4', type: 'generic', position: { x: 550, y: 200 }, data: { blockId: 'send-discord', config: { message: 'Whale alert! Large payment received (>100 ALGO)' }, label: 'Discord Alert' } },
     ],
     edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'payment', targetHandle: 'in' },
-      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'true', targetHandle: 'in' },
-      { id: 'e3', source: 'n2', target: 'n4', sourceHandle: 'true', targetHandle: 'in' },
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'amount', targetHandle: 'value' },
+      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'true', targetHandle: 'trigger' },
+      { id: 'e3', source: 'n2', target: 'n4', sourceHandle: 'true', targetHandle: 'trigger' },
     ],
   },
   {
@@ -178,10 +196,10 @@ const TEMPLATES: WorkflowTemplate[] = [
       { id: 'n5', type: 'generic', position: { x: 800, y: 200 }, data: { blockId: 'send-telegram', config: { message: 'Stop-loss triggered! Swapped ALGO to USDC at emergency price.' }, label: 'Alert' } },
     ],
     edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'in' },
-      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'quote', targetHandle: 'in' },
-      { id: 'e3', source: 'n3', target: 'n4', sourceHandle: 'true', targetHandle: 'in' },
-      { id: 'e4', source: 'n3', target: 'n5', sourceHandle: 'true', targetHandle: 'in' },
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'trigger' },
+      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'quoteAmount', targetHandle: 'value' },
+      { id: 'e3', source: 'n3', target: 'n4', sourceHandle: 'true', targetHandle: 'trigger' },
+      { id: 'e4', source: 'n3', target: 'n5', sourceHandle: 'true', targetHandle: 'trigger' },
     ],
   },
   {
@@ -199,9 +217,9 @@ const TEMPLATES: WorkflowTemplate[] = [
       { id: 'n4', type: 'generic', position: { x: 550, y: 200 }, data: { blockId: 'send-telegram', config: { message: 'Portfolio rebalance executed - allocation adjusted.' }, label: 'Notify' } },
     ],
     edges: [
-      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'in' },
-      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'quote', targetHandle: 'in' },
-      { id: 'e3', source: 'n3', target: 'n4', sourceHandle: 'result', targetHandle: 'in' },
+      { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'tick', targetHandle: 'trigger' },
+      { id: 'e2', source: 'n2', target: 'n3', sourceHandle: 'quoteAmount', targetHandle: 'trigger' },
+      { id: 'e3', source: 'n3', target: 'n4', sourceHandle: 'txId', targetHandle: 'trigger' },
     ],
   },
 ]

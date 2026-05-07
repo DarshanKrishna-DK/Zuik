@@ -150,8 +150,8 @@ TELEGRAM_WEBHOOK_URL=https://your-app.railway.app/telegram/webhook
 
 # Voice Server
 VOICE_SERVER_PORT=3002              # Internal port for voice processing
-FRONTEND_URL=http://localhost:5173  # Legacy CORS setting (dev only)
-CORS_ORIGIN=http://localhost:5173   # Comma-separated allowlist or *
+FRONTEND_URL=https://your-vercel-app.vercel.app  # Required for Vercel frontend
+CORS_ORIGIN=https://your-vercel-app.vercel.app,http://localhost:5173
 ```
 
 ---

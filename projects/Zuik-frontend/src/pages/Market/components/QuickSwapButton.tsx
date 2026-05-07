@@ -22,16 +22,20 @@ export default function QuickSwapButton({ token }: QuickSwapButtonProps) {
   const fromAsset = token.unitName || token.name
   const toAsset = fromAsset.toUpperCase() === 'ALGO' ? 'USDC' : 'ALGO'
   const prefillIntent = `Swap 50 ${fromAsset} to ${toAsset}`
+  const algorandOnly = typeof token.id !== 'number'
 
   return (
     <div className="market-card market-quick-swap">
       <div className="market-card-title"><SwapIcon /> Quick Swap</div>
       <p className="market-muted">
-        Send this token directly to the builder with a prefilled swap intent.
+        {algorandOnly
+          ? 'Swaps are available for Algorand assets only.'
+          : 'Send this token directly to the builder with a prefilled swap intent.'}
       </p>
       <button
         className="z-btn z-btn-primary z-btn-sm"
         onClick={() => navigate('/builder', { state: { prefillIntent, fromAssetId: token.id } })}
+        disabled={algorandOnly}
       >
         Trade {token.unitName || token.name}
       </button>

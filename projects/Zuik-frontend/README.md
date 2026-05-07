@@ -45,6 +45,7 @@ Open `.env` and set these values:
 | `VITE_GROQ_API_KEY` | Yes (for AI assistant) | Free at [console.groq.com/keys](https://console.groq.com/keys) |
 
 The Algorand TestNet node URLs are pre-filled and work out of the box.
+If you deploy the voice server on Railway, set `VITE_VOICE_SERVER_URL` to your Railway URL.
 
 ### Run the Development Server
 

@@ -15,8 +15,19 @@ export interface BuySellPressure {
   pressure: number
 }
 
+export interface AlgoMarketSummary {
+  priceUsd: number | null
+  change24h: number | null
+  volume24h: number | null
+  marketCapUsd: number | null
+}
+
 const FEAR_GREED_CACHE_KEY = 'zuik_fear_greed_v1'
 const FEAR_GREED_TTL_MS = 60 * 60_000
+const FX_CACHE_KEY = 'zuik_fx_rates_v1'
+const FX_TTL_MS = 30 * 60_000
+const ALGO_SUMMARY_CACHE_KEY = 'zuik_algo_summary_v1'
+const ALGO_SUMMARY_TTL_MS = 60_000
 
 function getIndexerBaseUrl(): { baseUrl: string; token?: string } | null {
   try {
@@ -77,6 +88,79 @@ export async function getFearGreedIndex(): Promise<FearGreedIndex | null> {
       }
     }
     return result
+  } catch {
+    return null
+  }
+}
+
+export async function getFxRates(): Promise<Record<string, number> | null> {
+  if (typeof window !== 'undefined') {
+    try {
+      const cachedRaw = localStorage.getItem(FX_CACHE_KEY)
+      if (cachedRaw) {
+        const cached = JSON.parse(cachedRaw) as { fetchedAt: number; rates: Record<string, number> }
+        if (Date.now() - cached.fetchedAt < FX_TTL_MS) {
+          return cached.rates
+        }
+      }
+    } catch {
+      // ignore cache failures
+    }
+  }
+
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD')
+    if (!res.ok) return null
+    const data = await res.json() as { rates?: Record<string, number> }
+    if (!data?.rates) return null
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(FX_CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), rates: data.rates }))
+      } catch {
+        // ignore cache failures
+      }
+    }
+    return data.rates
+  } catch {
+    return null
+  }
+}
+
+export async function getAlgoMarketSummary(): Promise<AlgoMarketSummary | null> {
+  if (typeof window !== 'undefined') {
+    try {
+      const cachedRaw = localStorage.getItem(ALGO_SUMMARY_CACHE_KEY)
+      if (cachedRaw) {
+        const cached = JSON.parse(cachedRaw) as AlgoMarketSummary & { fetchedAt: number }
+        if (Date.now() - cached.fetchedAt < ALGO_SUMMARY_TTL_MS) {
+          return cached
+        }
+      }
+    } catch {
+      // ignore cache failures
+    }
+  }
+
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/coins/algorand?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false')
+    if (!res.ok) return null
+    const data = await res.json() as { market_data?: Record<string, any> }
+    const market = data.market_data
+    if (!market) return null
+    const summary: AlgoMarketSummary = {
+      priceUsd: market.current_price?.usd ?? null,
+      change24h: market.price_change_percentage_24h ?? null,
+      volume24h: market.total_volume?.usd ?? null,
+      marketCapUsd: market.market_cap?.usd ?? null,
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(ALGO_SUMMARY_CACHE_KEY, JSON.stringify({ ...summary, fetchedAt: Date.now() }))
+      } catch {
+        // ignore cache failures
+      }
+    }
+    return summary
   } catch {
     return null
   }

@@ -9,7 +9,7 @@ import {
   Bar,
   Customized,
 } from 'recharts'
-import { getTokenOHLCV, type OhlcvPoint } from '../../../services/vestigeApi'
+import { getTokenOHLCV, type OhlcvPoint, type MarketTokenId } from '../../../services/vestigeApi'
 import { formatUsd } from '../utils'
 
 const CHART_INTERVALS: Record<string, { interval: string; limit: number; format: Intl.DateTimeFormatOptions }> = {
@@ -30,7 +30,7 @@ interface ChartPoint {
 }
 
 interface TokenChartProps {
-  assetId: number
+  assetId: MarketTokenId
   symbol: string
 }
 
@@ -111,6 +111,7 @@ export default function TokenChart({ assetId, symbol }: TokenChartProps) {
     queryKey: ['vestige', 'ohlcv', assetId, interval],
     queryFn: () => getTokenOHLCV(assetId, config.interval, config.limit),
     staleTime: 5 * 60_000,
+    refetchInterval: 60_000,
     enabled: assetId !== undefined && assetId !== null,
   })
 
@@ -133,6 +134,9 @@ export default function TokenChart({ assetId, symbol }: TokenChartProps) {
         </div>
       </div>
       {isFetching && <div className="market-muted">Updating chart...</div>}
+      {!isFetching && chartData.length === 0 && (
+        <div className="market-muted">Chart data unavailable.</div>
+      )}
       <div className="market-chart-wrap">
         <ResponsiveContainer width="100%" height={320}>
           <ComposedChart data={chartData}>

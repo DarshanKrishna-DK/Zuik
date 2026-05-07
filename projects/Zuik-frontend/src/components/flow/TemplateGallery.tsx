@@ -2,13 +2,13 @@ import { useState, useMemo, useDeferredValue } from 'react'
 import { createPortal } from 'react-dom'
 import {
   getAllTemplates, searchTemplates, TEMPLATE_CATEGORIES,
-  type WorkflowTemplate, type TemplateCategory, type TemplateNode, type TemplateEdge,
+  type WorkflowTemplate, type TemplateCategory,
 } from '../../services/templateService'
 
 interface Props {
   isOpen: boolean
   onClose: () => void
-  onUseTemplate: (nodes: TemplateNode[], edges: TemplateEdge[], name: string) => void
+  onUseTemplate: (template: WorkflowTemplate) => void
 }
 
 function SearchIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg> }
@@ -96,7 +96,7 @@ export default function TemplateGallery({ isOpen, onClose, onUseTemplate }: Prop
   }, [deferredQuery, catFilter])
 
   const handleUseTemplate = (template: WorkflowTemplate) => {
-    onUseTemplate(template.nodes, template.edges, template.name)
+    onUseTemplate(template)
     setSelectedTemplate(null)
     onClose()
   }

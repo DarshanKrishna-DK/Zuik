@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { getBuySellPressure } from '../../../services/marketDataService'
+import type { MarketTokenId } from '../../../services/vestigeApi'
 import { formatUsdCompact } from '../utils'
 
 interface BuySellPressureProps {
-  assetId: number
+  assetId: MarketTokenId
   priceUsd: number | null
   decimals?: number | null
 }
@@ -21,9 +22,10 @@ function GaugeIcon() {
 export default function BuySellPressure({ assetId, priceUsd, decimals }: BuySellPressureProps) {
   const { data, isFetching } = useQuery({
     queryKey: ['indexer', 'pressure', assetId],
-    queryFn: () => getBuySellPressure(assetId, priceUsd, decimals ?? 6, 60),
+    queryFn: () => getBuySellPressure(typeof assetId === 'number' ? assetId : 0, priceUsd, decimals ?? 6, 60),
     staleTime: 60_000,
-    enabled: assetId !== undefined && assetId !== null,
+    refetchInterval: 60_000,
+    enabled: typeof assetId === 'number' && assetId > 0,
   })
 
   const pressure = data?.pressure ?? 0.5

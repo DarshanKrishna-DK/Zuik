@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import zuikLogo from '../assets/zuik-logo.png'
@@ -146,198 +146,6 @@ function LaptopVisual() {
   )
 }
 
-function HeroFlowCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    let width = 0
-    let height = 0
-    const dpr = Math.max(1, window.devicePixelRatio || 1)
-    let t0 = performance.now()
-
-    type FlowNodeDef = { label: string; sub: string; color: string }
-    const flowNodes: FlowNodeDef[] = [
-      { label: 'PRICE', sub: 'ALGO < 0.25', color: '#A78BFA' },
-      { label: 'WALLET', sub: 'USDC in', color: '#A78BFA' },
-      { label: 'MERGE', sub: 'AND gate', color: '#FBBF24' },
-      { label: 'SWAP', sub: 'USDC / ALGO', color: '#6EE7FF' },
-      { label: 'ALERT', sub: 'Telegram', color: '#34D399' },
-    ]
-    const flowEdges: [number, number][] = [[0, 2], [1, 2], [2, 3], [3, 4]]
-
-    const candles = [0.42, 0.55, 0.48, 0.62, 0.58, 0.7, 0.65, 0.74].map((c, i) => {
-      const o = c - 0.04 + (i % 3) * 0.01
-      const h = Math.max(o, c) + 0.08
-      const l = Math.min(o, c) - 0.07
-      return { o, h, l, c }
-    })
-
-    function roundRect(x: number, y: number, w: number, h: number, r: number) {
-      const rr = Math.min(r, w / 2, h / 2)
-      ctx.beginPath()
-      ctx.moveTo(x + rr, y)
-      ctx.arcTo(x + w, y, x + w, y + h, rr)
-      ctx.arcTo(x + w, y + h, x, y + h, rr)
-      ctx.arcTo(x, y + h, x, y, rr)
-      ctx.arcTo(x, y, x + w, y, rr)
-      ctx.closePath()
-    }
-
-    const layoutFlow = () => {
-      const s = Math.min(1.15, width / 560)
-      const boxW = 92 * s
-      const boxH = 36 * s
-      const gapX = 18 * s
-      const gapY = 44 * s
-      const left = width * 0.04
-      const top = height * 0.18
-      const positions: { x: number; y: number; w: number; h: number }[] = [
-        { x: left, y: top, w: boxW, h: boxH },
-        { x: left, y: top + gapY, w: boxW, h: boxH },
-        { x: left + boxW + gapX, y: top + gapY * 0.45, w: boxW * 0.95, h: boxH },
-        { x: left + (boxW + gapX) * 2, y: top + gapY * 0.45, w: boxW, h: boxH },
-        { x: left + (boxW + gapX) * 3 + gapX * 0.5, y: top + gapY * 0.45, w: boxW, h: boxH },
-      ]
-      return { positions, boxW, boxH }
-    }
-
-    const center = (positions: { x: number; y: number; w: number; h: number }[], i: number) => {
-      const p = positions[i]
-      return { x: p.x + p.w / 2, y: p.y + p.h / 2 }
-    }
-
-    const resize = () => {
-      width = canvas.clientWidth
-      height = canvas.clientHeight
-      canvas.width = width * dpr
-      canvas.height = height * dpr
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    }
-
-    const draw = (t: number) => {
-      const elapsed = (t - t0) / 1000
-      ctx.clearRect(0, 0, width, height)
-
-      const { positions } = layoutFlow()
-      const dashPhase = prefersReducedMotion ? 0 : -(elapsed * 42) % 24
-
-      ctx.setLineDash([5, 7])
-      ctx.lineDashOffset = dashPhase
-      ctx.lineWidth = 1.5
-      for (const [from, to] of flowEdges) {
-        const a = center(positions, from)
-        const b = center(positions, to)
-        ctx.strokeStyle = 'rgba(110, 231, 255, 0.42)'
-        ctx.beginPath()
-        ctx.moveTo(a.x, a.y)
-        const mx = (a.x + b.x) / 2
-        const my = (a.y + b.y) / 2 - 14 * Math.min(1, width / 500)
-        ctx.quadraticCurveTo(mx, my, b.x, b.y)
-        ctx.stroke()
-      }
-      ctx.setLineDash([])
-
-      if (!prefersReducedMotion) {
-        const segT = (elapsed * 0.55) % 1
-        const edge = flowEdges[Math.floor((elapsed * 0.35) % flowEdges.length)]
-        const a = center(positions, edge[0])
-        const b = center(positions, edge[1])
-        const px = a.x + (b.x - a.x) * segT
-        const py = a.y + (b.y - a.y) * segT
-        ctx.shadowColor = 'rgba(110, 231, 255, 0.85)'
-        ctx.shadowBlur = 14
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
-        ctx.beginPath()
-        ctx.arc(px, py, 3.2, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.shadowBlur = 0
-      }
-
-      flowNodes.forEach((node, i) => {
-        const p = positions[i]
-        ctx.fillStyle = 'rgba(6, 10, 16, 0.82)'
-        ctx.strokeStyle = 'rgba(110, 231, 255, 0.5)'
-        ctx.lineWidth = 1
-        roundRect(p.x, p.y, p.w, p.h, 7)
-        ctx.fill()
-        ctx.stroke()
-        ctx.fillStyle = node.color
-        ctx.fillRect(p.x + 7, p.y + 9, 7, 7)
-        ctx.fillStyle = 'rgba(235, 242, 252, 0.95)'
-        ctx.font = `600 ${Math.max(8, 9 * Math.min(1, width / 520))}px "JetBrains Mono", monospace`
-        ctx.fillText(node.label, p.x + 18, p.y + 15)
-        ctx.fillStyle = 'rgba(160, 180, 200, 0.9)'
-        ctx.font = `${Math.max(7, 8 * Math.min(1, width / 520))}px "JetBrains Mono", monospace`
-        ctx.fillText(node.sub, p.x + 7, p.y + 28)
-      })
-
-      const chartLeft = width * 0.52
-      const chartTop = height * 0.22
-      const chartH = height * 0.42
-      const barW = Math.max(6, Math.min(14, width * 0.018))
-      const barGap = 7
-      ctx.strokeStyle = 'rgba(110, 231, 255, 0.2)'
-      ctx.beginPath()
-      ctx.moveTo(chartLeft - 6, chartTop + chartH * 0.5)
-      ctx.lineTo(Math.min(width - 12, chartLeft + candles.length * (barW + barGap) + 8), chartTop + chartH * 0.5)
-      ctx.stroke()
-
-      candles.forEach((cnd, i) => {
-        const x = chartLeft + i * (barW + barGap)
-        const up = cnd.c >= cnd.o
-        const yHigh = chartTop + (1 - cnd.h) * chartH
-        const yLow = chartTop + (1 - cnd.l) * chartH
-        const yOpen = chartTop + (1 - cnd.o) * chartH
-        const yClose = chartTop + (1 - cnd.c) * chartH
-        const topBody = Math.min(yOpen, yClose)
-        const botBody = Math.max(yOpen, yClose)
-        ctx.strokeStyle = 'rgba(110, 231, 255, 0.35)'
-        ctx.beginPath()
-        ctx.moveTo(x + barW / 2, yHigh)
-        ctx.lineTo(x + barW / 2, yLow)
-        ctx.stroke()
-        ctx.fillStyle = up ? 'rgba(52, 211, 153, 0.9)' : 'rgba(248, 113, 113, 0.9)'
-        ctx.fillRect(x, topBody, barW, Math.max(2.5, botBody - topBody))
-      })
-
-      ctx.fillStyle = 'rgba(110, 231, 255, 0.55)'
-      ctx.font = `600 ${Math.max(9, 10 * Math.min(1, width / 560))}px "JetBrains Mono", monospace`
-      ctx.fillText('Live flow + market pulse', chartLeft, chartTop - 10)
-    }
-
-    const handleResize = () => {
-      resize()
-      draw(performance.now())
-    }
-    window.addEventListener('resize', handleResize)
-    resize()
-    draw(performance.now())
-
-    if (!prefersReducedMotion) {
-      let frame = 0
-      const loop = (now: number) => {
-        frame = requestAnimationFrame(loop)
-        draw(now)
-      }
-      frame = requestAnimationFrame(loop)
-      return () => {
-        cancelAnimationFrame(frame)
-        window.removeEventListener('resize', handleResize)
-      }
-    }
-
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
-  return <canvas ref={canvasRef} className="landing-hero-canvas" aria-hidden />
-}
-
 export default function Landing({ onConnectWallet, onStartBuilding }: LandingProps) {
   const { activeAddress } = useWallet()
   const [scrollY, setScrollY] = useState(0)
@@ -386,12 +194,9 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
         </div>
       </nav>
 
-      {/* ── Hero: Text Left, Animated Flow Right ────────── */}
+      {/* ── Hero: Text Left, Laptop Right ────────── */}
       <section className="landing-hero">
         <div className="landing-hero-glow" />
-        <div className="landing-hero-backdrop" aria-hidden>
-          <HeroFlowCanvas />
-        </div>
         <div className="landing-hero-split">
           <div className="landing-hero-left">
             <h1 className="landing-hero-title">
@@ -475,7 +280,12 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
         <div ref={featReveal.ref} className={`landing-section-inner${featReveal.visible ? ' revealed' : ''}`}>
           <div className="z-section-label">// CAPABILITIES</div>
           <h2 className="landing-section-title">Built for real DeFi users</h2>
-          <div className="z-features-grid">
+          <div className="z-capabilities-orbit">
+            <div className="z-orbit-ring" aria-hidden />
+            <div className="z-orbit-core">
+              <span className="z-orbit-title">ZUIK CORE</span>
+              <span className="z-orbit-sub">AI + FLOW</span>
+            </div>
             {[
               { Icon: GridIcon, title: 'Visual Flow Builder', desc: 'Drag-and-drop blocks - connect triggers, actions, and logic without code.' },
               { Icon: BrainIcon, title: 'AI Intent Engine', desc: 'Describe what you want in plain English. The AI builds the entire workflow.' },
@@ -483,8 +293,12 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
               { Icon: TrendIcon, title: 'DEX Aggregation', desc: 'Best swap routes via Folks Router and Tinyman with multi-hop routing.' },
               { Icon: LockIcon, title: 'Non-Custodial', desc: 'Your keys, your tokens. Every transaction requires your wallet signature.' },
               { Icon: ShieldCheck, title: 'Smart Advisor', desc: 'AI-powered strategy recommendations, risk assessments, and portfolio guidance.' },
-            ].map((f) => (
-              <div key={f.title} className="z-feature-card">
+            ].map((f, index, arr) => (
+              <div
+                key={f.title}
+                className="z-orbit-card"
+                style={{ '--angle': `${(360 / arr.length) * index}deg` } as CSSProperties}
+              >
                 <div className="z-feature-icon"><f.Icon /></div>
                 <h3>{f.title}</h3>
                 <p>{f.desc}</p>
@@ -516,9 +330,9 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
             <div className="z-why-card z-why-card-alt">
               <h3>Who is this for</h3>
               <p>
-                Traders who want precision, founders running treasury ops, and builders who
-                need automation without bespoke scripts. If you value clarity and speed, Zuik
-                is your control layer.
+                Zuik is for everyone - from someone who has never traded, to teams with no time
+                to watch charts, to professionals who want precision. Use it for payroll, bridging,
+                swapping tokens, or scheduling payments to anyone.
               </p>
             </div>
           </div>
@@ -530,7 +344,6 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
         <div ref={statsReveal.ref} className={`landing-section-inner${statsReveal.visible ? ' revealed' : ''}`}>
           <div className="z-section-label">// NETWORK</div>
           <h2 className="landing-section-title">Powered by Algorand</h2>
-          <div className="z-stats-roots" aria-hidden />
           <div className="z-stats-row">
             <div className="z-stat">
               <TimerIcon />
