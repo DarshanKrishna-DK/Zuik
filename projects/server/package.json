@@ -16,6 +16,7 @@
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.41.1",
     "@supabase/supabase-js": "^2.103.0",
+    "algosdk": "^3.5.2",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",

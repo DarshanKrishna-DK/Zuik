@@ -4,6 +4,7 @@ import { getBlockById } from './blockRegistry'
 import type { BlockCategory } from './blockRegistry'
 import { allExecutors } from './executors'
 import { saveSchedule, deactivateSchedule, recordScheduleIteration } from '../services/workflowScheduler'
+import { getActiveLogicSigVault } from '../services/logicSigDelegation'
 
 /**
  * Creates a Web Worker-based interval that is NOT throttled when the tab
@@ -463,10 +464,10 @@ export function subscribeAgent(
     })
   }
 
-  const hasOnChainActions = nodes.some((n) => {
-    const id = n.data.blockId
-    return ['send-payment', 'swap-token', 'opt-in-asa', 'create-asa', 'call-contract'].includes(id)
-  })
+  const onChainBlocks = new Set(['send-payment', 'swap-token', 'opt-in-asa', 'create-asa', 'call-contract'])
+  const delegationBlocks = new Set(['send-payment'])
+  const hasOnChainActions = nodes.some((n) => onChainBlocks.has(n.data.blockId))
+  const hasUnsupportedOnChain = nodes.some((n) => onChainBlocks.has(n.data.blockId) && !delegationBlocks.has(n.data.blockId))
 
   const scheduleIds: string[] = []
 
@@ -481,20 +482,26 @@ export function subscribeAgent(
       let scheduleId: string | null = null
 
       if (workflowId) {
-        saveSchedule({
-          workflowId,
-          walletAddress: context.sender,
-          intervalSec,
-          maxIterations: maxIterations === Infinity ? null : maxIterations,
-          requiresSigner: hasOnChainActions,
-          flowJson: {
-            nodes: nodes.map((n) => ({ id: n.id, data: n.data })),
-            edges: edges.map((e) => ({ source: e.source, target: e.target })),
-          },
-        }).then((id) => {
+        ;(async () => {
+          let requiresSigner = hasOnChainActions
+          if (hasOnChainActions && !hasUnsupportedOnChain && context.sender) {
+            const vault = await getActiveLogicSigVault(context.sender)
+            requiresSigner = !vault
+          }
+          const id = await saveSchedule({
+            workflowId,
+            walletAddress: context.sender,
+            intervalSec,
+            maxIterations: maxIterations === Infinity ? null : maxIterations,
+            requiresSigner,
+            flowJson: {
+              nodes: nodes.map((n) => ({ id: n.id, data: n.data })),
+              edges: edges.map((e) => ({ source: e.source, target: e.target })),
+            },
+          })
           scheduleId = id
           if (id) scheduleIds.push(id)
-        }).catch(() => {})
+        })().catch(() => {})
       }
 
       const handle = createDriftAwareRepeatingTimer(async () => {

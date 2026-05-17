@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { executeDelegatedPayment, type LogicSigVaultRow } from './logicSigDelegation.js'
 
 export interface FlowNode {
   id: string
@@ -125,6 +126,7 @@ export async function executeWorkflowHeadless(
   walletAddress: string,
   workflowLabel?: string,
   resolveLinkedChats?: LinkedChatResolver,
+  logicSigVault?: LogicSigVaultRow | null,
 ): Promise<void> {
   const { nodes, edges } = flowJson
   if (!nodes || nodes.length === 0) return
@@ -209,6 +211,36 @@ export async function executeWorkflowHeadless(
           await sendDiscord(webhookUrl, msg)
           console.log('  [send-discord] Sent')
         }
+        break
+      }
+
+      case 'send-payment': {
+        if (!logicSigVault) {
+          console.log('  [send-payment] Skipped (no automation permission)')
+          break
+        }
+        const recipient = String(config.recipient ?? '')
+        const amountRaw = config.amount
+        const assetId = Number(config.asset ?? 0)
+        const note = typeof config.note === 'string' ? config.note : undefined
+        if (!recipient || amountRaw == null) {
+          console.log('  [send-payment] Missing recipient or amount')
+          break
+        }
+        const numericAmount = Number(amountRaw)
+        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+          console.log('  [send-payment] Invalid amount')
+          break
+        }
+        const txIds = await executeDelegatedPayment({
+          vault: logicSigVault,
+          sender: walletAddress,
+          recipient,
+          amount: numericAmount,
+          assetId,
+          note,
+        })
+        console.log(`  [send-payment] Sent (${txIds.join(', ')})`)
         break
       }
 

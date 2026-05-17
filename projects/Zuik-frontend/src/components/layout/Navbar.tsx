@@ -69,7 +69,7 @@ const navItems = [
 export default function Navbar({ onConnectWallet }: NavbarProps) {
   const location = useLocation()
   const { activeAddress } = useWallet()
-  const [balances, setBalances] = useState<Array<{ assetId: number; label: string; amount: number }>>([])
+  const [balances, setBalances] = useState<Array<{ assetId: number; label: string; amount: number; decimals: number }>>([])
   const [selectedAssetId, setSelectedAssetId] = useState(0)
   const [loadingBalances, setLoadingBalances] = useState(false)
   const [walletMenuOpen, setWalletMenuOpen] = useState(false)
@@ -97,27 +97,53 @@ export default function Navbar({ onConnectWallet }: NavbarProps) {
         const assetDetails = await Promise.all(
           assets.map(async (asset: { ['asset-id']: number; amount: number }) => {
             try {
-              const details = await algod.getAssetByID(asset['asset-id']).do()
+              const assetId = asset['asset-id']
+              if (!assetId || isNaN(assetId)) {
+                return null // Skip invalid asset IDs
+              }
+
+              // Handle known testnet assets
+              const knownAssets: Record<number, string> = {
+                10458941: 'USDC', // USDC on Algorand testnet
+                148607: 'ALGO', // Native ALGO
+              }
+
+              if (knownAssets[assetId]) {
+                const decimals = assetId === 10458941 ? 6 : 0
+                const amount = Number(asset.amount ?? 0) / Math.pow(10, decimals)
+                return { assetId, label: knownAssets[assetId], amount, decimals }
+              }
+
+              const details = await algod.getAssetByID(assetId).do()
               const params = details?.params as { name?: string; ['unit-name']?: string; decimals?: number }
               const decimals = params?.decimals ?? 0
               const amount = Number(asset.amount ?? 0) / Math.pow(10, decimals)
-              const label = params?.['unit-name'] || params?.name || `ASA ${asset['asset-id']}`
-              return { assetId: asset['asset-id'], label, amount }
-            } catch {
-              return { assetId: asset['asset-id'], label: `ASA ${asset['asset-id']}`, amount: Number(asset.amount ?? 0) }
+              const label = params?.['unit-name'] || params?.name || `ASA ${assetId}`
+              return { assetId, label, amount, decimals }
+            } catch (error) {
+              const assetId = asset['asset-id']
+              if (!assetId || isNaN(assetId)) {
+                return null // Skip invalid asset IDs
+              }
+              return { 
+                assetId, 
+                label: `ASA ${assetId}`, 
+                amount: Number(asset.amount ?? 0),
+                decimals: 0
+              }
             }
           }),
         )
         if (cancelled) return
         const nextBalances = [
-          { assetId: 0, label: 'ALGO', amount: algoBalance },
-          ...assetDetails.filter((asset) => asset.amount > 0),
+          { assetId: 0, label: 'ALGO', amount: algoBalance, decimals: 6 },
+          ...assetDetails.filter((asset) => asset && asset.amount > 0),
         ]
         setBalances(nextBalances)
         setSelectedAssetId((prev) => nextBalances.find((b) => b.assetId === prev)?.assetId ?? 0)
       } catch {
         if (!cancelled) {
-          setBalances([{ assetId: 0, label: 'ALGO', amount: 0 }])
+          setBalances([{ assetId: 0, label: 'ALGO', amount: 0, decimals: 6 }])
         }
       } finally {
         if (!cancelled) setLoadingBalances(false)

@@ -216,7 +216,7 @@ npm start  # Production mode (Railway)
 npm run dev  # Development mode (local)
 ```
 
-> 📚 **Detailed deployment guide:** See `reference_docs/RAILWAY_DEPLOYMENT_GUIDE.md`
+> 📚 **Deployment and ops context:** See `reference_docs/ZUIK_DEVELOPMENT_PLAN.md` and `reference_docs/TESTING_AND_DEMO_GUIDE.md`
 
 ---
 

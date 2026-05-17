@@ -183,3 +183,12 @@ employee-payroll-demo.xlsx
 .idea/
 *.swp
 *.swo
+**/.algokit/
+.algokit/
+
+# ===== TEST SCRIPTS =====
+# Do not push test scripts to GitHub
+**/test-*.ts
+**/test-*.js
+scripts/test-localnet.ts
+scripts/test-testnet.ts

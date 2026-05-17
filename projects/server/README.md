@@ -352,9 +352,8 @@ curl https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getMe
 
 ## 📚 Additional Resources
 
-- **📖 Complete Setup Guide**: `../reference_docs/POST_PHASE7_SETUP_GUIDE.md`
-- **🚂 Detailed Railway Guide**: `../reference_docs/RAILWAY_DEPLOYMENT_GUIDE.md` 
-- **🔄 Development Plan**: `../reference_docs/ZUIK_DEVELOPMENT_PLAN.md`
+- **🔄 Development plan**: `../reference_docs/ZUIK_DEVELOPMENT_PLAN.md`
+- **🧪 Testing and demo**: `../reference_docs/TESTING_AND_DEMO_GUIDE.md`
 - **📝 Changelog**: `../reference_docs/CHANGELOG.md`
 
 ---

@@ -6,5 +6,5 @@ type = 'workspace'
 projects_root_path = 'projects'
 
 [project.run]
-# Zuik-contracts removed from repo; frontend is the active build target
-build = ['Zuik-frontend']
+# Build both frontend and contracts
+build = ['Zuik-frontend', 'Zuik-contracts']

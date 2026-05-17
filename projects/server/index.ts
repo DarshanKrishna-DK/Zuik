@@ -3,6 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import { startTelegramBot, handleTelegramWebhook } from './telegram.js'
 import { executeWorkflowHeadless } from './workflowRunner.js'
+import { fetchActiveLogicSigVault } from './logicSigDelegation.js'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createVoiceRouter, startVoiceServer } from './voiceServer.js'
 
@@ -105,11 +106,13 @@ app.post('/webhook/:workflowId', async (req, res) => {
     }
 
     // Execute workflow
+    const delegationVault = await fetchActiveLogicSigVault(sb, workflow.wallet_address)
     await executeWorkflowHeadless(
       workflow.flow_json,
       workflow.wallet_address,
       `webhook-${workflowId}`,
       getLinkedTelegramChats,
+      delegationVault,
     )
 
     res.json({ success: true, executed: workflowId })
@@ -142,11 +145,13 @@ async function pollSchedules(): Promise<void> {
 
   for (const schedule of schedules as ScheduleRow[]) {
     try {
+      const delegationVault = await fetchActiveLogicSigVault(sb, schedule.wallet_address)
       await executeWorkflowHeadless(
         schedule.flow_json,
         schedule.wallet_address,
         schedule.workflow_id,
         getLinkedTelegramChats,
+        delegationVault,
       )
 
       const maxIter = schedule.max_iterations

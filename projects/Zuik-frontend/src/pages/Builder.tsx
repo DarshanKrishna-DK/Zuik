@@ -71,6 +71,7 @@ import {
 import { WorkflowSelectOptionsProvider } from '../context/WorkflowSelectOptionsContext'
 import { fetchAlgoUsdPrice, estimateStepFee } from '../services/transactionSimulator'
 import { scheduleWorkflowStart, deactivateSchedule } from '../services/workflowScheduler'
+import { getActiveLogicSigVault } from '../services/logicSigDelegation'
 
 /* ── Inline SVG Icons ─────────────────────────────────── */
 
@@ -183,6 +184,7 @@ export default function Builder() {
   const navigate = useNavigate()
   const [prefillIntent, setPrefillIntent] = useState<string | null>(null)
   const prefillAppliedRef = useRef<string | null>(null)
+  const [delegationAvailable, setDelegationAvailable] = useState(false)
 
   const refreshSpawnWorkflowOptions = useCallback(async () => {
     if (!activeAddress || !isSupabaseConfigured()) {
@@ -197,6 +199,16 @@ export default function Builder() {
     } catch {
       setWorkflowSpawnSelectOptions([])
     }
+  }, [activeAddress])
+
+  useEffect(() => {
+    if (!activeAddress || !isSupabaseConfigured()) {
+      setDelegationAvailable(false)
+      return
+    }
+    getActiveLogicSigVault(activeAddress)
+      .then((vault) => setDelegationAvailable(Boolean(vault)))
+      .catch(() => setDelegationAvailable(false))
   }, [activeAddress])
 
   useEffect(() => {
@@ -284,11 +296,19 @@ export default function Builder() {
 
   const requiresSigner = useMemo(() => {
     const signerBlocks = new Set(['swap-token', 'send-payment', 'opt-in-asa', 'create-asa', 'call-contract'])
-    return nodes.some((node) => {
+    const delegationBlocks = new Set(['send-payment'])
+    const hasSignerBlocks = nodes.some((node) => {
       const blockId = (node.data as Record<string, unknown>)?.blockId as string | undefined
       return blockId ? signerBlocks.has(blockId) : false
     })
-  }, [nodes])
+    if (!hasSignerBlocks) return false
+    const hasUnsupported = nodes.some((node) => {
+      const blockId = (node.data as Record<string, unknown>)?.blockId as string | undefined
+      return blockId ? signerBlocks.has(blockId) && !delegationBlocks.has(blockId) : false
+    })
+    if (!hasUnsupported && delegationAvailable) return false
+    return true
+  }, [nodes, delegationAvailable])
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()

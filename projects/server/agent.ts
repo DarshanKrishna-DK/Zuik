@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { startTelegramBot } from './telegram.js'
 import { executeWorkflowHeadless, type FlowNode, type FlowEdge } from './workflowRunner.js'
+import { fetchActiveLogicSigVault } from './logicSigDelegation.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
@@ -29,11 +30,13 @@ interface ScheduleRow {
 }
 
 async function executeWorkflow(schedule: ScheduleRow): Promise<void> {
+  const vault = await fetchActiveLogicSigVault(sb, schedule.wallet_address)
   await executeWorkflowHeadless(
     schedule.flow_json,
     schedule.wallet_address,
     schedule.workflow_id,
     getLinkedTelegramChats,
+    vault,
   )
 }
 
