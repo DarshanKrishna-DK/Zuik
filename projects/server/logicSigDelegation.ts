@@ -105,11 +105,16 @@ export async function executeDelegatedPayment(params: {
   const method = assetId === 0 ? DELEGATION_METHODS.algo : DELEGATION_METHODS.asset
   const appId = BigInt(vault.verifier_app_id)
 
+  // Create the AtomicTransactionComposer and build the group correctly
   const atc = new algosdk.AtomicTransactionComposer()
+  
+  // IMPORTANT: Add the method call with the transaction as argument
+  // The ATC will structure the group as: [spendTxn, appCallTxn]
+  // which matches what the LogicSig expects
   atc.addMethodCall({
     appID: appId,
     method,
-    sender,
+    sender: vault.lsig_address, // The LogicSig address should be the sender
     signer,
     suggestedParams,
     methodArgs: [{ txn: spendTxn, signer }],
