@@ -1,13 +1,13 @@
 // Vercel Function for AI Chat API
-import { NextApiRequest, NextApiResponse } from 'next'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 // Import your existing server logic
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
 
 export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+  req: VercelRequest,
+  res: VercelResponse
 ) {
   // Enable CORS for your Vercel domain
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -25,12 +25,15 @@ export default async function handler(
   }
 
   if (!GROQ_API_KEY) {
-    res.status(503).json({ error: 'AI service not configured' })
+    res.status(503).json({ error: 'AI service not configured - missing GROQ_API_KEY' })
     return
   }
 
   try {
     const { model, messages, response_format, temperature, max_tokens } = req.body
+
+    console.log('[AI Chat] Processing request with model:', model || GROQ_MODEL)
+    console.log('[AI Chat] Messages count:', messages?.length || 0)
 
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -49,7 +52,7 @@ export default async function handler(
 
     if (!groqResponse.ok) {
       const errorText = await groqResponse.text()
-      console.error('Groq API error:', errorText)
+      console.error('[AI Chat] Groq API error:', errorText)
       res.status(groqResponse.status).json({ 
         error: `Groq API error (${groqResponse.status})`,
         detail: errorText 
@@ -58,9 +61,10 @@ export default async function handler(
     }
 
     const data = await groqResponse.json()
+    console.log('[AI Chat] ✅ Success - Response received from Groq')
     res.status(200).json(data)
   } catch (error) {
-    console.error('AI Chat error:', error)
+    console.error('[AI Chat] Internal error:', error)
     res.status(500).json({ 
       error: 'Internal server error',
       detail: error instanceof Error ? error.message : 'Unknown error'

@@ -1,9 +1,9 @@
 // Vercel Function for Voice Health Check
-import { NextApiRequest, NextApiResponse } from 'next'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+  req: VercelRequest,
+  res: VercelResponse
 ) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -24,6 +24,9 @@ export default async function handler(
     const groqConfigured = !!process.env.GROQ_API_KEY
     const elevenlabsConfigured = !!process.env.ELEVENLABS_API_KEY
 
+    console.log('[Voice Health] Groq configured:', groqConfigured)
+    console.log('[Voice Health] ElevenLabs configured:', elevenlabsConfigured)
+
     res.status(200).json({
       status: 'healthy',
       services: {
@@ -33,7 +36,7 @@ export default async function handler(
       timestamp: new Date().toISOString()
     })
   } catch (error) {
-    console.error('Voice health check error:', error)
+    console.error('[Voice Health] Error:', error)
     res.status(500).json({ error: 'Health check failed' })
   }
 }
