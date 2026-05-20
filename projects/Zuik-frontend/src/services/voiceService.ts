@@ -3,16 +3,21 @@ import { useState, useRef, useCallback } from 'react'
 
 function resolveVoiceBaseUrl(): string {
   const fromEnv = (import.meta.env.VITE_VOICE_SERVER_URL as string | undefined)?.trim()
-  if (fromEnv) return fromEnv.replace(/\/$/, '')
+  
+  // If explicitly configured, use it
+  if (fromEnv && fromEnv !== '') return fromEnv.replace(/\/$/, '')
+  
+  // In dev mode with no config, use empty string (Vite proxy handles it)
   if (import.meta.env.DEV) return ''
   
-  // Check if we're in production deployment
+  // In production with no config, try relative API calls (Vercel Functions on same domain)
   const isProductionDeployment = import.meta.env.PROD && (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
   if (isProductionDeployment) {
-    // Voice service not available in production deployment
+    // Try using same-domain API for production (Vercel Functions)
     return ''
   }
   
+  // Fallback for other environments
   return 'http://localhost:3002'
 }
 
@@ -44,13 +49,8 @@ export async function checkVoiceServiceHealth(): Promise<{
   available: boolean
   services: { groq: boolean; elevenlabs: boolean }
 }> {
-  // Skip health check if no voice server is configured (e.g. production deployment)
-  const voiceBaseUrl = resolveVoiceBaseUrl()
-  if (!voiceBaseUrl || voiceBaseUrl === '') {
-    return { available: false, services: { groq: false, elevenlabs: false } }
-  }
-  
   try {
+    // Always try the health check - VOICE_API_PREFIX handles the URL resolution
     const response = await fetch(`${VOICE_API_PREFIX}/health`)
     if (!response.ok) {
       return { available: false, services: { groq: false, elevenlabs: false } }
