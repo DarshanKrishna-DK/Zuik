@@ -177,6 +177,7 @@ DEMO_SCRIPT.md
 reference_docs/
 .firecrawl/
 employee-payroll-demo.xlsx
+./playwright-mcp
 
 # ===== IDE =====
 .vscode/
