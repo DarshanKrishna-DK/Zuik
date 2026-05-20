@@ -71,6 +71,19 @@ export function GuardianSettings() {
       setGlobalMetrics(metrics)
       setIsPaused(metrics?.isPaused || false)
 
+      // Check if current connected wallet is already opted in
+      if (activeAddress) {
+        try {
+          const currentWalletStatus = await guardianContract.getAgentStatus(activeAddress)
+          if (currentWalletStatus && activeStep < 2) {
+            // If current wallet has status, it means it's opted in - skip to step 2
+            setActiveStep(2)
+          }
+        } catch {
+          // Wallet not opted in yet, stay on step 1
+        }
+      }
+
       const addr = registrationForm.agentAddress.trim()
       if (addr) {
         const status = await guardianContract.getAgentStatus(addr)
@@ -82,7 +95,7 @@ export function GuardianSettings() {
     } finally {
       setLoading(false)
     }
-  }, [activeAccount, guardianReady, registrationForm.agentAddress, showMessage])
+  }, [activeAccount, activeAddress, guardianReady, registrationForm.agentAddress, activeStep, showMessage])
 
   useEffect(() => {
     if (activeAccount && guardianReady) {
@@ -105,7 +118,15 @@ export function GuardianSettings() {
       )
       setActiveStep(2)
     } catch (error) {
-      showMessage('error', error instanceof Error ? error.message : 'Could not activate agent. Try again.')
+      const errorMessage = error instanceof Error ? error.message : 'Could not activate agent. Try again.'
+      
+      // Handle "already opted in" case as success
+      if (errorMessage.includes('has already opted in')) {
+        showMessage('success', 'Agent is already activated on Guardian. You can proceed to register spending limits.')
+        setActiveStep(2)
+      } else {
+        showMessage('error', errorMessage)
+      }
     } finally {
       setLoading(false)
     }

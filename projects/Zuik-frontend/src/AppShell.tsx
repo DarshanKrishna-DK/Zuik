@@ -5,12 +5,13 @@ import Navbar from './components/layout/Navbar'
 import ConnectWallet from './components/ConnectWallet'
 import ErrorBoundary from './components/ErrorBoundary'
 import LoadingFallback from './components/LoadingFallback'
-import Landing from './pages/Landing'
+import DemoAutoConnect from './components/DemoAutoConnect'
 
 const Builder = lazy(() => import('./pages/Builder'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Settings = lazy(() => import('./pages/Settings'))
 const MarketExplorer = lazy(() => import('./pages/Market/MarketExplorer'))
+const Landing = lazy(() => import('./pages/Landing'))
 
 export default function AppShell() {
   const [walletModalOpen, setWalletModalOpen] = useState(false)
@@ -63,6 +64,7 @@ export default function AppShell() {
         </ErrorBoundary>
       </div>
       <ConnectWallet openModal={walletModalOpen} closeModal={() => setWalletModalOpen(false)} />
+      <DemoAutoConnect />
     </div>
   )
 }

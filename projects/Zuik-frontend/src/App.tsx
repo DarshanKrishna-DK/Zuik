@@ -14,6 +14,23 @@ const queryClient = new QueryClient({
   },
 })
 
+const BROWSER_WALLETS: SupportedWallet[] = [
+  { id: WalletId.PERA },
+  { id: WalletId.DEFLY },
+  { id: WalletId.EXODUS },
+]
+
+const DEMO_MNEMONIC_WALLET: SupportedWallet = {
+  id: WalletId.MNEMONIC,
+  options: {
+    persistToStorage: false,
+    promptForMnemonic: async () => {
+      const phrase = import.meta.env.VITE_DEMO_WALLET_MNEMONIC?.trim()
+      return phrase || null
+    },
+  },
+}
+
 let supportedWallets: SupportedWallet[]
 if (import.meta.env.VITE_ALGOD_NETWORK === 'localnet') {
   const kmdConfig = getKmdConfigFromViteEnvironment()
@@ -28,11 +45,10 @@ if (import.meta.env.VITE_ALGOD_NETWORK === 'localnet') {
     },
   ]
 } else {
-  supportedWallets = [
-    { id: WalletId.DEFLY },
-    { id: WalletId.PERA },
-    { id: WalletId.EXODUS },
-  ]
+  supportedWallets = [...BROWSER_WALLETS]
+  if (import.meta.env.VITE_DEMO_AUTO_WALLET === 'true') {
+    supportedWallets.push(DEMO_MNEMONIC_WALLET)
+  }
 }
 
 export default function App() {
@@ -52,6 +68,7 @@ export default function App() {
     },
     options: {
       resetNetwork: true,
+      debug: false, // Disable debug to avoid network detection issues
     },
   })
 

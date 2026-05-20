@@ -236,7 +236,9 @@ export async function createLogicSigDelegation(params: CreateDelegationParams): 
       wallet_address: walletAddress,
       lsig_address: lsigAddress,
       lsig_account_b64: lsigAccountB64,
+      lsig_program: lsigAccountB64, // Backward compatibility - use same data for both fields
       verifier_app_id: String(verifierAppId),
+      asset_id: String(allowedFromAsset), // Backward compatibility - old column name
       allowed_from_asset: String(allowedFromAsset),
       allowed_to_asset: String(allowedToAsset),
       max_per_trade: String(maxPerTradeBase),

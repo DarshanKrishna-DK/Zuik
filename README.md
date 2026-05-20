@@ -5,7 +5,7 @@
 <h1 align="center">Zuik</h1>
 
 <p align="center">
-  <strong>DeFi automation you can describe in plain language</strong>
+  <strong>The First Intent-Based DeFi Automation Tool on Algorand: describe goals in plain language, review a visual workflow, sign with your wallet.</strong>
 </p>
 
 <p align="center">
@@ -16,546 +16,161 @@
 </p>
 
 <p align="center">
-  Set up a <strong>$500 weekly DCA into ALGO</strong>, alert yourself when prices move, or rebalance your portfolio -<br/>
-  by speaking, typing, or arranging a simple visual flow. Zuik builds the automation; you stay in control with one approval.
+  Set up <strong>$X weekly dollar-cost averaging into ALGO</strong>, alert yourself when prices move, or rebalance - by voice, chat, or drag-and-drop.
 </p>
 
 <p align="center">
+  <a href="#overview"><strong>Overview</strong></a>
+  &nbsp;&middot;&nbsp;
   <a href="#getting-started"><strong>Get started</strong></a>
   &nbsp;&middot;&nbsp;
   <a href="#developer-setup"><strong>Run locally</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="#use-cases"><strong>See use cases</strong></a>
-  &nbsp;&middot;&nbsp;
-  <a href="#plans"><strong>View plans</strong></a>
+  <a href="#architecture"><strong>Architecture</strong></a>
 </p>
 
 ---
 
-## Hero: Automate DeFi without the complexity
+## Table of contents
 
-| Benefit | What you get |
-|--------|----------------|
-| **Say it, run it** | Voice, chat, or drag-and-drop blocks turn goals into live workflows |
-| **Works while you sleep** | Optional cloud agent runs schedules, price watches, and alerts 24/7 |
-| **Your keys, your control** | Non-custodial by design - every on-chain action needs your wallet |
-| **Smart limits** | Spending caps, delegation rules, and pre-flight checks before you sign |
-| **All-or-nothing execution** | Multi-step trades succeed together or not at all on Algorand |
+<details open>
+<summary><strong>Jump to a section</strong></summary>
+
+**Product**
+
+- [Overview](#overview)
+- [User journey](#user-journey)
+- [Capabilities and use cases](#capabilities-and-use-cases)
+
+**Technical deep dive**
+
+- [Architecture](#architecture)
+- [Workflow creation](#workflow-creation)
+- [Smart contracts](#smart-contracts)
+  - [Contract interaction flow](#contract-interaction-flow)
+  - [ZuikGuardian](#zuikguardian)
+  - [Delegation verifier and LogicSig](#delegation-verifier-and-logicsig)
+  - [TestNet deployment](#testnet-deployment)
+- [Technology and integrations](#technology-and-integrations)
+
+**Build and run**
+
+- [Getting started](#getting-started)
+- [Developer setup](#developer-setup)
+  - [Prerequisites](#prerequisites)
+  - [Clone and install](#clone-and-install)
+  - [Environment configuration](#environment-configuration)
+  - [Running the project](#running-the-project)
+- [Development workflow](#development-workflow)
+
+**Trust**
+
+- [Security and trust](#security-and-trust)
+- [License](#license)
+
+</details>
 
 ---
 
-## The problem
+## Overview
 
-DeFi promises freedom, but day-to-day use still feels like a second job.
+Most people want outcomes - steady investing, recurring payments, price alerts - not another dashboard to babysit. Zuik turns those goals into reviewable, wallet-signed workflows without scripts or manual monitoring.
 
-| Pain point | What users experience today |
-|------------|----------------------------|
-| **Complexity** | Swaps, bridges, and schedules spread across wallets, DEXs, and spreadsheets |
-| **Manual monitoring** | Price alerts and rebalancing need constant screen time |
-| **Technical barriers** | Scripts, bots, and "advanced" tools assume engineering skills |
-| **Fragmented safety** | Hard to see total fees, slippage, and risk before money moves |
-| **Missed timing** | Life gets in the way; opportunities and obligations happen off-hours |
+Zuik is an intent-based DeFi automation platform on Algorand. You describe what you want; AI and visual tools turn that into a clear workflow you review and approve.
 
-Most people want outcomes - "invest steadily," "pay this address every Friday," "tell me when ALGO drops 5%" - not another dashboard to babysit.
+## USP
+
+**Governed AI automation:** AI agents can go rogue or act outside intended limits. Zuik addresses this with reviewable workflows before signing, on-chain Guardian spending caps, and LogicSig delegation rules so automation stays bounded and wallet controlled.
+
+| Pain point | How Zuik helps |
+|------------|----------------|
+| Complexity across wallets, DEXs, and spreadsheets | One intent engine and visual builder for the full flow |
+| Manual price monitoring and rebalancing | Scheduled triggers and condition-based automation |
+| Technical barriers to scripting bots | Natural language, voice, and drag-and-drop blocks |
+| Unclear fees and risk before signing | Safety preview with fee estimates and on-chain limits |
+| Missed off-hours opportunities | Optional cloud agent for 24/7 schedules and alerts |
+
+**Live on Algorand TestNet:** Guardian contract deployed and wired into Settings. Swaps route through Tinyman on TestNet and Folks Router where available.
 
 ---
 
-## The solution
-
-Zuik is an **intent-first automation platform** on Algorand. You describe what you want; AI and visual tools turn that into a clear workflow you review and approve.
+## User journey
 
 ```mermaid
 flowchart LR
-    subgraph YOU["You"]
+    subgraph INPUT["1. Describe"]
         V["Voice"]
         T["Chat"]
         B["Visual builder"]
     end
 
-    subgraph ZUIK["Zuik"]
-        AI["Intent engine"]
+    subgraph ZUIK["2. Review"]
+        INTENT["Intent engine"]
         FLOW["Workflow builder"]
         CHECK["Safety preview"]
     end
 
-    subgraph CHAIN["Algorand"]
-        SIGN["You sign once"]
-        ATOMIC["Atomic execution"]
-        ALERT["Alerts & history"]
+    subgraph EXECUTE["3. Approve and automate"]
+        SIGN["Wallet signature"]
+        ATOMIC["Atomic transaction group"]
+        TRACK["Dashboard and alerts"]
     end
 
-    V --> AI
-    T --> AI
+    V --> INTENT
+    T --> INTENT
     B --> FLOW
-    AI --> FLOW
+    INTENT --> FLOW
     FLOW --> CHECK
     CHECK --> SIGN
     SIGN --> ATOMIC
-    ATOMIC --> ALERT
+    ATOMIC --> TRACK
 
-    style YOU fill:#1a1040,stroke:#a78bfa,color:#f8fafc
+    style INPUT fill:#1a1040,stroke:#a78bfa,color:#f8fafc
     style ZUIK fill:#0a1a2a,stroke:#00e5ff,color:#f8fafc
-    style CHAIN fill:#0a2018,stroke:#34d399,color:#f8fafc
+    style EXECUTE fill:#0a2018,stroke:#34d399,color:#f8fafc
 ```
 
-**How it feels in practice**
-
-1. **Describe** - "Set up a $500 weekly DCA into ALGO" or "When USDC arrives, swap 20% to ALGO and notify me on Telegram."
-2. **Review** - See each step, estimated fees, and guardrails before anything runs.
-3. **Approve** - Sign with your wallet. Zuik never holds your funds.
-4. **Automate** - Workflows run on schedule or when conditions are met, with optional always-on cloud execution.
+You stay non-custodial throughout: Zuik orchestrates, your wallet signs, and multi-step flows run as atomic transaction groups on Algorand.
 
 ---
 
-## What makes Zuik different
-
-| Advantage | Why it matters |
-|-----------|----------------|
-| **Voice and natural language** | Automate from your phone or desktop without writing code |
-| **Non-custodial** | Assets stay in your wallet; Zuik orchestrates, you authorize |
-| **Atomic execution** | Multi-step operations complete as one unit - no half-finished trades |
-| **Visual + AI together** | Start from a template, refine in chat, or fine-tune on the canvas |
-| **Built-in advisor** | Risk-aware suggestions and plain-language explanations, not hype |
-| **DEX aggregation** | Swap routing across leading Algorand liquidity sources |
-| **Guardian limits** | Optional on-chain spending rules for delegated or automated agents |
-| **Telegram and voice alerts** | Stay informed without living in a charting app |
-
-### Zuik vs. typical DIY DeFi
-
-| | **Zuik** | **Manual DeFi** | **Custom bots** |
-|---|:---:|:---:|:---:|
-| Plain-language setup | Yes | No | No |
-| Visual workflow map | Yes | No | Rare |
-| Non-custodial | Yes | Yes | Varies |
-| Atomic multi-step trades | Yes | Manual | If coded |
-| 24/7 automation without code | Yes | No | Requires dev |
-| Pre-sign safety preview | Yes | Fragmented | DIY |
-| Voice + mobile-friendly | Yes | No | Rare |
-
----
-
-## Use cases
-
-Real scenarios Zuik is built for:
-
-### Trading and investing
-
-- **Dollar-cost averaging** - "Invest $500 in ALGO every Monday at 9 AM."
-- **Conditional swaps** - "If ALGO falls 8% in 24 hours, swap 100 USDC to ALGO."
-- **Take-profit / stop-style flows** - Combine price triggers with swaps and notifications.
-
-### Scheduled payments
-
-- **Recurring sends** - Salaries, subscriptions, or donations to any Algorand address on a schedule.
-- **Payroll-style batches** - Same workflow, multiple recipients, one approval pattern you trust.
-
-### Portfolio management
-
-- **Rebalancing** - When allocations drift, swap back toward your target mix.
-- **Yield routing** - Move funds between strategies when rules you define are met.
-- **Incoming funds** - Auto-allocate a percentage of new USDC deposits into ALGO or stablecoins.
-
-### Price monitoring and alerts
-
-- **Threshold alerts** - Telegram or Discord when an asset crosses a price you set.
-- **Watchlists** - Monitor several assets and act only when your conditions fire.
-
-```mermaid
-flowchart TB
-    subgraph TRADE["Trading"]
-        DCA["Weekly DCA"]
-        SW["Conditional swap"]
-    end
-
-    subgraph PAY["Payments"]
-        SCH["Scheduled ALGO/USDC send"]
-        SUB["Recurring subscription"]
-    end
-
-    subgraph PORT["Portfolio"]
-        RB["Rebalance"]
-        IN["Split incoming USDC"]
-    end
-
-    subgraph MON["Monitoring"]
-        PX["Price alert"]
-        TG["Telegram notify"]
-    end
-
-    TRADE --> Z["Zuik workflows"]
-    PAY --> Z
-    PORT --> Z
-    MON --> Z
-
-    style Z fill:#111822,stroke:#00e5ff,color:#f8fafc
-```
-
----
-
-## Features
-
-| Category | Capability |
-|----------|------------|
-| **Intent engine** | Turn goals in everyday language into structured workflows |
-| **Visual flow builder** | 30+ blocks for triggers, swaps, logic, math, and notifications |
-| **Voice interface** | Hands-free setup and optional voice replies |
-| **Trading advisor** | Goal-based guidance with clear risk framing |
-| **Safety preview** | Fee estimates, slippage awareness, and policy checks before signing |
-| **Atomic groups** | Related transactions succeed or roll back together |
-| **DEX connectivity** | Aggregated swaps via Folks Router and Tinyman |
-| **Dashboard** | History, status, and workflow health in one place |
-| **Cloud agent** | Always-on execution for schedules and monitors |
-| **Telegram bot** | Create, control, and get alerts from chat |
-| **Guardian controls** | On-chain limits for automated or delegated spending |
-| **Templates** | Start from proven patterns and customize in minutes |
-
----
-
-## Plans
-
-Zuik is designed to grow with you - from personal automation to always-on professional use.
-
-| | **Starter** | **Pro** | **Team** |
-|---|:---:|:---:|:---:|
-| **Price** | Free | $19 / month | Custom |
-| Visual builder & chat intent | Yes | Yes | Yes |
-| Wallet-connected execution | Yes | Yes | Yes |
-| Safety preview & templates | Yes | Yes | Yes |
-| Active workflows | Up to 3 | Unlimited | Unlimited |
-| Cloud agent (24/7) | - | Yes | Yes |
-| Voice (server-grade) | Basic | Full | Full |
-| Telegram bot integration | - | Yes | Yes |
-| Priority support | Community | Email | Dedicated |
-| **Best for** | Trying Zuik, simple automations | DCA, alerts, daily DeFi ops | Funds, treasuries, operators |
-
-> **Early access:** Starter capabilities are available today. Pro and Team tiers roll out as cloud and billing go live. [Contact us](https://github.com/DarshanKrishna-DK/Zuik/issues) for Team pilots.
-
----
-
-## Getting started
-
-A simple path from zero to your first automation:
-
-```mermaid
-flowchart TD
-    A["1. Open Zuik"] --> B["2. Connect wallet"]
-    B --> C["3. Describe your goal"]
-    C --> D["4. Review workflow"]
-    D --> E["5. Sign & activate"]
-    E --> F{"Need 24/7 runs?"}
-    F -->|Yes| G["6. Enable cloud agent"]
-    F -->|No| H["Runs when you're online"]
-    G --> I["Get Telegram alerts"]
-
-    style A fill:#1a1040,stroke:#a78bfa,color:#f8fafc
-    style E fill:#0a2018,stroke:#34d399,color:#f8fafc
-    style I fill:#0a1a2a,stroke:#00e5ff,color:#f8fafc
-```
-
-| Step | Action |
-|------|--------|
-| **1** | Visit the Zuik app and connect a supported Algorand wallet (Pera, Defly, Exodus, and others). |
-| **2** | Open the builder. Use chat, voice, or a starter template. |
-| **3** | Example prompt: *"Every Friday, swap $500 USDC to ALGO and message me on Telegram when done."* |
-| **4** | Review the visual workflow, limits, and fee preview. Adjust anything that does not match your intent. |
-| **5** | Sign once to activate. Your keys never leave your wallet. |
-| **6** (optional) | Turn on the cloud agent so schedules and price watches run while you are away. |
-
-**Security habits we recommend**
-
-- Start with small amounts until you trust a workflow.
-- Use Guardian spending caps for any delegated automation.
-- Keep Telegram and API keys private; Zuik only uses what you configure.
-
----
-
-## Developer setup
-
-Everything you need to clone, configure, and run Zuik on your machine. The repo is a monorepo with three main packages:
-
-| Package | Path | Role |
-|---------|------|------|
-| **Frontend** | `projects/Zuik-frontend` | React web app (builder, dashboard, wallet) |
-| **Backend** | `projects/server` | AI proxy, market proxy, cloud agent, Telegram, voice |
-| **Contracts** | `projects/Zuik-contracts` | Guardian and delegation smart contracts (optional for basic UI) |
-
-### Prerequisites
-
-| Requirement | Notes |
-|-------------|-------|
-| **Node.js 20+** | Frontend and server require Node 20+. Contracts require Node 22+. |
-| **npm 9+** | Bundled with Node.js |
-| **Docker** | Only needed for [AlgoKit LocalNet](#network-configuration-localnet-vs-testnet) |
-| **AlgoKit CLI** | Optional but recommended for contracts and LocalNet (`algokit localnet start`) |
-
-Free API keys you will want for full functionality:
-
-- [Groq](https://console.groq.com) - AI intent parsing (server-side)
-- [Supabase](https://supabase.com) - Workflow persistence and dashboard history
-
-### Clone and install
-
-```bash
-git clone https://github.com/DarshanKrishna-DK/Zuik.git
-cd Zuik
-
-# Frontend (required)
-cd projects/Zuik-frontend
-npm install
-
-# Backend (required for AI assistant, cloud agent, Telegram)
-cd ../server
-npm install
-
-# Smart contracts (optional - Guardian / delegation demos)
-cd ../Zuik-contracts
-npm install
-```
-
-From the repo root you can also build everything with AlgoKit:
-
-```bash
-algokit project run build
-```
-
----
-
-## Environment configuration
-
-Zuik uses separate env files for the frontend and backend. Never commit secrets - `.env.local` (frontend) and `.env` (server) are gitignored.
-
-### Frontend (`projects/Zuik-frontend`)
-
-```bash
-cd projects/Zuik-frontend
-cp .env.template .env.local
-```
-
-Edit `.env.local`. Uncomment **one** network block (TestNet, LocalNet, or MainNet) and fill in API keys at the bottom.
-
-#### Required vs optional (frontend)
-
-| Variable | Required | Purpose |
-|----------|:--------:|---------|
-| `VITE_ALGOD_SERVER`, `VITE_ALGOD_NETWORK` | Yes | Algorand node connection |
-| `VITE_INDEXER_SERVER` | Yes | Transaction and app history |
-| `VITE_SERVER_URL` | For AI chat | Backend URL (default `http://localhost:3001`) |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | For persistence | Save workflows and dashboard data |
-| `VITE_GUARDIAN_APP_ID`, `VITE_GUARDIAN_APP_ADDRESS` | For Guardian | On-chain spending limits (after contract deploy) |
-| `VITE_KMD_*` | LocalNet only | Built-in LocalNet wallet |
-| `VITE_GROQ_MODEL` | Optional | Model name (API key lives on the server) |
-| `VITE_TELEGRAM_BOT_TOKEN` | Optional | Telegram notification block |
-| `VITE_VOICE_SERVER_URL` | Optional | Override voice server URL in production |
-
-The Groq API key is **not** set in the frontend. Set `GROQ_API_KEY` on the backend instead.
-
-### Backend (`projects/server`)
-
-```bash
-cd projects/server
-cp .env.example .env
-```
-
-#### Required vs optional (backend)
-
-| Variable | Required | Purpose |
-|----------|:--------:|---------|
-| `SUPABASE_URL` | Yes | Database connection |
-| `SUPABASE_SERVICE_KEY` | Yes | Service role key (not the anon key) |
-| `GROQ_API_KEY` | Yes for AI | Intent parsing and chat |
-| `CORS_ORIGIN` | Yes | Must include `http://localhost:5173` for local dev |
-| `PORT` | Optional | Main server port (default **3001**) |
-| `VOICE_SERVER_PORT` | Optional | Voice server in dev (default **3002**) |
-| `TELEGRAM_BOT_TOKEN` | Optional | Telegram bot integration |
-| `ELEVENLABS_API_KEY` | Optional | High-quality text-to-speech |
-| `ALGOD_URL` | Optional | Algorand node for balance checks (defaults to TestNet) |
-
-### Network configuration (LocalNet vs TestNet)
-
-**TestNet (default in `.env.template`)** - Works out of the box with free [Nodely](https://nodely.io) endpoints. No Algorand node API key needed. Connect Pera, Defly, or Exodus and fund from the [TestNet dispenser](https://dispenser.testnet.aws.algodev.network/).
-
-**LocalNet** - For offline development and KMD wallet automation:
-
-1. Start Docker, then run `algokit localnet start` (or `npm run localnet:start` in `projects/Zuik-contracts`).
-2. In `.env.local`, comment out the TestNet block and uncomment the LocalNet block (`VITE_ALGOD_PORT=4001`, `VITE_KMD_PORT=4002`, etc.).
-3. Restart the frontend dev server.
-
-**MainNet** - Uncomment the MainNet block in `.env.local`. Use real funds only after thorough testing on TestNet.
-
-After deploying Guardian contracts, copy `VITE_GUARDIAN_APP_ID` and `VITE_GUARDIAN_APP_ADDRESS` from `projects/Zuik-contracts/smart_contracts/artifacts/guardian/deployment.json` into `.env.local`.
-
----
-
-## Running the project
-
-Run the backend and frontend in **separate terminals**. Default ports:
-
-| Service | Port | URL |
-|---------|------|-----|
-| Frontend (Vite) | **5173** | http://localhost:5173 |
-| Backend (main) | **3001** | http://localhost:3001 |
-| Voice server (dev only) | **3002** | http://localhost:3002 |
-| Algod (LocalNet) | 4001 | http://localhost:4001 |
-| KMD (LocalNet) | 4002 | http://localhost:4002 |
-
-**Terminal 1 - Backend**
-
-```bash
-cd projects/server
-npm run dev
-```
-
-**Terminal 2 - Frontend**
-
-```bash
-cd projects/Zuik-frontend
-npm run dev
-```
-
-The frontend proxies `/api/ai`, `/api/market`, and `/api/voice` to the backend URLs in your env (see `vite.config.ts`).
-
-**Optional - Voice server (local dev)**
-
-When `NODE_ENV` is not `production`, voice runs as a separate process:
-
-```bash
-cd projects/server
-npm run voice:dev
-```
-
-### Verify everything is working
-
-1. **Backend health** - `curl http://localhost:3001/health` should return `"status": "ok"`.
-2. **Frontend** - Open http://localhost:5173 and confirm the landing page loads.
-3. **Wallet** - Click Connect Wallet and approve in Pera/Defly (TestNet) or use KMD on LocalNet.
-4. **AI assistant** - Open the builder chat and send a prompt. If `GROQ_API_KEY` is missing, the UI falls back to templates with a warning.
-5. **Persistence** - Save a workflow. Without Supabase keys, local-only features still work but dashboard history will not persist.
-
----
-
-## Demo and automation
-
-Zuik includes **Playwright-based browser demos** for live presentations. They open Chromium, walk through the UI with cursor highlights, typing delays, and on-screen step banners.
-
-Full details: [projects/Zuik-frontend/demo/README.md](projects/Zuik-frontend/demo/README.md)
-
-### Quick start (demos)
-
-From `projects/Zuik-frontend/`:
-
-```bash
-npm run demo:install                              # Install Chromium (once)
-cp demo/demo.config.example.json demo/demo.config.json
-npm run demo:full                               # Full stakeholder story
-```
-
-Demos default to **headed** mode (visible browser) and **auto-start** the Vite dev server. If the app is already running, set `DEMO_START_SERVER=false`.
-
-### Available demo commands
-
-| Command | What it showcases |
-|---------|-------------------|
-| `npm run demo:ai-workflow` | AI generates a wallet-trigger workflow on the builder |
-| `npm run demo:ai-edit` | AI extends the canvas to multi-agent automation |
-| `npm run demo:guardian` | Settings: Guardian on-chain daily spend limits |
-| `npm run demo:logicsig` | Settings: LogicSig automation permissions |
-| `npm run demo:trading` | Market explorer to prefilled swap workflow |
-| `npm run demo:full` | Complete story: landing, all chapters, dashboard finale |
-| `npm run demo:help` | CLI usage |
-
-**Suggested presentation order:** `demo:ai-workflow` → `demo:ai-edit` → `demo:guardian` → `demo:logicsig`, or run `demo:full` for the entire narrative.
-
-### Demo requirements
-
-- Node 20+, frontend dependencies installed, Playwright Chromium (`npm run demo:install`).
-- `.env.local` aligned with your target network.
-- `VITE_SERVER_URL` + server `GROQ_API_KEY` for AI demos (optional fallback: templates).
-- Supabase env vars for delegation persistence demos.
-- Guardian env vars after contract deploy for the Guardian chapter.
-- A connected wallet (Pera/Defly on TestNet, or `DEMO_WALLET_PROVIDER=kmd` on LocalNet). For UI-only tours: `DEMO_SKIP_WALLET=true`.
-
-Copy `demo/demo.config.example.json` to `demo/demo.config.json` to override scenario text (no secrets in that file).
-
----
-
-## Development workflow
-
-### Common commands
-
-| Location | Command | Purpose |
-|----------|---------|---------|
-| `projects/Zuik-frontend` | `npm run dev` | Start Vite dev server (port 5173) |
-| `projects/Zuik-frontend` | `npm run build` | Production build to `dist/` |
-| `projects/Zuik-frontend` | `npm run build:strict` | Typecheck + production build |
-| `projects/Zuik-frontend` | `npm run preview` | Preview production build locally |
-| `projects/server` | `npm run dev` | Backend with hot reload |
-| `projects/server` | `npm start` | Backend without watch |
-| `projects/server` | `npm run agent:dev` | Cloud agent loop only |
-| `projects/Zuik-contracts` | `npm run build` | Compile contracts, generate clients |
-| `projects/Zuik-contracts` | `npm run localnet:start` | Start AlgoKit LocalNet |
-| Repo root | `algokit project run build` | Build frontend + contracts |
-
-### Smart contracts
-
-Guardian and delegation contracts live in `projects/Zuik-contracts`. Typical flow:
-
-```bash
-cd projects/Zuik-contracts
-algokit localnet start          # if using LocalNet
-npm run build                   # compile TEAL + generate TypeScript clients
-# deploy via smart_contracts deploy scripts, then copy app ID into .env.local
-```
-
-Generated clients are linked into the frontend on `npm run dev` via `algokit project link`.
-
-### Testing
-
-| Command | Where | Purpose |
-|---------|-------|---------|
-| `npm run test:localnet` | `projects/Zuik-contracts` | Contract integration on LocalNet |
-| `npm run test:testnet` | `projects/Zuik-contracts` | Connectivity checks on TestNet |
-| `curl http://localhost:3001/health` | anywhere | Backend smoke test |
-
-For cloud agent, Telegram, and Railway deployment details, see [projects/server/README.md](projects/server/README.md).
-
-### Troubleshooting
-
-| Issue | Likely fix |
-|-------|------------|
-| Frontend loads but AI chat fails | Start the backend; set `GROQ_API_KEY` in `projects/server/.env`; confirm `VITE_SERVER_URL` matches server `PORT` (default `http://localhost:3001`) |
-| CORS errors in browser console | Add `http://localhost:5173` to `CORS_ORIGIN` in server `.env` |
-| `[Server] Missing SUPABASE_URL` on startup | Copy `.env.example` to `.env` and fill Supabase credentials |
-| Port 5173 already in use | Stop other Vite instances or set `DEMO_BASE_URL` to your running app |
-| Port 3001 already in use | Set `PORT=<free-port>` in server `.env` and update `VITE_SERVER_URL` to match |
-| Wallet will not connect on TestNet | Install Pera or Defly, switch wallet to TestNet, fund from the dispenser |
-| LocalNet transactions fail | Run `algokit localnet start`; confirm LocalNet block is uncommented in `.env.local` |
-| Guardian demo shows "not available" | Deploy Guardian contract and set `VITE_GUARDIAN_APP_ID` |
-| Demo hangs on Market page | Use latest demo scripts (`domcontentloaded` navigation); see demo README |
-| `Chromium missing` for demos | Run `npm run demo:install` in `projects/Zuik-frontend` |
+## Capabilities and use cases
+
+| Capability | Examples |
+|------------|----------|
+| **Multimodal input** | Voice, chat, and a 34-block visual flow builder |
+| **Non-custodial execution** | Wallet-signed transactions; assets stay in your control |
+| **Atomic groups** | Multi-step trades succeed together or not at all |
+| **DEX connectivity** | Tinyman direct pools and Folks Router aggregation |
+| **On-chain safety** | Guardian daily caps and LogicSig delegation with verifier apps |
+| **Cloud agent** | Background schedules, price monitors, and Telegram alerts |
+| **Persistence** | Supabase-backed workflows and run history |
+| **Trading and investing** | Weekly DCA, conditional swaps on price drops, take-profit flows |
+| **Scheduled payments** | Recurring sends to any Algorand address, payroll-style batches |
+| **Portfolio management** | Rebalancing, yield routing, auto-allocate incoming stablecoin deposits |
+| **Monitoring** | Threshold alerts to Telegram or Discord, multi-asset watchlists |
 
 ---
 
 ## Architecture
 
-High-level view of how Zuik connects your intent to the chain:
-
 ```mermaid
 graph TB
     subgraph USERS["Users"]
-        WEB["Web app"]
+        WEB["Web application"]
         TG["Telegram"]
         VOICE["Voice"]
     end
 
     subgraph PLATFORM["Zuik platform"]
-        INTENT["Intent & advisor"]
+        INTENT["Intent and advisor"]
         BUILDER["Flow builder"]
         EXEC["Workflow engine"]
-        SAFE["Safety & limits"]
+        SAFE["Safety and limits"]
     end
 
-    subgraph PERSIST["Your data"]
-        DB["Workflows & history"]
+    subgraph PERSIST["Persistence"]
+        DB["Supabase workflows and history"]
     end
 
     subgraph AGENT["Cloud agent optional"]
@@ -566,8 +181,8 @@ graph TB
 
     subgraph ALGORAND["Algorand"]
         WALLET["Your wallet"]
-        DEX["DEX liquidity"]
-        GUARD["Guardian contracts"]
+        SWAPS["Tinyman and Folks Router"]
+        GUARD["ZuikGuardian and delegation verifier"]
     end
 
     WEB --> INTENT
@@ -577,7 +192,7 @@ graph TB
     BUILDER --> EXEC
     EXEC --> SAFE
     SAFE --> WALLET
-    EXEC --> DEX
+    EXEC --> SWAPS
     SAFE --> GUARD
     EXEC --> DB
     AGENT --> EXEC
@@ -594,11 +209,303 @@ graph TB
 | Layer | Role |
 |-------|------|
 | **Experience** | Web builder, chat, voice, and Telegram as entry points |
-| **Orchestration** | Turns intent into ordered steps with logic, math, and conditions |
-| **Safety** | Pre-sign previews, advisor context, and optional on-chain Guardian caps |
+| **Orchestration** | Ordered steps with logic, math, conditions, and multi-agent flows |
+| **Safety** | Pre-sign previews, advisor context, Guardian caps, LogicSig delegation rules |
 | **Execution** | Wallet-signed transactions and atomic groups on Algorand |
-| **Persistence** | Saves workflows and run history so automations survive sessions |
-| **Cloud agent** | Runs triggers on a schedule or in the background when you opt in |
+| **Persistence** | Supabase stores workflows and run history across sessions |
+| **Cloud agent** | Background triggers when you opt in (Node.js server on Railway or local) |
+
+### Repository structure
+
+Monorepo managed with [AlgoKit](https://github.com/algorandfoundation/algokit-cli) workspace configuration (`.algokit.toml`):
+
+| Package | Path | Role |
+|---------|------|------|
+| **Frontend** | `projects/Zuik-frontend` | React web app: builder, dashboard, wallet, swap execution |
+| **Backend** | `projects/server` | AI proxy, market proxy, cloud agent, Telegram, voice |
+| **Contracts** | `projects/Zuik-contracts` | Guardian and LogicSig delegation smart contracts (Algorand TypeScript / Puya) |
+
+---
+
+## Workflow creation
+
+From natural language to on-chain execution, Zuik materializes intent into a reviewable flow before anything is signed.
+
+```mermaid
+flowchart TD
+    START(["User describes goal"]) --> PARSE["Intent engine parses goal"]
+    PARSE --> MATERIALIZE["Blocks placed on canvas"]
+    MATERIALIZE --> REFINE{"Need changes?"}
+    REFINE -->|"Chat or voice"| PARSE
+    REFINE -->|"Drag and drop"| MATERIALIZE
+    REFINE -->|"Looks good"| PREVIEW["Safety preview: fees, slippage, limits"]
+    PREVIEW --> POLICY{"Guardian or LogicSig enabled?"}
+    POLICY -->|"Yes"| VERIFY["On-chain policy check"]
+    POLICY -->|"No"| SIGN
+    VERIFY --> SIGN["Wallet signs atomic group"]
+    SIGN --> RUN["Workflow runs on trigger or schedule"]
+    RUN --> HISTORY["Results stored in dashboard"]
+
+    style START fill:#1a1040,stroke:#a78bfa,color:#f8fafc
+    style PREVIEW fill:#0a1a2a,stroke:#00e5ff,color:#f8fafc
+    style SIGN fill:#0a2018,stroke:#34d399,color:#f8fafc
+    style RUN fill:#2a1020,stroke:#ec4899,color:#f8fafc
+```
+
+Refine through chat, voice, or drag-and-drop until the canvas matches your intent. The safety preview surfaces fees and slippage before you sign.
+
+---
+
+## Smart contracts
+
+Contracts are written in **Algorand TypeScript**, compiled with **Puya**, and deployed through **AlgoKit**. Generated TypeScript clients link into the frontend via `algokit project link`.
+
+### Contract interaction flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Wallet
+    participant Guardian as ZuikGuardian
+    participant Verifier as DelegationVerifier
+    participant DEX as Tinyman / Folks Router
+
+    User->>Frontend: Enable automation with limits
+    Frontend->>Wallet: Request signature
+    Wallet->>Guardian: Register agent and daily cap
+    Note over User,Verifier: LogicSig path (optional)
+    User->>Frontend: Configure delegation policy
+    Frontend->>Verifier: Deploy per-user verifier app
+    Frontend->>Wallet: Sign LogicSig template
+
+    User->>Frontend: Run workflow
+    Frontend->>Wallet: Sign atomic transaction group
+    Wallet->>Guardian: attemptSpend (if delegated)
+    Guardian-->>Wallet: Approve or revert
+    Wallet->>DEX: Swap transactions
+    Wallet->>Verifier: Policy validation call
+    Verifier-->>Wallet: Approve or revert
+    DEX-->>Frontend: Execution result
+```
+
+### ZuikGuardian
+
+On-chain **daily spending limits** for delegated or automated agents. The contract owner registers agents with a daily cap in microAlgos. Only the registered agent may call `attemptSpend`; the contract reverts if the cap is exceeded or the contract is paused.
+
+| Method | Caller | Purpose |
+|--------|--------|---------|
+| `createApplication` | Deployer | Sets contract owner |
+| `optIn` | Agent | Creates local state before registration |
+| `registerAgent(address,uint64)` | Owner | Sets daily cap for an opted-in agent |
+| `updateDailyCap(address,uint64)` | Owner | Updates an agent cap |
+| `attemptSpend(address,uint64)` | Agent | Records spend against daily limit |
+| `setPaused(bool)` | Owner | Emergency pause |
+
+Source: `projects/Zuik-contracts/smart_contracts/guardian/contract.algo.ts`
+
+### Delegation verifier and LogicSig
+
+**LogicSig delegation** for server-side automation with strict on-chain guardrails. The user deploys a verifier application with trade size, daily cap, allowed assets, allowed DEX application ID, and expiry round. A templated LogicSig may only submit payments, asset transfers, or application calls that match those rules and include a paired verifier call in the same atomic group.
+
+| Component | Purpose |
+|-----------|---------|
+| `ZuikDelegationVerifier` | Validates each spend against owner policy |
+| `ZuikDelegationLsig` | Template LogicSig bound to verifier and DEX allowlist |
+
+Source: `projects/Zuik-contracts/smart_contracts/lsig_delegation/contract.algo.ts`
+
+Verifier applications deploy **per user** from the Settings screen when enabling LogicSig automation. Policy is stored in Supabase for the cloud agent.
+
+### TestNet deployment
+
+| Contract | Network | Application ID | Application address | Status |
+|----------|---------|----------------|---------------------|--------|
+| **ZuikGuardian** | TestNet | `762678299` | `Y3L2MA2ZFE7TV2RP6SUH5ULCKVM5K7NSDBRCC6SSPXLCHL3GKWXPL5VR2Y` | Deployed (2026-05-17) |
+| **ZuikDelegationVerifier** | TestNet | Per-user deploy | Per-user | Deployed via Settings |
+| **ZuikDelegationLsig** | TestNet | Per-user template | Per-user | Created with verifier |
+
+Deployment artifact: `projects/Zuik-contracts/smart_contracts/artifacts/guardian/deployment.json`
+
+**Configure the frontend** after Guardian deploy:
+
+```bash
+VITE_GUARDIAN_APP_ID=762678299
+VITE_GUARDIAN_APP_ADDRESS=Y3L2MA2ZFE7TV2RP6SUH5ULCKVM5K7NSDBRCC6SSPXLCHL3GKWXPL5VR2Y
+```
+
+**Redeploy contracts** (LocalNet or TestNet):
+
+```bash
+cd projects/Zuik-contracts
+algokit localnet start          # LocalNet only
+npm run build                   # Compile TEAL and generate clients
+algokit project deploy testnet  # or localnet
+```
+
+Integration tests: `npm run test:localnet` and `npm run test:testnet` in `projects/Zuik-contracts`.
+
+---
+
+## Technology and integrations
+
+| Area | Technologies |
+|------|--------------|
+| **Frontend** | React 18, TypeScript, Vite, React Router, `@xyflow/react`, `@txnlab/use-wallet` |
+| **Backend** | Node.js 20+, Express-style routing, cloud workflow runner |
+| **Smart contracts** | Algorand TypeScript (Puya), AlgoKit CLI, AlgoKit Utils, generated ARC-56 clients |
+| **Blockchain** | `algosdk`, Algorand atomic transaction groups, LogicSig templates |
+| **AI** | Groq (intent parsing and chat via server proxy) |
+| **Database** | Supabase (workflows, execution history, delegation vault records) |
+| **Voice** | Groq Whisper transcription, ElevenLabs text-to-speech (optional) |
+| **Demos** | Playwright browser automation |
+
+| Integration | Role in Zuik |
+|-------------|--------------|
+| **[Tinyman](https://tinyman.org/)** | Primary TestNet swap execution via `@tinymanorg/tinyman-js-sdk` |
+| **[Folks Router](https://folksrouter.io/)** | Aggregated swap quotes and routes |
+| **[Pera Wallet](https://perawallet.app/)** | Wallet connect via `@perawallet/connect` |
+| **[Defly Wallet](https://defly.app/)** | Wallet connect via `@blockshake/defly-connect` |
+| **[AlgoKit](https://github.com/algorandfoundation/algokit-cli)** | Workspace build, LocalNet, contract deploy, client generation |
+| **[Nodely](https://nodely.io/)** | Free-tier TestNet algod and indexer endpoints (default in `.env.template`) |
+| **[Supabase](https://supabase.com/)** | Workflow persistence, dashboard, delegation metadata |
+| **[Groq](https://groq.com/)** | Server-side LLM for intent parsing (key never exposed to browser) |
+| **[Telegram](https://telegram.org/)** | Bot notifications, workflow control, voice conversations via `@ZuikDeFiBot` |
+
+Swap routing tries **Tinyman** first (on-chain pool state), then **Folks Router** when a competitive quote is available (`projects/Zuik-frontend/src/services/swapToken.ts`).
+
+---
+
+## Getting started
+
+| Step | Action |
+|------|--------|
+| **1** | Open the Zuik application and connect a supported Algorand wallet (Pera, Defly, Exodus, and others on TestNet). |
+| **2** | Open the builder. Use chat, voice, or a starter template. |
+| **3** | Try a prompt like: *Every Friday, swap $X USDC to ALGO and message me on Telegram when done.* |
+| **4** | Review the visual workflow, limits, and fee preview. |
+| **5** | Sign once to activate. Your keys never leave your wallet. |
+| **6** (optional) | Enable the cloud agent for 24/7 schedules and price watches. |
+
+Fund TestNet wallets from the [Algorand TestNet dispenser](https://dispenser.testnet.aws.algodev.network/).
+
+**Security habits:** start with small amounts, use Guardian caps for delegated automation, keep Telegram and API keys private.
+
+For local development, continue to [Developer setup](#developer-setup).
+
+---
+
+## Developer setup
+
+### Prerequisites
+
+| Requirement | Notes |
+|-------------|-------|
+| **Node.js 20+** | Frontend and server |
+| **Node.js 22+** | Smart contracts |
+| **npm 9+** | Bundled with Node.js |
+| **Docker** | LocalNet only |
+| **AlgoKit CLI 2.5+** | Contract compile, deploy, LocalNet |
+
+Optional keys for full functionality: [Groq](https://console.groq.com), [Supabase](https://supabase.com).
+
+### Clone and install
+
+```bash
+git clone https://github.com/DarshanKrishna-DK/Zuik.git
+cd Zuik
+
+cd projects/Zuik-frontend && npm install
+cd ../server && npm install
+cd ../Zuik-contracts && npm install
+```
+
+Build everything from the repository root:
+
+```bash
+algokit project run build
+```
+
+### Environment configuration
+
+Never commit secrets. Use `.env.local` (frontend) and `.env` (server).
+
+**Frontend** (`projects/Zuik-frontend`):
+
+```bash
+cd projects/Zuik-frontend
+cp .env.template .env.local
+```
+
+Uncomment **one** network block (TestNet, LocalNet, or MainNet). TestNet works out of the box with Nodely endpoints.
+
+| Variable | Required | Purpose |
+|----------|:--------:|---------|
+| `VITE_ALGOD_SERVER`, `VITE_ALGOD_NETWORK` | Yes | Algorand node |
+| `VITE_INDEXER_SERVER` | Yes | Transaction history |
+| `VITE_SERVER_URL` | Optional in dev | Backend URL for production builds (dev uses Vite proxy) |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | For persistence | Workflows and dashboard |
+| `VITE_GUARDIAN_APP_ID`, `VITE_GUARDIAN_APP_ADDRESS` | For Guardian | TestNet values in [Smart contracts](#smart-contracts) or your deploy |
+
+The Groq key lives on the **server** as `GROQ_API_KEY`, not in the frontend.
+
+**Backend** (`projects/server`):
+
+```bash
+cd projects/server
+cp .env.example .env
+```
+
+| Variable | Required | Purpose |
+|----------|:--------:|---------|
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Yes | Database |
+| `GROQ_API_KEY` | For AI | Intent parsing |
+| `CORS_ORIGIN` | Yes | Include `http://localhost:5173` (and `5174` if Vite falls back) |
+
+See [projects/server/README.md](projects/server/README.md) for Railway deployment and Telegram webhook setup.
+
+### Running the project
+
+| Service | Port | URL |
+|---------|------|-----|
+| Frontend (Vite) | 5173 | http://localhost:5173 |
+| Backend | 4021 | http://localhost:4021 |
+| Voice server (development) | 3002 | http://localhost:3002 |
+
+**Terminal 1 - Backend**
+
+```bash
+cd projects/server
+# Set PORT=4021 in .env (or export PORT=4021)
+npm run dev
+```
+
+**Terminal 2 - Frontend**
+
+```bash
+cd projects/Zuik-frontend
+npm run dev
+```
+
+**Verify**
+
+1. `curl http://localhost:4021/health` returns `"status": "ok"`.
+2. Open http://localhost:5173 and connect a TestNet wallet (Pera, Defly, or Exodus).
+3. Send a chat prompt in the builder (requires `GROQ_API_KEY` on the server).
+
+---
+
+## Development workflow
+
+| Location | Command | Purpose |
+|----------|---------|---------|
+| `projects/Zuik-frontend` | `npm run dev` | Development server |
+| `projects/Zuik-frontend` | `npm run build:strict` | Typecheck and production build |
+| `projects/server` | `npm run dev` | Backend with hot reload |
+| `projects/server` | `npm run agent:dev` | Cloud agent loop only |
+| `projects/Zuik-contracts` | `npm run build` | Compile contracts |
+| `projects/Zuik-contracts` | `npm run test:localnet` | Contract integration tests |
+| Repository root | `algokit project run build` | Build frontend and contracts |
 
 ---
 
@@ -607,22 +514,12 @@ graph TB
 | Principle | Commitment |
 |-----------|------------|
 | **Non-custodial** | Zuik cannot move funds without your wallet signature |
-| **Transparent workflows** | Every step is visible before you approve |
-| **Smart limits** | Guardian and delegation rules cap what automation can do |
+| **Transparent workflows** | Every step visible before approval |
+| **On-chain limits** | Guardian and LogicSig verifier cap automated spending |
 | **Atomic safety** | Multi-step actions avoid partial execution |
 | **You own your keys** | Export, rotate, and disconnect wallets at any time |
 
-Zuik provides tooling, not investment advice. Past performance does not guarantee future results. Only automate amounts you can afford to risk.
-
----
-
-## Community and support
-
-| Resource | Link |
-|----------|------|
-| **GitHub** | [github.com/DarshanKrishna-DK/Zuik](https://github.com/DarshanKrishna-DK/Zuik) |
-| **Telegram** | [@ZuikDeFiBot](https://t.me/ZuikDeFiBot) |
-| **Issues & feedback** | [Open an issue](https://github.com/DarshanKrishna-DK/Zuik/issues) |
+Zuik provides tooling, not investment advice. Only automate amounts you can afford to risk.
 
 ---
 

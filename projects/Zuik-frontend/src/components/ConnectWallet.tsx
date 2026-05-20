@@ -29,6 +29,7 @@ const ConnectWallet = ({ openModal, closeModal }: ConnectWalletInterface) => {
   const [copied, setCopied] = useState(false)
 
   const isKmd = (wallet: Wallet) => wallet.id === WalletId.KMD
+  const isMnemonic = (wallet: Wallet) => wallet.id === WalletId.MNEMONIC
 
   const handleCopyAddress = async () => {
     if (!activeAddress) return
@@ -104,7 +105,7 @@ const ConnectWallet = ({ openModal, closeModal }: ConnectWalletInterface) => {
                   onClick={() => wallet.connect()}
                   className="z-wallet-option"
                 >
-                  {!isKmd(wallet) ? (
+                  {!isKmd(wallet) && !isMnemonic(wallet) ? (
                     <img
                       src={wallet.metadata.icon}
                       alt={wallet.metadata.name}
@@ -115,7 +116,13 @@ const ConnectWallet = ({ openModal, closeModal }: ConnectWalletInterface) => {
                       <WalletIcon size={18} />
                     </div>
                   )}
-                  <span>{isKmd(wallet) ? 'LocalNet Wallet' : wallet.metadata.name}</span>
+                  <span>
+                    {isKmd(wallet)
+                      ? 'LocalNet Wallet'
+                      : isMnemonic(wallet)
+                        ? 'Demo Wallet'
+                        : wallet.metadata.name}
+                  </span>
                 </button>
               ))}
             </div>

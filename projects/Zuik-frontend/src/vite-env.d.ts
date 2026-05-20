@@ -27,6 +27,10 @@ interface ImportMetaEnv {
 
   readonly VITE_SUPABASE_URL: string
   readonly VITE_SUPABASE_ANON_KEY: string
+
+  readonly VITE_DEMO_AUTO_WALLET: string
+  readonly VITE_DEMO_WALLET_MNEMONIC: string
+  readonly VITE_DEMO_LOCAL_INTENT: string
 }
 
 interface ImportMeta {
