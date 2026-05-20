@@ -78,10 +78,6 @@ Most people want outcomes - steady investing, recurring payments, price alerts -
 
 Zuik is an intent-based DeFi automation platform on Algorand. You describe what you want; AI and visual tools turn that into a clear workflow you review and approve.
 
-## USP
-
-**Governed AI automation:** AI agents can go rogue or act outside intended limits. Zuik addresses this with reviewable workflows before signing, on-chain Guardian spending caps, and LogicSig delegation rules so automation stays bounded and wallet controlled.
-
 | Pain point | How Zuik helps |
 |------------|----------------|
 | Complexity across wallets, DEXs, and spreadsheets | One intent engine and visual builder for the full flow |
