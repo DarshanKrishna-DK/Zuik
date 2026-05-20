@@ -216,6 +216,8 @@
   border-radius: var(--z-radius-lg);
   box-shadow: 0 12px 28px rgba(8, 12, 16, 0.45);
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .st-card-title {
@@ -241,6 +243,8 @@
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--z-border);
+  position: relative;
+  z-index: 10;
 }
 
 .st-card-footer--stack {
@@ -361,6 +365,22 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  position: relative;
+  z-index: 2;
+}
+
+/* Prevent any form elements from overlapping buttons */
+.st-section form,
+.st-card form {
+  position: relative;
+  z-index: 2;
+}
+
+/* Ensure input fields don't block buttons */
+.st-field,
+.st-input {
+  position: relative;
+  z-index: 3;
 }
 
 .st-feedback {
@@ -481,6 +501,25 @@
   gap: 8px;
   width: 100%;
   text-decoration: none;
+}
+
+/* Ensure all buttons in settings are clickable */
+.st-card .z-btn,
+.st-card button,
+.guardian-form button,
+.st-card-footer button {
+  position: relative;
+  z-index: 100;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.st-card .z-btn:hover,
+.st-card button:hover,
+.guardian-form button:hover,
+.st-card-footer button:hover {
+  transform: translateY(-1px);
+  transition: transform 0.15s ease;
 }
 
 @media (max-width: 768px) {

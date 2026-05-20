@@ -17,7 +17,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS ?? '15000', 10)
 const INLINE_VOICE = process.env.NODE_ENV === 'production'
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL ?? 'http://localhost:5173'
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL ?? 'http://localhost:5173,http://localhost:5174'
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('[Server] Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in .env')

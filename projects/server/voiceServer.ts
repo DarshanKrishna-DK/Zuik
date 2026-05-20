@@ -5,7 +5,7 @@ import cors from 'cors'
 import { transcribeAudio, synthesizeSpeech, detectLanguage, isVoiceServiceConfigured, getAvailableVoices } from './voiceService.js'
 
 const PORT = parseInt(process.env.VOICE_SERVER_PORT || '3002', 10)
-const CORS_ORIGIN = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:5173'
+const CORS_ORIGIN = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:5174'
 const corsOrigins = CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
 
 const upload = multer({

@@ -1,6 +1,6 @@
 import type { Node, Edge } from '@xyflow/react'
-import type { ParsedIntent, IntentStep } from '../services/intentParser'
-import { getBlockById } from './blockRegistry'
+import type { ParsedIntent, IntentStep, CanvasBlock } from '../services/intentParser'
+import { getBlockById, type BlockDefinition } from './blockRegistry'
 
 const NODE_WIDTH = 280
 const NODE_HEIGHT_ESTIMATE = 180
@@ -8,6 +8,65 @@ const HORIZONTAL_GAP = 60
 const VERTICAL_OFFSET = 240
 const START_X = 80
 const START_Y = 80
+
+const SOURCE_HANDLE_PRIORITY = [
+  'tick', 'txn', 'txId', 'amount', 'out', 'true', 'result', 'output',
+  'passed', 'payload', 'triggered', 'value', 'quoteAmount', 'merged', 'passthrough',
+]
+
+function pickSourceHandle(def: BlockDefinition, override?: string | null): string | undefined {
+  if (override && def.outputs.some((port) => port.id === override)) return override
+  for (const id of SOURCE_HANDLE_PRIORITY) {
+    if (def.outputs.some((port) => port.id === id)) return id
+  }
+  return def.outputs[0]?.id
+}
+
+function pickTargetHandle(
+  targetDef: BlockDefinition,
+  sourceDef: BlockDefinition,
+  sourceHandle?: string,
+): string | undefined {
+  if (targetDef.inputs.length === 0) return undefined
+
+  const sourcePort =
+    sourceDef.outputs.find((port) => port.id === sourceHandle) ?? sourceDef.outputs[0]
+
+  if (sourcePort) {
+    const compatible = targetDef.inputs.find(
+      (port) =>
+        port.type === sourcePort.type ||
+        port.type === 'any' ||
+        sourcePort.type === 'any',
+    )
+    if (compatible) return compatible.id
+  }
+
+  for (const preferred of ['trigger', 'input', 'value', 'input1']) {
+    const match = targetDef.inputs.find((port) => port.id === preferred)
+    if (match) return match.id
+  }
+
+  return targetDef.inputs[0]?.id
+}
+
+function buildEdge(
+  sourceId: string,
+  targetId: string,
+  sourceDef: BlockDefinition,
+  targetDef: BlockDefinition,
+  sourceHandleOverride?: string | null,
+): Edge {
+  const sourceHandle = pickSourceHandle(sourceDef, sourceHandleOverride)
+  const targetHandle = pickTargetHandle(targetDef, sourceDef, sourceHandle)
+  return {
+    id: `e_${sourceId}_${targetId}`,
+    source: sourceId,
+    target: targetId,
+    ...(sourceHandle ? { sourceHandle } : {}),
+    ...(targetHandle ? { targetHandle } : {}),
+  }
+}
 
 let matCounter = 0
 function nextMatId() {
@@ -26,6 +85,7 @@ export function materializeIntent(intent: ParsedIntent): MaterializedFlow {
   let x = START_X
   const y = START_Y
   let prevNodeId: string | null = null
+  let prevDef: BlockDefinition | null = null
   let prevSourceHandle: string | null = null
 
   for (let i = 0; i < intent.steps.length; i++) {
@@ -56,24 +116,19 @@ export function materializeIntent(intent: ParsedIntent): MaterializedFlow {
     }
     nodes.push(node)
 
-    if (prevNodeId) {
-      const edge: Edge = {
-        id: `e_${prevNodeId}_${nodeId}`,
-        source: prevNodeId,
-        target: nodeId,
-        sourceHandle: prevSourceHandle ?? undefined,
-      }
-      edges.push(edge)
+    if (prevNodeId && prevDef) {
+      edges.push(buildEdge(prevNodeId, nodeId, prevDef, def, prevSourceHandle))
     }
 
     if (step.action === 'comparator') {
       prevSourceHandle = 'true'
-      handleComparatorBranching(intent.steps, i, nodeId, x, y, nodes, edges)
+      handleComparatorBranching(intent.steps, i, nodeId, def, x, y, nodes, edges)
     } else {
       prevSourceHandle = null
     }
 
     prevNodeId = nodeId
+    prevDef = def
     x += NODE_WIDTH + HORIZONTAL_GAP
   }
 
@@ -84,6 +139,7 @@ function handleComparatorBranching(
   steps: IntentStep[],
   comparatorIndex: number,
   comparatorNodeId: string,
+  comparatorDef: BlockDefinition,
   baseX: number,
   baseY: number,
   _nodes: Node[],
@@ -101,6 +157,9 @@ function handleComparatorBranching(
 
   if (isBranchingAction) {
     const falseNodeId = nextMatId()
+    const falseDef = getBlockById('log-debug')
+    if (!falseDef) return
+
     const falseNode: Node = {
       id: falseNodeId,
       type: 'generic',
@@ -113,13 +172,7 @@ function handleComparatorBranching(
     }
     _nodes.push(falseNode)
 
-    const falseEdge: Edge = {
-      id: `e_${comparatorNodeId}_${falseNodeId}`,
-      source: comparatorNodeId,
-      target: falseNodeId,
-      sourceHandle: 'false',
-    }
-    _edges.push(falseEdge)
+    _edges.push(buildEdge(comparatorNodeId, falseNodeId, comparatorDef, falseDef, 'false'))
   }
 }
 
@@ -159,11 +212,19 @@ export function addNodesToCanvas(
     if (!hasIncoming) {
       const lastExisting = existingNodes[existingNodes.length - 1]
       if (lastExisting) {
-        allEdges.push({
-          id: `auto_${lastExisting.id}_${firstNewId}`,
-          source: lastExisting.id,
-          target: firstNewId,
-        })
+        const lastBlockId = (lastExisting.data as { blockId?: string }).blockId
+        const firstNewBlockId = (shifted[0].data as { blockId?: string }).blockId
+        const lastDef = lastBlockId ? getBlockById(lastBlockId) : undefined
+        const firstDef = firstNewBlockId ? getBlockById(firstNewBlockId) : undefined
+        if (lastDef && firstDef) {
+          allEdges.push(buildEdge(lastExisting.id, firstNewId, lastDef, firstDef))
+        } else {
+          allEdges.push({
+            id: `auto_${lastExisting.id}_${firstNewId}`,
+            source: lastExisting.id,
+            target: firstNewId,
+          })
+        }
       }
     }
   }
@@ -172,4 +233,112 @@ export function addNodesToCanvas(
     nodes: [...existingNodes, ...shifted],
     edges: allEdges,
   }
+}
+
+export type CanvasUpdateMode = 'replace' | 'add' | 'in_place'
+
+export function nodesToCanvasBlocks(nodes: Node[]): CanvasBlock[] {
+  return nodes.map((n) => {
+    const data = n.data as {
+      blockId?: string
+      config?: Record<string, string | number | undefined>
+      label?: string
+    }
+    const blockId = data.blockId ?? ''
+    const def = getBlockById(blockId)
+    return {
+      nodeId: n.id,
+      blockId,
+      blockName: def?.name ?? data.label ?? blockId,
+      config: data.config ?? {},
+    }
+  })
+}
+
+export function inferCanvasUpdateMode(
+  intent: ParsedIntent,
+  canvasBlocks: CanvasBlock[],
+  userMessage: string,
+): CanvasUpdateMode {
+  if (canvasBlocks.length === 0) return 'replace'
+
+  const lower = userMessage.toLowerCase()
+  if (/\b(add|also|extend|append|another|extra)\b/.test(lower)) return 'add'
+  if (intent.replaceCanvas === true) return 'replace'
+  if (/\b(change|instead|update|modify|revise|replace)\b/.test(lower)) return 'replace'
+  if (intent.replaceCanvas === false) return 'add'
+
+  const existingIds = canvasBlocks.map((b) => b.blockId)
+  const newIds = intent.steps.map((s) => s.action)
+  if (
+    existingIds.length === newIds.length &&
+    existingIds.every((id, i) => id === newIds[i])
+  ) {
+    return 'in_place'
+  }
+
+  return 'replace'
+}
+
+export function updateCanvasInPlace(
+  intent: ParsedIntent,
+  existingNodes: Node[],
+  existingEdges: Edge[],
+): { nodes: Node[]; edges: Edge[] } | null {
+  const existingIds = existingNodes.map(
+    (n) => (n.data as { blockId?: string }).blockId ?? '',
+  )
+  const newIds = intent.steps.map((s) => s.action)
+  if (
+    existingIds.length !== newIds.length ||
+    !existingIds.every((id, i) => id === newIds[i])
+  ) {
+    return null
+  }
+
+  const nodes = existingNodes.map((node, i) => {
+    const step = intent.steps[i]
+    const def = getBlockById(step.action)
+    if (!def) return node
+
+    const config: Record<string, string | number | undefined> = {}
+    for (const field of def.config) {
+      if (step.params[field.id] !== undefined) {
+        config[field.id] = step.params[field.id]
+      } else if (field.defaultValue !== undefined) {
+        config[field.id] = field.defaultValue
+      }
+    }
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        blockId: def.id,
+        config,
+        label: def.name,
+      },
+    }
+  })
+
+  return { nodes, edges: existingEdges }
+}
+
+export function applyIntentToCanvas(
+  intent: ParsedIntent,
+  existingNodes: Node[],
+  existingEdges: Edge[],
+  mode: CanvasUpdateMode,
+): { nodes: Node[]; edges: Edge[] } {
+  if (mode === 'in_place') {
+    const updated = updateCanvasInPlace(intent, existingNodes, existingEdges)
+    if (updated) return updated
+  }
+
+  const materialized = materializeIntent(intent)
+  if (mode === 'add') {
+    return addNodesToCanvas(existingNodes, existingEdges, materialized.nodes, materialized.edges)
+  }
+
+  return materialized
 }

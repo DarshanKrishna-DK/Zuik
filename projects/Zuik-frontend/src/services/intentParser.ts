@@ -1,5 +1,6 @@
 import { getAllBlocks } from '../lib/blockRegistry'
 import type { BlockDefinition } from '../lib/blockRegistry'
+import { inferCanvasUpdateMode } from '../lib/intentMaterializer'
 import {
   ADVISOR_DECISION_DISCIPLINE,
   QUANT_AND_ML_BEST_PRACTICES,
@@ -10,6 +11,8 @@ import {
 const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'llama-3.3-70b-versatile'
 
 function resolveAiChatUrl(): string {
+  // In dev, always use the Vite proxy to avoid CORS (even when VITE_SERVER_URL is set for demos).
+  if (import.meta.env.DEV) return '/api/ai/chat'
   const serverBase = (import.meta.env.VITE_SERVER_URL as string | undefined)?.trim()
   if (!serverBase) return '/api/ai/chat'
   const normalized = serverBase.replace(/\/$/, '').replace(/\/api\/?$/i, '')
@@ -423,6 +426,53 @@ function truncateConversationHistory(
   }))
 }
 
+/** Deterministic intent for demo recording when AI backend is unavailable. */
+function parseLocalDemoIntent(userMessage: string, userContext?: UserContext): ParsedIntent | null {
+  if (import.meta.env.VITE_DEMO_LOCAL_INTENT !== 'true') return null
+  const lower = userMessage.toLowerCase()
+  if (!lower.includes('usdc') || !lower.includes('receive')) return null
+
+  const notify = lower.includes('telegram') || lower.includes('notify')
+  const pollInterval = lower.includes('5 second') ? 5 : 15
+  const wallet = userContext?.walletAddress ?? '{{user_wallet}}'
+
+  const steps: IntentStep[] = [
+    {
+      action: 'wallet-event',
+      params: {
+        assetId: EXAMPLE_USDC_ASA,
+        address: wallet,
+        pollInterval,
+        amountMode: 'received',
+      },
+    },
+    {
+      action: 'swap-token',
+      params: {
+        fromAsset: EXAMPLE_USDC_ASA,
+        toAsset: 0,
+        amount: '{{wallet-event.amount}}',
+        slippage: 0.5,
+      },
+    },
+  ]
+  if (notify) {
+    steps.push({
+      action: 'send-telegram',
+      params: { message: 'Incoming USDC swapped to ALGO on Algorand TestNet.' },
+    })
+  }
+
+  return {
+    intent: 'auto_swap_on_receive',
+    steps,
+    explanation:
+      'Watching your wallet for incoming USDC. When the balance increases between polls, the net amount is swapped to ALGO via Tinyman.',
+    confidence: 1,
+    userMessage,
+  }
+}
+
 export async function parseIntent(
   userMessage: string,
   conversationHistory?: { role: 'user' | 'assistant'; content: string }[],
@@ -430,6 +480,23 @@ export async function parseIntent(
   canvasBlocks?: CanvasBlock[],
   userContext?: UserContext,
 ): Promise<ParsedIntent> {
+  const localDemo = parseLocalDemoIntent(userMessage, userContext)
+  if (localDemo) {
+    if (userContext?.walletAddress) {
+      for (const step of localDemo.steps) {
+        for (const [key, val] of Object.entries(step.params)) {
+          if (val === '{{user_wallet}}') {
+            step.params[key] = userContext.walletAddress
+          }
+        }
+      }
+    }
+    if (canvasBlocks && canvasBlocks.length > 0 && localDemo.steps.length > 0) {
+      localDemo.replaceCanvas = inferCanvasUpdateMode(localDemo, canvasBlocks, userMessage) === 'replace'
+    }
+    return localDemo
+  }
+
   const systemContent = truncateSystemPrompt(
     advisorMode ? buildAdvisorPrompt(canvasBlocks, userContext) : buildSystemPrompt(canvasBlocks, userContext),
   )

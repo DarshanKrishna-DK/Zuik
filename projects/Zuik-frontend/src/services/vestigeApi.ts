@@ -1,9 +1,9 @@
 function marketApiBase(envKey: string, devPath: string, serverSuffix: string, prodUrl: string): string {
   const fromEnv = import.meta.env[envKey] as string | undefined
   if (fromEnv?.trim()) return fromEnv.trim().replace(/\/$/, '')
+  if (import.meta.env.DEV) return devPath
   const server = (import.meta.env.VITE_SERVER_URL as string | undefined)?.trim()
   if (server) return `${server.replace(/\/$/, '')}/api/market${serverSuffix}`
-  if (import.meta.env.DEV) return devPath
   return prodUrl
 }
 

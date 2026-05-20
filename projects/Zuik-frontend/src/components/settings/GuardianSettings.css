@@ -186,6 +186,8 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  position: relative;
+  z-index: 5;
 }
 
 .guardian-form .check-status-btn {
@@ -276,4 +278,32 @@
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
+}
+
+/* Ensure guardian buttons are always clickable */
+.guardian-form .z-btn,
+.guardian-form button,
+.guardian-step-card .z-btn,
+.guardian-step-card button {
+  position: relative;
+  z-index: 150;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.guardian-form .z-btn:disabled,
+.guardian-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Fix any potential step card overlapping */
+.guardian-step-card {
+  position: relative;
+  z-index: 1;
+}
+
+.guardian-step-card .st-card-footer {
+  position: relative;
+  z-index: 15;
 }
