@@ -188,7 +188,31 @@ employee-payroll-demo.xlsx
 
 # ===== Local demo harness (optional; not needed to run Zuik) =====
 projects/Zuik-frontend/demo/screenshots/
+projects/Zuik-frontend/demo/screenshots/videos/
+projects/Zuik-frontend/demo/recordings/
+projects/Zuik-frontend/demo/**/*.mp4
+projects/Zuik-frontend/demo/**/*.webm
+projects/Zuik-frontend/demo/**/*.mkv
 projects/Zuik-frontend/demo/demo.config.json
+projects/Zuik-frontend/demo/.env.demo.local
+projects/Zuik-frontend/demo/.env.demo.*
+projects/Zuik-frontend/demo/dist/
+projects/Zuik-frontend/demo/run-hackathon.ts
+projects/Zuik-frontend/demo/run-real-txns.ts
+projects/Zuik-frontend/demo/src/video-export.ts
+projects/Zuik-frontend/demo/src/demos/real-txns.ts
+projects/Zuik-frontend/demo/src/demos/hackathon.ts
+projects/Zuik-frontend/demo/src/chain.ts
+# Demo wallet secrets - never commit mnemonics or private keys
+**/demo.config.json
+**/*wallet*.local.json
+**/*mnemonic*
+Zuik-AlgoBharat-Demo.mp4
+Zuik-Go-To-Market-Plan.docx
+Zuik-Go-To-Market-Plan.pdf
+*.mp4
+*.webm
+*.mkv
 
 # Do not push test scripts to GitHub
 **/test-*.ts

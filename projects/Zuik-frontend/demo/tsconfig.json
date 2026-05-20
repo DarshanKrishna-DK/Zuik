@@ -8,8 +8,14 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "run.ts"]
+  "include": [
+    "src/**/*.ts",
+    "run.ts",
+    "run-hackathon.ts",
+    "run-real-txns.ts"
+  ],
+  "exclude": ["dist", "node_modules"]
 }
