@@ -6,6 +6,8 @@ import { executeWorkflowHeadless } from './workflowRunner.js'
 import { fetchActiveLogicSigVault } from './logicSigDelegation.js'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createVoiceRouter, startVoiceServer } from './voiceServer.js'
+import { createAiChatRouter } from './aiChatRouter.js'
+import { createMarketProxyRouter } from './marketProxyRouter.js'
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const VOICE_SERVER_PORT = parseInt(process.env.VOICE_SERVER_PORT || '3002', 10)
@@ -58,10 +60,12 @@ app.use(cors({
   },
   credentials: true,
 }))
-app.use(express.json())
+app.use(express.json({ limit: '5mb' }))
 if (INLINE_VOICE) {
   app.use('/api/voice', createVoiceRouter())
 }
+app.use('/api/ai', createAiChatRouter())
+app.use('/api/market', createMarketProxyRouter())
 
 // Health check endpoint
 app.get('/health', (_req, res) => {

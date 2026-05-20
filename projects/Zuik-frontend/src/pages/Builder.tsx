@@ -276,7 +276,10 @@ export default function Builder() {
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      rfInstance.current?.updateNodeInternals(node.id)
+      const inst = rfInstance.current as (ReactFlowInstance<Node, Edge> & {
+        updateNodeInternals?: (id: string) => void
+      }) | null
+      inst?.updateNodeInternals?.(node.id)
     },
     [],
   )
@@ -1044,7 +1047,13 @@ export default function Builder() {
           />
           <div className="zuik-agent-separator" />
 
-          <button className="z-btn z-btn-primary z-btn-sm" onClick={() => setChatOpen((o) => !o)} title="AI Intent Assistant">
+          <button
+            type="button"
+            className="z-btn z-btn-primary z-btn-sm"
+            data-testid="builder-ai-assistant"
+            onClick={() => setChatOpen((o) => !o)}
+            title="AI Intent Assistant"
+          >
             <BrainCircuitIcon /> AI
           </button>
           <button className="z-btn z-btn-ghost z-btn-sm" onClick={() => setTemplateGalleryOpen((o) => !o)} title="Starter Workflows">

@@ -6,7 +6,7 @@ interface BlockInputsProps {
   values: Record<string, string | number>
   onChange: (fieldId: string, value: string | number) => void
   /** Merged after static `field.options` (deduped by value). */
-  extraSelectOptions?: Record<string, { value: string; label: string }[]>
+  extraSelectOptions?: Record<string, { value: string; label: string; description?: string }[]>
 }
 
 /**

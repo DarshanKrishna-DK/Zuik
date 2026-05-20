@@ -111,7 +111,7 @@ export default function SchedulePanel({
 
         {!supabaseReady && (
           <div className="zuik-schedule-warning">
-            Supabase is not configured. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to schedule runs.
+            Cloud sync is required to schedule automated runs. Enable sync in Settings to use this feature.
           </div>
         )}
 

@@ -1,7 +1,14 @@
 // Client-side voice service that communicates with the voice server
 import { useState, useRef, useCallback } from 'react'
 
-const VOICE_SERVER_URL = import.meta.env.VITE_VOICE_SERVER_URL || 'http://localhost:3002'
+function resolveVoiceBaseUrl(): string {
+  const fromEnv = (import.meta.env.VITE_VOICE_SERVER_URL as string | undefined)?.trim()
+  if (fromEnv) return fromEnv.replace(/\/$/, '')
+  if (import.meta.env.DEV) return ''
+  return 'http://localhost:3002'
+}
+
+const VOICE_API_PREFIX = `${resolveVoiceBaseUrl()}/api/voice`
 
 export interface TranscriptionResult {
   text: string
@@ -30,7 +37,7 @@ export async function checkVoiceServiceHealth(): Promise<{
   services: { groq: boolean; elevenlabs: boolean }
 }> {
   try {
-    const response = await fetch(`${VOICE_SERVER_URL}/health`)
+    const response = await fetch(`${VOICE_API_PREFIX}/health`)
     if (!response.ok) {
       return { available: false, services: { groq: false, elevenlabs: false } }
     }
@@ -70,7 +77,7 @@ export async function transcribeAudio(
   formData.append('format', format)
 
   try {
-    const response = await fetch(`${VOICE_SERVER_URL}/api/voice/transcribe`, {
+    const response = await fetch(`${VOICE_API_PREFIX}/transcribe`, {
       method: 'POST',
       body: formData,
     })
@@ -114,7 +121,7 @@ export async function synthesizeSpeech(
       }
     }
 
-    const response = await fetch(`${VOICE_SERVER_URL}/api/voice/synthesize`, {
+    const response = await fetch(`${VOICE_API_PREFIX}/synthesize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -150,7 +157,7 @@ export async function synthesizeSpeech(
  */
 export async function getAvailableVoices(): Promise<VoiceInfo[]> {
   try {
-    const response = await fetch(`${VOICE_SERVER_URL}/api/voice/voices`)
+    const response = await fetch(`${VOICE_API_PREFIX}/voices`)
     
     if (!response.ok) {
       console.warn('[VoiceService] Failed to fetch voices')
@@ -176,7 +183,7 @@ export async function getAvailableVoices(): Promise<VoiceInfo[]> {
  */
 export async function detectLanguage(text: string): Promise<string> {
   try {
-    const response = await fetch(`${VOICE_SERVER_URL}/api/voice/detect-language`, {
+    const response = await fetch(`${VOICE_API_PREFIX}/detect-language`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

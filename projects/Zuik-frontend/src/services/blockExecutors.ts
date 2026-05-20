@@ -1,5 +1,6 @@
 import type { AlgorandClient } from '@algorandfoundation/algokit-utils'
 import type { TransactionSigner } from 'algosdk'
+import { readAccountAmountMicro, readAssetDecimals, readSuggestedMinFee } from '../utils/algosdkCompat'
 import { getAlgodClient } from './algorand'
 import { createAsa } from './createAsa'
 import { optInToAsa } from './optInAsa'
@@ -11,10 +12,7 @@ async function getAssetDecimals(assetId: number): Promise<number> {
   try {
     const algod = getAlgodClient()
     const info = await algod.getAssetByID(BigInt(assetId)).do()
-    return Number(
-      (info as Record<string, unknown>).decimals ??
-      (info as Record<string, Record<string, unknown>>).params?.decimals ?? 6
-    )
+    return readAssetDecimals(info)
   } catch {
     return 6
   }
@@ -38,8 +36,8 @@ async function capAlgoSwapInputMicro(
     algod.accountInformation(sender).do(),
     algod.getTransactionParams().do(),
   ])
-  const balanceMicro = Number((acct as { amount?: number }).amount ?? 0)
-  const minFee = Number((params as { minFee?: number }).minFee ?? 1000)
+  const balanceMicro = readAccountAmountMicro(acct)
+  const minFee = readSuggestedMinFee(params)
   // Tinyman direct swap: payment txn (minFee) + app call (2x minFee for fixed-input; see @tinymanorg/tinyman-js-sdk swap/v2)
   const reservedForFees = minFee + 2 * minFee
   const roundingBuffer = 2000
@@ -188,8 +186,8 @@ async function preflight(sender: string, fromAssetId: number, baseAmount: number
   const algod = getAlgodClient()
   try {
     const acctInfo = await algod.accountInformation(sender).do()
-    const info = acctInfo as Record<string, unknown>
-    const algoBalance = Number(info.amount ?? 0)
+    const info = acctInfo as unknown as Record<string, unknown>
+    const algoBalance = readAccountAmountMicro(acctInfo)
     const minBalance = Number(info.minBalance ?? info['min-balance'] ?? 100_000)
 
     if (algoBalance < minBalance + 200_000) {

@@ -1,0 +1,29 @@
+{
+  "baseUrl": "http://localhost:5173",
+  "startServer": true,
+  "headless": false,
+  "slowMo": 80,
+  "defaultTimeoutMs": 30000,
+  "walletWaitMs": 120000,
+  "screenshotDir": "demo/screenshots",
+  "scenarios": {
+    "aiWorkflow": {
+      "intent": "When I receive USDC in my wallet, swap it all to ALGO and notify me on Telegram"
+    },
+    "aiEdit": {
+      "editIntent": "Extend this workflow: add a timer loop that runs every hour to DCA 5 USDC into ALGO, spawn a second agent for price alerts when ALGO drops below 0.15, and keep the wallet trigger for incoming USDC swaps"
+    },
+    "trading": {
+      "marketAsset": "31566704",
+      "swapIntent": "Swap 10 USDC to ALGO when I receive USDC"
+    },
+    "guardian": {
+      "dailyCapAlgo": "2"
+    },
+    "logicSig": {
+      "maxPerTrade": "1",
+      "dailyCap": "5",
+      "expiryDays": "30"
+    }
+  }
+}

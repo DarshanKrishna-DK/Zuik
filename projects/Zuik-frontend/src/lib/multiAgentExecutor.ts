@@ -264,7 +264,7 @@ async function processMergeGate(
       windowStart: Date.now(),
       mode: config.mode as 'ALL' | 'ANY' | 'SEQUENCE',
       windowSeconds: Number(config.window_seconds) || 300,
-      resetAfterFire: config.reset_after_fire === 'true' || config.reset_after_fire === true
+      resetAfterFire: String(config.reset_after_fire ?? '') === 'true'
     }
     mergeGates.set(nodeId, gateState)
   }

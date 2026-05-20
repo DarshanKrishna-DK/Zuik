@@ -12,7 +12,7 @@
  */
 
 import type { FlowNode, FlowEdge, AgentContext } from './runAgent'
-import { runMultiAgentWorkflow } from './runAgent'
+import { runMultiAgentWorkflow, createVariableContext } from './runAgent'
 import { globalEventBus } from './multiAgentExecutor'
 import type { TransactionSigner } from 'algosdk'
 
@@ -35,7 +35,7 @@ export class MultiAgentTestSuite {
       sender: 'TESTACCOUNT123456789012345678901234567890123456',
       signer: {} as TransactionSigner,
       algorand: {} as any,
-      variables: { values: new Map() },
+      variables: createVariableContext(),
       blockOutputs: new Map(),
       log: (entry) => console.log(`[Test Log]`, entry),
       onNodeStatusChange: (nodeId, status) => console.log(`[Node ${nodeId}]: ${status}`),

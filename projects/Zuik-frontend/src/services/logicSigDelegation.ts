@@ -5,8 +5,6 @@ import { getSupabase, isSupabaseConfigured } from './supabase'
 import lsigTeal from '../contracts/lsig_delegation/ZuikDelegationLsig.teal?raw'
 import verifierApprovalTeal from '../contracts/lsig_delegation/ZuikDelegationVerifier.approval.teal?raw'
 import verifierClearTeal from '../contracts/lsig_delegation/ZuikDelegationVerifier.clear.teal?raw'
-import { guardianContract } from './guardianContract'
-
 const DEFAULT_MAX_FEE = 2000
 const DEFAULT_EXPIRY_DAYS = 30
 const DEFAULT_DAILY_RESET_ROUNDS = 27_000
@@ -55,8 +53,8 @@ async function getAssetDecimals(assetId: number): Promise<number> {
   try {
     const algod = getAlgodClient()
     const info = await algod.getAssetByID(BigInt(assetId)).do()
-    const params = (info as Record<string, unknown>).params ?? info
-    return Number((params as Record<string, unknown>).decimals ?? 6)
+    const { readAssetParams } = await import('../utils/algosdkCompat')
+    return Number(readAssetParams(info).decimals ?? 6)
   } catch {
     return 6
   }
@@ -71,7 +69,7 @@ async function compileTeal(source: string): Promise<Uint8Array> {
 function applyTemplate(source: string, vars: Record<string, string | number | bigint>): string {
   let output = source
   for (const [key, value] of Object.entries(vars)) {
-    output = output.replaceAll(`TMPL_${key}`, String(value))
+    output = output.split(`TMPL_${key}`).join(String(value))
   }
   return output
 }
@@ -134,10 +132,10 @@ export async function createLogicSigDelegation(params: CreateDelegationParams): 
   const algod = getAlgodClient()
   const suggestedParams = await algod.getTransactionParams().do()
   const status = await algod.status().do()
-  const currentRound = BigInt(status.lastRound ?? status['last-round'] ?? 0)
-  
-  // Ensure we have a valid current round, otherwise use suggested params
-  const validCurrentRound = currentRound > 0 ? currentRound : BigInt(suggestedParams.firstRound)
+  const currentRound = BigInt(status.lastRound ?? 0)
+
+  const firstRound = BigInt(suggestedParams.firstValid ?? suggestedParams.lastValid ?? 0)
+  const validCurrentRound = currentRound > 0n ? currentRound : firstRound
   const expiryRound = validCurrentRound + BigInt(expiryDays * DEFAULT_DAILY_RESET_ROUNDS)
   
   console.log('Current round:', validCurrentRound)
@@ -177,9 +175,10 @@ export async function createLogicSigDelegation(params: CreateDelegationParams): 
   })
 
   const signedCreate = await signer([createTxn], [0])
-  const { txId } = await algod.sendRawTransaction(signedCreate).do()
-  const confirmed = await algosdk.waitForConfirmation(algod, txId, 4)
-  const verifierAppId = Number(confirmed['application-index'] ?? 0)
+  const createResult = await algod.sendRawTransaction(signedCreate).do()
+  const createTxId = createResult.txid
+  const confirmed = await algosdk.waitForConfirmation(algod, createTxId, 4)
+  const verifierAppId = Number(confirmed.applicationIndex ?? 0)
   if (!verifierAppId) {
     throw new Error('Failed to deploy verifier app. No app ID returned.')
   }
@@ -228,7 +227,7 @@ export async function createLogicSigDelegation(params: CreateDelegationParams): 
   
   // Send the approval transaction to prove user consent
   const approvalResult = await algod.sendRawTransaction(signedApproval).do()
-  const approvalTxId = approvalResult.txId
+  const approvalTxId = approvalResult.txid
 
   const sb = getSupabase()
   const { data, error } = await sb

@@ -1,9 +1,20 @@
 import { getAllBlocks } from '../lib/blockRegistry'
 import type { BlockDefinition } from '../lib/blockRegistry'
+import {
+  ADVISOR_DECISION_DISCIPLINE,
+  QUANT_AND_ML_BEST_PRACTICES,
+  TRADING_COMPLIANCE_AND_METRICS,
+  ZUIK_TRADING_WORKFLOW_RECIPES,
+} from './tradingAdvisorKnowledge'
 
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || ''
 const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'llama-3.3-70b-versatile'
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+
+function resolveAiChatUrl(): string {
+  const serverBase = (import.meta.env.VITE_SERVER_URL as string | undefined)?.trim()
+  if (!serverBase) return '/api/ai/chat'
+  const normalized = serverBase.replace(/\/$/, '').replace(/\/api\/?$/i, '')
+  return `${normalized}/api/ai/chat`
+}
 
 export interface IntentStep {
   action: string
@@ -132,6 +143,9 @@ ${buildBlockSummary()}
 ${buildWellKnownAssetsSection()}
 ${buildCanvasSummary(canvasBlocks)}
 ${buildUserContext(userContext)}
+${TRADING_COMPLIANCE_AND_METRICS}
+${QUANT_AND_ML_BEST_PRACTICES}
+${ZUIK_TRADING_WORKFLOW_RECIPES}
 
 ## DeFi Knowledge:
 - Algorand uses microAlgo internally (1 ALGO = 1,000,000 microAlgo). When the user says "10 ALGO", the amount field should be 10.
@@ -247,7 +261,10 @@ Return a JSON object with:
 10. ALWAYS return valid JSON. No markdown fences.
 11. Be conversational in explanations. Suggest follow-ups like "Would you like me to add a Telegram alert for this?" or "I can also add a stop-loss."
 12. After building a workflow, mention approximate execution time and fees.
-13. On mainnet, never invent ASA IDs. If the user names an asset not in the well-known list, ask them to provide the numeric ASA ID in your explanation and use a placeholder only if they confirm.`
+13. On mainnet, never invent ASA IDs. If the user names an asset not in the well-known list, ask them to provide the numeric ASA ID in your explanation and use a placeholder only if they confirm.
+14. For hands-off or autonomous trading workflows, include safety rails: conservative **slippage** on swaps, \`get-quote\` before large \`swap-token\` moves when possible, end with \`send-telegram\` or \`send-discord\` for audit, and use \`math-op\` + \`portfolio-balance\` for explicit sizing when possible. Do not claim the workflow guarantees profit.
+15. Your entire reply must be one JSON object (json_object mode). No prose outside JSON.
+`
 }
 
 const FEW_SHOT_EXAMPLES = [
@@ -350,6 +367,10 @@ ${buildBlockSummary()}
 ${buildWellKnownAssetsSection()}
 ${buildCanvasSummary(canvasBlocks)}
 ${buildUserContext(userContext)}
+${TRADING_COMPLIANCE_AND_METRICS}
+${QUANT_AND_ML_BEST_PRACTICES}
+${ZUIK_TRADING_WORKFLOW_RECIPES}
+${ADVISOR_DECISION_DISCIPLINE}
 
 ## Your Behavior:
 1. Be conversational and friendly - like talking to a knowledgeable friend, not a robot.
@@ -379,6 +400,13 @@ JSON with:
 ALWAYS return valid JSON. No markdown fences.`
 }
 
+const MAX_SYSTEM_PROMPT_CHARS = 26_000
+
+function truncateSystemPrompt(content: string): string {
+  if (content.length <= MAX_SYSTEM_PROMPT_CHARS) return content
+  return `${content.slice(0, MAX_SYSTEM_PROMPT_CHARS)}\n\n## Note\nContext was shortened to fit model limits. If you need a rare block, ask the user to name it explicitly.`
+}
+
 const MAX_CONVERSATION_MESSAGES = 24
 const MAX_MESSAGE_CHARS = 4000
 
@@ -402,13 +430,9 @@ export async function parseIntent(
   canvasBlocks?: CanvasBlock[],
   userContext?: UserContext,
 ): Promise<ParsedIntent> {
-  if (!GROQ_API_KEY) {
-    throw new Error('Groq API key not configured. Set VITE_GROQ_API_KEY in your .env file.')
-  }
-
-  const systemContent = advisorMode
-    ? buildAdvisorPrompt(canvasBlocks, userContext)
-    : buildSystemPrompt(canvasBlocks, userContext)
+  const systemContent = truncateSystemPrompt(
+    advisorMode ? buildAdvisorPrompt(canvasBlocks, userContext) : buildSystemPrompt(canvasBlocks, userContext),
+  )
 
   const messages = [
     { role: 'system' as const, content: systemContent },
@@ -421,12 +445,9 @@ export async function parseIntent(
 
   messages.push({ role: 'user' as const, content: userMessage })
 
-  const resp = await fetch(GROQ_URL, {
+  const resp = await fetch(resolveAiChatUrl(), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${GROQ_API_KEY}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages,
@@ -438,7 +459,12 @@ export async function parseIntent(
 
   if (!resp.ok) {
     const err = await resp.text()
-    throw new Error(`Groq API error (${resp.status}): ${err}`)
+    let detail = err
+    try {
+      const parsed = JSON.parse(err) as { error?: string; detail?: string }
+      detail = parsed.error ?? parsed.detail ?? err
+    } catch { /* use raw */ }
+    throw new Error(`AI service error (${resp.status}): ${detail}`)
   }
 
   const data = await resp.json()
@@ -494,6 +520,7 @@ export async function parseIntent(
   return parsed
 }
 
+/** AI intent parsing uses the Zuik server proxy (Groq key stays server-side). */
 export function isGroqConfigured(): boolean {
-  return Boolean(GROQ_API_KEY)
+  return true
 }

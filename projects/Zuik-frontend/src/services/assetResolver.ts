@@ -1,3 +1,4 @@
+import { readAssetParams } from '../utils/algosdkCompat'
 import { getAlgodClient } from './algorand'
 
 const KNOWN_TESTNET: Record<number, string> = {
@@ -26,10 +27,10 @@ export async function resolveAssetName(assetId: number): Promise<string> {
   try {
     const algod = getAlgodClient()
     const info = await algod.getAssetByID(BigInt(assetId)).do()
-    const params = info.params ?? info
-    const name = (params as Record<string, unknown>).unitName as string
-      ?? (params as Record<string, unknown>)['unit-name'] as string
-      ?? (params as Record<string, unknown>).name as string
+    const params = readAssetParams(info)
+    const name = (params.unitName as string | undefined)
+      ?? (params['unit-name'] as string | undefined)
+      ?? (params.name as string | undefined)
       ?? `ASA #${assetId}`
     cache.set(assetId, name)
     return name

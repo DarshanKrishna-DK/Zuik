@@ -227,10 +227,11 @@ export async function getBuySellPressure(
         const receiver = String(axfer.receiver ?? '')
         const amount = Number(axfer.amount ?? 0) / Math.pow(10, decimals)
 
-        if (appAddress && receiver === appAddress) {
+        const appAddrStr = appAddress?.toString() ?? ''
+        if (appAddrStr && receiver === appAddrStr) {
           sells += 1
           sellVolume += amount
-        } else if (appAddress && sender === appAddress) {
+        } else if (appAddrStr && sender === appAddrStr) {
           buys += 1
           buyVolume += amount
         }

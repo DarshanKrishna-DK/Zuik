@@ -44,7 +44,8 @@ async function getAssetDecimals(client: Algodv2, assetId: number): Promise<numbe
   if (assetId === 0) return 6
   try {
     const info = await client.getAssetByID(BigInt(assetId)).do()
-    return Number((info as Record<string, unknown>).decimals ?? (info as Record<string, Record<string, unknown>>).params?.decimals ?? 6)
+    const { readAssetDecimals } = await import('../utils/algosdkCompat')
+    return readAssetDecimals(info)
   } catch {
     return 6
   }
@@ -98,8 +99,9 @@ export async function getTinymanQuote(params: TinymanQuoteParams): Promise<Tinym
 
   let poolAddr = ''
   try {
-    const acct = pool.account as { address?: () => string; toString?: () => string }
-    poolAddr = acct?.address?.() ?? acct?.toString?.() ?? ''
+    const acct = pool.account as { address?: { toString?: () => string } | string }
+    const addr = acct?.address
+    poolAddr = typeof addr === 'string' ? addr : addr?.toString?.() ?? String(addr ?? '')
   } catch { /* ignore */ }
 
   return {

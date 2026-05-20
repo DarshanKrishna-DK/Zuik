@@ -1,5 +1,24 @@
-const VESTIGE_BASE = 'https://free-api.vestige.fi'
-const COINGECKO_BASE = 'https://api.coingecko.com/api/v3'
+function marketApiBase(envKey: string, devPath: string, serverSuffix: string, prodUrl: string): string {
+  const fromEnv = import.meta.env[envKey] as string | undefined
+  if (fromEnv?.trim()) return fromEnv.trim().replace(/\/$/, '')
+  const server = (import.meta.env.VITE_SERVER_URL as string | undefined)?.trim()
+  if (server) return `${server.replace(/\/$/, '')}/api/market${serverSuffix}`
+  if (import.meta.env.DEV) return devPath
+  return prodUrl
+}
+
+const VESTIGE_BASE = marketApiBase(
+  'VITE_VESTIGE_API_BASE',
+  '/api/vestige',
+  '/vestige',
+  'https://free-api.vestige.fi',
+)
+const COINGECKO_BASE = marketApiBase(
+  'VITE_COINGECKO_API_BASE',
+  '/api/coingecko',
+  '/coingecko',
+  'https://api.coingecko.com/api/v3',
+)
 
 export type MarketTokenId = number | string
 
@@ -149,7 +168,12 @@ function normalizeCoingeckoDetails(id: string, row: RawRow): MarketToken {
 }
 
 async function fetchVestige<T>(path: string): Promise<T> {
-  const res = await fetch(`${VESTIGE_BASE}${path}`)
+  const res = await fetch(`${VESTIGE_BASE}${path}`, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'ZuikFrontend/1.0',
+    },
+  })
   if (!res.ok) {
     throw new Error(`Vestige API error: ${res.status}`)
   }
@@ -157,7 +181,12 @@ async function fetchVestige<T>(path: string): Promise<T> {
 }
 
 async function fetchCoingecko<T>(path: string): Promise<T> {
-  const res = await fetch(`${COINGECKO_BASE}${path}`)
+  const res = await fetch(`${COINGECKO_BASE}${path}`, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'ZuikFrontend/1.0',
+    },
+  })
   if (!res.ok) {
     throw new Error(`CoinGecko API error: ${res.status}`)
   }
@@ -272,88 +301,136 @@ export async function getTokenDetails(assetId: MarketTokenId): Promise<MarketTok
   return null
 }
 
+function coingeckoDaysForChart(interval: string): number {
+  if (interval === '1d') return 30
+  if (interval === '4h') return 7
+  return 1
+}
+
+async function fetchCoingeckoMarketChartOhlc(geckoId: string, days: number, limit: number): Promise<OhlcvPoint[]> {
+  try {
+    const res = await fetch(
+      `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`,
+      {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'ZuikFrontend/1.0',
+        },
+      },
+    )
+    if (!res.ok) return []
+    const body = (await res.json()) as { prices?: [number, number][] }
+    const prices = Array.isArray(body.prices) ? body.prices : []
+    const slice = prices.slice(-Math.max(limit, 12))
+    return slice
+      .map(([timestamp, close]) => ({
+        timestamp,
+        open: close,
+        high: close,
+        low: close,
+        close,
+        volume: 0,
+      }))
+      .filter((p) => p.close > 0 && Number.isFinite(p.close))
+  } catch {
+    return []
+  }
+}
+
+async function fetchCoingeckoOhlc(geckoId: string, interval: string, limit: number): Promise<OhlcvPoint[]> {
+  const days = coingeckoDaysForChart(interval)
+  try {
+    const res = await fetch(`${COINGECKO_BASE}/coins/${geckoId}/ohlc?vs_currency=usd&days=${days}`, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'ZuikFrontend/1.0',
+      },
+    })
+    if (!res.ok) {
+      return fetchCoingeckoMarketChartOhlc(geckoId, days, limit)
+    }
+    const raw = await res.json() as Array<[number, number, number, number, number]>
+    const rows = Array.isArray(raw) ? raw.slice(-limit) : []
+    const points = rows
+      .map((row) => ({
+        timestamp: row[0],
+        open: row[1],
+        high: row[2],
+        low: row[3],
+        close: row[4],
+        volume: 0,
+      }))
+      .filter((p) => p.close > 0 && Number.isFinite(p.close))
+    if (points.length > 0) return points
+    return fetchCoingeckoMarketChartOhlc(geckoId, days, limit)
+  } catch {
+    return fetchCoingeckoMarketChartOhlc(geckoId, coingeckoDaysForChart(interval), limit)
+  }
+}
+
 export async function getTokenOHLCV(
   assetId: MarketTokenId,
   interval: string,
   limit: number,
 ): Promise<OhlcvPoint[]> {
   if (isCoingeckoId(assetId)) {
-    const days = interval === '1d' ? 30 : interval === '4h' ? 7 : 1
     const geckoId = stripCoingeckoId(assetId)
-    try {
-      const res = await fetch(`${COINGECKO_BASE}/coins/${geckoId}/ohlc?vs_currency=usd&days=${days}`)
-      if (!res.ok) return []
-      const raw = await res.json() as Array<[number, number, number, number, number]>
-      const rows = Array.isArray(raw) ? raw.slice(-limit) : []
-      return rows.map((row) => ({
-        timestamp: row[0],
-        open: row[1],
-        high: row[2],
-        low: row[3],
-        close: row[4],
-        volume: 0,
-      }))
-    } catch {
-      return []
-    }
+    return fetchCoingeckoOhlc(geckoId, interval, limit)
   }
 
   if (assetId === 0) {
-    const days = interval === '1d' ? 30 : interval === '4h' ? 7 : 1
-    try {
-      const res = await fetch(`https://api.coingecko.com/api/v3/coins/algorand/ohlc?vs_currency=usd&days=${days}`)
-      if (!res.ok) return []
-      const raw = await res.json() as Array<[number, number, number, number, number]>
-      const rows = Array.isArray(raw) ? raw.slice(-limit) : []
-      return rows.map((row) => ({
-        timestamp: row[0],
-        open: row[1],
-        high: row[2],
-        low: row[3],
-        close: row[4],
-        volume: 0,
-      }))
-    } catch {
-      return []
-    }
+    return fetchCoingeckoOhlc('algorand', interval, limit)
   }
+
   if (typeof assetId !== 'number') return []
 
-  const data = await fetchVestige<unknown>(`/asset/${assetId}/prices?interval=${interval}&limit=${limit}`)
-  const rows = Array.isArray(data)
-    ? data
-    : (data as RawRow).data ?? (data as RawRow).prices ?? []
+  try {
+    const data = await fetchVestige<unknown>(`/asset/${assetId}/prices?interval=${interval}&limit=${limit}`)
+    const rows = Array.isArray(data)
+      ? data
+      : (data as RawRow).data ?? (data as RawRow).prices ?? []
 
-  if (!Array.isArray(rows)) return []
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return []
+    }
 
-  return rows.map((row) => {
-    if (Array.isArray(row)) {
-      const [timestamp, open, high, low, close, volume] = row as unknown[]
-      return {
-        timestamp: Number(timestamp) * 1000,
-        open: Number(open),
-        high: Number(high),
-        low: Number(low),
-        close: Number(close),
-        volume: Number(volume ?? 0),
+    const points = rows.map((row) => {
+      if (Array.isArray(row)) {
+        const [timestamp, open, high, low, close, volume] = row as unknown[]
+        const tsRaw = Number(timestamp)
+        const tsMs = Number.isFinite(tsRaw) && tsRaw > 1e12 ? tsRaw : tsRaw * 1000
+        return {
+          timestamp: tsMs,
+          open: Number(open),
+          high: Number(high),
+          low: Number(low),
+          close: Number(close),
+          volume: Number(volume ?? 0),
+        }
       }
-    }
 
-    const raw = row as RawRow
-    const timestamp = pickNumber(raw, ['timestamp', 'time', 't']) ?? Date.now()
-    const open = pickNumber(raw, ['open', 'o']) ?? 0
-    const high = pickNumber(raw, ['high', 'h']) ?? open
-    const low = pickNumber(raw, ['low', 'l']) ?? open
-    const close = pickNumber(raw, ['close', 'c']) ?? open
-    const volume = pickNumber(raw, ['volume', 'v']) ?? 0
+      const raw = row as RawRow
+      const timestamp = pickNumber(raw, ['timestamp', 'time', 't']) ?? Date.now()
+      const open = pickNumber(raw, ['open', 'o']) ?? 0
+      const high = pickNumber(raw, ['high', 'h']) ?? open
+      const low = pickNumber(raw, ['low', 'l']) ?? open
+      const close = pickNumber(raw, ['close', 'c', 'price', 'usd', 'value']) ?? open
+      const volume = pickNumber(raw, ['volume', 'v']) ?? 0
 
-    return {
-      timestamp: timestamp > 10_000_000_000 ? timestamp : timestamp * 1000,
-      open,
-      high,
-      low,
-      close,
-      volume,
-    }
-  })
+      return {
+        timestamp: timestamp > 10_000_000_000 ? timestamp : timestamp * 1000,
+        open,
+        high,
+        low,
+        close,
+        volume,
+      }
+    })
+
+    const filtered = points.filter((p) => p.close > 0 && Number.isFinite(p.close))
+    return filtered
+  } catch {
+    return []
+  }
 }
+

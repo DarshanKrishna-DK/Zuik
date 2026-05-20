@@ -183,7 +183,7 @@ export const multiAgentExecutors: Record<string, ExecutorFn> = {
   spawn_agent: async (config, context, upstreamOutputs) => {
     const subFlowId = String(config.sub_flow_id ?? '').trim()
     const mode = (config.mode as string) || 'parallel'
-    const passContext = config.pass_context === 'true' || config.pass_context === true
+    const passContext = String(config.pass_context ?? '') === 'true'
 
     if (!subFlowId) {
       throw new Error('Sub-workflow ID is required for spawn agent')

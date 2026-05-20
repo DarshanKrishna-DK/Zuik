@@ -24,6 +24,19 @@ const upload = multer({
 
 export function createVoiceRouter() {
   const router = express.Router()
+
+  router.get('/health', (_req, res) => {
+    const services = isVoiceServiceConfigured()
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      services: {
+        groq: services.groq ? 'configured' : 'missing_api_key',
+        elevenlabs: services.elevenlabs ? 'configured' : 'missing_api_key',
+      },
+    })
+  })
+
   router.use(cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true)

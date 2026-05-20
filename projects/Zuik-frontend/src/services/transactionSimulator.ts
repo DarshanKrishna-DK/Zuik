@@ -130,8 +130,10 @@ export function buildStepDescription(
       return `Send Discord message`
     case 'browser-notify':
       return `Browser notification: ${config.title ?? 'Zuik'}`
-    case 'comparator':
-      return `Compare: value ${config.operator ?? '=='} ${config.threshold ?? '?'}`
+    case 'comparator': {
+      const fld = config.compareField ? `${config.compareField} ` : ''
+      return `Compare: ${fld}${config.operator ?? '=='} ${config.threshold ?? '?'}`
+    }
     case 'delay':
       return `Wait ${config.duration ?? 5} seconds`
     case 'math-op': {
@@ -248,10 +250,8 @@ async function getAssetDecimalsForSim(assetId: number): Promise<number> {
   try {
     const algod = getAlgodClient()
     const info = await algod.getAssetByID(BigInt(assetId)).do()
-    return Number(
-      (info as Record<string, unknown>).decimals ??
-      (info as Record<string, Record<string, unknown>>).params?.decimals ?? 6
-    )
+    const { readAssetDecimals } = await import('../utils/algosdkCompat')
+    return readAssetDecimals(info)
   } catch {
     return 6
   }

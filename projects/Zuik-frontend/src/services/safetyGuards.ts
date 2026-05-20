@@ -211,10 +211,10 @@ export function suggestFix(errorMessage: string): string | null {
     return 'Your wallet does not hold enough of the source asset. Check your balance and reduce the swap amount.'
   }
   if (msg.includes('fund this wallet')) {
-    return 'Fund the active wallet with ALGO from the TestNet Dispenser: https://bank.testnet.algorand.network/'
+    return 'Add ALGO to your connected wallet to cover network fees and this transaction.'
   }
   if (msg.includes('overspend') || msg.includes('insufficient')) {
-    return 'Your account does not have enough ALGO. Fund your wallet from the Algorand TestNet Dispenser.'
+    return 'Your wallet does not have enough ALGO for this workflow. Add funds and try again.'
   }
   if (msg.includes('asset not opted in') || msg.includes('asset not found')) {
     return 'The recipient has not opted in to this asset. They need to opt in before receiving it.'

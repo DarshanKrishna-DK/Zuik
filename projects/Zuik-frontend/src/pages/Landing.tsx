@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, type CSSProperties } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import zuikLogo from '../assets/zuik-logo.png'
@@ -103,7 +103,7 @@ const MARQUEE_ITEMS = [
 
 function LaptopVisual() {
   return (
-    <div className="z-laptop">
+    <div className="z-laptop z-3d-layer">
       <div className="z-laptop-tilt">
         <div className="z-laptop-bezel">
           <div className="z-laptop-camera" />
@@ -113,27 +113,31 @@ function LaptopVisual() {
               <span className="z-screen-title">Zuik Flow Builder</span>
             </div>
             <div className="z-screen-canvas z-screen-canvas-flow">
-              <svg className="z-wf-edges" viewBox="0 0 100 100" preserveAspectRatio="none" fill="none" aria-hidden>
-                <path d="M 31 50 L 36 50" stroke="rgba(0,229,255,0.4)" strokeWidth="0.5" strokeLinecap="round" />
-                <path d="M 61 50 L 66 50" stroke="rgba(0,229,255,0.4)" strokeWidth="0.5" strokeLinecap="round" />
-                <circle cx="33.5" cy="50" r="0.6" fill="rgba(0,229,255,0.5)" />
-                <circle cx="63.5" cy="50" r="0.6" fill="rgba(0,229,255,0.5)" />
-              </svg>
-
+              <div className="z-wf-row">
               <div className="z-wf-block z-wf-block-1">
                 <div className="z-wf-block-h"><i style={{ background: '#A78BFA' }} />Wallet Event</div>
                 <div className="z-wf-block-b">When USDC is received on your wallet.</div>
-                <span className="z-wf-handle" />
+                <span className="z-wf-handle z-wf-handle-out" aria-hidden />
+              </div>
+              <div className="z-wf-connector" aria-hidden>
+                <span className="z-wf-connector-line" />
+                <span className="z-wf-connector-dot" />
               </div>
               <div className="z-wf-block z-wf-block-2">
                 <div className="z-wf-block-h"><i style={{ background: '#00E5FF' }} />Swap Token</div>
                 <div className="z-wf-block-b">USDC to ALGO on Tinyman.</div>
-                <span className="z-wf-handle" />
+                <span className="z-wf-handle z-wf-handle-in" aria-hidden />
+                <span className="z-wf-handle z-wf-handle-out" aria-hidden />
+              </div>
+              <div className="z-wf-connector z-wf-connector-2" aria-hidden>
+                <span className="z-wf-connector-line" />
+                <span className="z-wf-connector-dot" />
               </div>
               <div className="z-wf-block z-wf-block-3">
                 <div className="z-wf-block-h"><i style={{ background: '#34D399' }} />Telegram</div>
                 <div className="z-wf-block-b">Send confirmation to your chat.</div>
-                <span className="z-wf-handle" />
+                <span className="z-wf-handle z-wf-handle-in" aria-hidden />
+              </div>
               </div>
             </div>
           </div>
@@ -162,11 +166,19 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
     return () => container.removeEventListener('scroll', onScroll)
   }, [])
 
+  const scrollToSection = useCallback((id: string) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   const problemReveal = useReveal()
   const stepsReveal = useReveal()
   const featReveal = useReveal()
   const statsReveal = useReveal()
   const whyReveal = useReveal()
+  const useCasesReveal = useReveal()
+  const pricingReveal = useReveal()
 
   const blockCount = useCounter(30, 1800, statsReveal.visible)
   const feeCount = useCounter(1, 1800, statsReveal.visible)
@@ -181,6 +193,23 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
           <img src={zuikLogo} alt="Zuik" style={{ width: 40, height: 40 }} />
           <span>ZUIK</span>
         </Link>
+        <div className="landing-nav-links" aria-label="Page sections">
+          <button type="button" className="landing-nav-link" onClick={() => scrollToSection('problem')}>
+            Problem
+          </button>
+          <button type="button" className="landing-nav-link" onClick={() => scrollToSection('how-it-works')}>
+            How it works
+          </button>
+          <button type="button" className="landing-nav-link" onClick={() => scrollToSection('capabilities')}>
+            Capabilities
+          </button>
+          <button type="button" className="landing-nav-link" onClick={() => scrollToSection('use-cases')}>
+            Use cases
+          </button>
+          <button type="button" className="landing-nav-link" onClick={() => scrollToSection('pricing')}>
+            Pricing
+          </button>
+        </div>
         <div className="landing-nav-right">
           {shortAddr ? (
             <button className="landing-wallet-btn connected" onClick={onConnectWallet}>
@@ -195,7 +224,12 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
       </nav>
 
       {/* ── Hero: Text Left, Laptop Right ────────── */}
-      <section className="landing-hero">
+      <section className="landing-hero z-3d-scene">
+        <div className="landing-hero-3d-bg" aria-hidden>
+          <span className="z-hero-orb z-hero-orb-1" />
+          <span className="z-hero-orb z-hero-orb-2" />
+          <span className="z-hero-orb z-hero-orb-3" />
+        </div>
         <div className="landing-hero-glow" />
         <div className="landing-hero-split">
           <div className="landing-hero-left">
@@ -208,7 +242,12 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
               atomic transactions on Algorand - no code, no complexity.
             </p>
             <div className="landing-hero-ctas">
-              <button className="landing-cta-primary" onClick={onStartBuilding}>
+              <button
+                type="button"
+                className="landing-cta-primary"
+                data-testid="landing-start-building"
+                onClick={onStartBuilding}
+              >
                 LAUNCH BUILDER <ArrowRight />
               </button>
             </div>
@@ -237,27 +276,44 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
         <div className="z-journey-line" />
 
       {/* ── The Problem ─────────────────────────────────── */}
-      <section className="landing-section">
+      <section id="problem" className="landing-section landing-section-problem">
         <div ref={problemReveal.ref} className={`landing-section-inner${problemReveal.visible ? ' revealed' : ''}`}>
           <div className="z-section-label">// THE PROBLEM</div>
           <h2 className="landing-section-title">DeFi is powerful but inaccessible</h2>
-          <p className="landing-section-subtitle">
+          <p className="landing-section-subtitle landing-section-lead">
             Managing token swaps, setting price alerts, rebalancing portfolios -
             it all requires constant monitoring, multiple tools, and deep technical knowledge.
             Zuik changes that.
           </p>
+          <div className="landing-problem-panel">
+            <div className="landing-problem-stat">
+              <span className="landing-problem-stat-label">Typical workflow</span>
+              <span className="landing-problem-stat-value">5+ apps</span>
+              <span className="landing-problem-stat-hint">DEX, explorer, portfolio, alerts, scripts</span>
+            </div>
+            <div className="landing-problem-stat">
+              <span className="landing-problem-stat-label">Time cost</span>
+              <span className="landing-problem-stat-value">Always on</span>
+              <span className="landing-problem-stat-hint">Manual checks, missed windows, brittle automation</span>
+            </div>
+            <div className="landing-problem-stat">
+              <span className="landing-problem-stat-label">Zuik path</span>
+              <span className="landing-problem-stat-value accent">One canvas</span>
+              <span className="landing-problem-stat-hint">Describe intent, preview, sign once, atomic run</span>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ── How It Works ────────────────────────────────── */}
-      <section className="landing-section">
+      <section id="how-it-works" className="landing-section">
         <div ref={stepsReveal.ref} className={`landing-section-inner${stepsReveal.visible ? ' revealed' : ''}`}>
           <div className="z-section-label">// HOW IT WORKS</div>
           <h2 className="landing-section-title">Three steps. That's it.</h2>
           <div className="landing-steps-row">
             {[
               { n: '01', Icon: MicIcon, title: 'Describe Your Intent', desc: 'Use voice, text, or drag blocks onto the canvas. Say "Swap 50 USDC to ALGO" and the AI builds it instantly.' },
-              { n: '02', Icon: BranchIcon, title: 'Review & Simulate', desc: 'Visual cards show every step. Simulate the full transaction, check fees, and verify safety guards before signing.' },
+              { n: '02', Icon: BranchIcon, title: 'Review & Preview', desc: 'Visual cards show every step. Preview fees, routes, and safety checks before you sign once.' },
               { n: '03', Icon: ZapIcon, title: 'Execute Atomically', desc: 'One signature, multiple transactions. All-or-nothing execution on Algorand with sub-5-second finality.' },
             ].map((step, i) => (
               <div key={step.n} className="z-step-card" style={{ animationDelay: `${i * 0.12}s` }}>
@@ -276,16 +332,16 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
       </section>
 
       {/* ── Features ────────────────────────────────────── */}
-      <section className="landing-section">
+      <section id="capabilities" className="landing-section">
         <div ref={featReveal.ref} className={`landing-section-inner${featReveal.visible ? ' revealed' : ''}`}>
           <div className="z-section-label">// CAPABILITIES</div>
           <h2 className="landing-section-title">Built for real DeFi users</h2>
-          <div className="z-capabilities-orbit">
-            <div className="z-orbit-ring" aria-hidden />
-            <div className="z-orbit-core">
-              <span className="z-orbit-title">ZUIK CORE</span>
-              <span className="z-orbit-sub">AI + FLOW</span>
+          <div className="z-capabilities">
+            <div className="z-capabilities-core" aria-hidden>
+              <span className="z-capabilities-core-title">ZUIK CORE</span>
+              <span className="z-capabilities-core-sub">AI + FLOW</span>
             </div>
+            <div className="z-capabilities-grid">
             {[
               { Icon: GridIcon, title: 'Visual Flow Builder', desc: 'Drag-and-drop blocks - connect triggers, actions, and logic without code.' },
               { Icon: BrainIcon, title: 'AI Intent Engine', desc: 'Describe what you want in plain English. The AI builds the entire workflow.' },
@@ -293,23 +349,20 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
               { Icon: TrendIcon, title: 'DEX Aggregation', desc: 'Best swap routes via Folks Router and Tinyman with multi-hop routing.' },
               { Icon: LockIcon, title: 'Non-Custodial', desc: 'Your keys, your tokens. Every transaction requires your wallet signature.' },
               { Icon: ShieldCheck, title: 'Smart Advisor', desc: 'AI-powered strategy recommendations, risk assessments, and portfolio guidance.' },
-            ].map((f, index, arr) => (
-              <div
-                key={f.title}
-                className="z-orbit-card"
-                style={{ '--angle': `${(360 / arr.length) * index}deg` } as CSSProperties}
-              >
+            ].map((f) => (
+              <div key={f.title} className="z-feature-card">
                 <div className="z-feature-icon"><f.Icon /></div>
                 <h3>{f.title}</h3>
                 <p>{f.desc}</p>
               </div>
             ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* ── Why Zuik ────────────────────────────────────── */}
-      <section className="landing-section landing-section-why">
+      <section id="why-zuik" className="landing-section landing-section-why">
         <div ref={whyReveal.ref} className={`landing-section-inner${whyReveal.visible ? ' revealed' : ''}`}>
           <div className="z-section-label">// WHY ZUIK</div>
           <h2 className="landing-section-title">Automation that feels effortless</h2>
@@ -339,8 +392,57 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
         </div>
       </section>
 
+      {/* ── Use Cases ─────────────────────────────────── */}
+      <section id="use-cases" className="landing-section">
+        <div ref={useCasesReveal.ref} className={`landing-section-inner${useCasesReveal.visible ? ' revealed' : ''}`}>
+          <div className="z-section-label">// USE CASES</div>
+          <h2 className="landing-section-title">Built for how you actually use DeFi</h2>
+          <p className="landing-section-subtitle">
+            From one-off swaps to recurring payments, Zuik handles the workflow so you do not have to babysit the chain.
+          </p>
+          <div className="z-use-cases-grid">
+            {[
+              { title: 'Smart trading', desc: 'Set DCA, take-profit, and stop-loss flows with price triggers and best-route swaps.' },
+              { title: 'Automated payments', desc: 'Send payroll, vendor payouts, or allowances on a schedule with spending caps.' },
+              { title: 'Scheduled transactions', desc: 'Queue swaps, rebalances, and treasury moves to run while you are offline.' },
+            ].map((item) => (
+              <article key={item.title} className="z-use-case-card">
+                <h3>{item.title}</h3>
+                <p>{item.desc}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pricing ───────────────────────────────────── */}
+      <section id="pricing" className="landing-section landing-section-pricing">
+        <div ref={pricingReveal.ref} className={`landing-section-inner${pricingReveal.visible ? ' revealed' : ''}`}>
+          <div className="z-section-label">// PLANS</div>
+          <h2 className="landing-section-title">Simple plans that scale with you</h2>
+          <p className="landing-section-subtitle">
+            Start free, upgrade when you need more automations, alerts, and team controls.
+          </p>
+          <div className="z-pricing-grid">
+            {[
+              { name: 'Starter', price: 'Free', period: '', features: ['3 active workflows', 'Market explorer', 'Wallet-connected execution', 'Community support'], cta: 'Get started', featured: false },
+              { name: 'Pro', price: '$19', period: '/ month', features: ['Unlimited workflows', 'Scheduled automations', 'Telegram alerts', 'Guardian spend limits', 'Priority support'], cta: 'Start Pro trial', featured: true },
+              { name: 'Business', price: '$79', period: '/ month', features: ['Team workspaces', 'Higher automation limits', 'Custom policies', 'Dedicated onboarding', 'SLA support'], cta: 'Contact sales', featured: false },
+            ].map((plan) => (
+              <article key={plan.name} className={`z-pricing-card${plan.featured ? ' featured' : ''}`}>
+                {plan.featured && <span className="z-pricing-badge">Most popular</span>}
+                <h3>{plan.name}</h3>
+                <p className="z-pricing-price"><span>{plan.price}</span>{plan.period && <small>{plan.period}</small>}</p>
+                <ul>{plan.features.map((f) => (<li key={f}>{f}</li>))}</ul>
+                <button type="button" className={plan.featured ? 'landing-cta-primary' : 'landing-cta-secondary'} onClick={onStartBuilding}>{plan.cta}</button>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Network Stats ───────────────────────────────── */}
-      <section className="landing-section">
+      <section id="network" className="landing-section">
         <div ref={statsReveal.ref} className={`landing-section-inner${statsReveal.visible ? ' revealed' : ''}`}>
           <div className="z-section-label">// NETWORK</div>
           <h2 className="landing-section-title">Powered by Algorand</h2>

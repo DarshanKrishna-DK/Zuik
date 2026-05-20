@@ -238,6 +238,7 @@ const blocks: BlockDefinition[] = [
         { value: 'contains', label: 'contains' },
       ]},
       { id: 'threshold', label: 'Compare To', type: 'text' },
+      { id: 'compareField', label: 'Upstream field (optional)', type: 'text', placeholder: 'e.g. priceImpact or quoteAmount' },
     ],
   },
   {

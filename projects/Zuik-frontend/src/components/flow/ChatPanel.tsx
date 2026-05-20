@@ -203,7 +203,8 @@ function useSpeechSynthesis() {
 }
 
 const BUILDER_WELCOME = 'Describe what you want to do in plain language - or pick a template below. I will build the workflow for you.'
-const ADVISOR_WELCOME = 'I am your Smart Trading Advisor. Tell me about your goals, risk tolerance, or what you want to achieve. I can also show amounts in INR or your preferred currency.'
+const ADVISOR_WELCOME =
+  'I am your Smart Trading Advisor. Tell me about your goals, risk tolerance, or what you want to achieve. I can also show amounts in INR or your preferred currency. I do not guarantee returns or win rates; we focus on risk-aware plans and concrete workflows.'
 
 export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlocks, userContext, prefillMessage }: Props) {
   const [mode, setMode] = useState<'builder' | 'advisor'>('builder')
@@ -483,7 +484,7 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
       )}
 
       {!configured && (
-        <div className="zuik-chat-warning"><AlertIcon /> <span>Set <code>VITE_GROQ_API_KEY</code> in your .env to enable AI intent parsing.</span></div>
+        <div className="zuik-chat-warning"><AlertIcon /> <span>AI assistant is unavailable on this deployment. You can still build workflows manually on the canvas.</span></div>
       )}
 
       <div className="zuik-chat-input-area">
@@ -499,7 +500,8 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
         )}
         <input 
           ref={inputRef} 
-          className="zuik-chat-input" 
+          className="zuik-chat-input"
+          data-testid="chat-input" 
           value={speech.isListening || speech.isTranscribing ? speech.transcript || input : input} 
           onChange={(e) => setInput(e.target.value)} 
           onKeyDown={handleKeyDown} 
@@ -510,7 +512,15 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
           } 
           disabled={isLoading || speech.isListening || speech.isTranscribing} 
         />
-        <button className="zuik-chat-send" onClick={() => sendMessage(input)} disabled={!input.trim() || isLoading}><SendIcon /></button>
+        <button
+          type="button"
+          className="zuik-chat-send"
+          data-testid="chat-send"
+          onClick={() => sendMessage(input)}
+          disabled={!input.trim() || isLoading}
+        >
+          <SendIcon />
+        </button>
       </div>
     </div>
   )

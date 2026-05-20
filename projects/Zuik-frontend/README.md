@@ -17,6 +17,20 @@ The React web application for Zuik. This is the visual interface where users bui
 
 ---
 
+## Stakeholder demos (browser automation)
+
+Automated presentation scripts with visual cursor highlights and step banners:
+
+```bash
+npm run demo:install
+cp demo/demo.config.example.json demo/demo.config.json
+npm run demo:full
+```
+
+See [demo/README.md](demo/README.md) for the story flow (`demo:ai-workflow`, `demo:ai-edit`, `demo:guardian`, `demo:logicsig`, `demo:full`), wallet setup, and troubleshooting.
+
+---
+
 ## Setup
 
 ### Requirements
@@ -35,14 +49,14 @@ npm install
 Copy the template and fill in your API keys:
 
 ```bash
-cp .env.template .env
+cp .env.template .env.local
 ```
 
-Open `.env` and set these values:
+Open `.env.local` and set these values:
 
 | Variable | Required | Where to Get It |
 |:---------|:---------|:----------------|
-| `VITE_GROQ_API_KEY` | Yes (for AI assistant) | Free at [console.groq.com/keys](https://console.groq.com/keys) |
+| `VITE_SERVER_URL` | Yes (for AI assistant) | Zuik backend URL (e.g. `http://localhost:3001`). Set `GROQ_API_KEY` on the server. |
 
 The Algorand TestNet node URLs are pre-filled and work out of the box.
 If you deploy the voice server on Railway, set `VITE_VOICE_SERVER_URL` to your Railway URL.
@@ -67,12 +81,12 @@ The output goes to the `dist/` folder.
 
 ## Switching Between Networks
 
-The `.env` file has three sections: TestNet, LocalNet, and MainNet. Only one should be uncommented at a time.
+The `.env.local` file has three sections: TestNet, LocalNet, and MainNet. Only one should be uncommented at a time.
 
 **To use LocalNet:**
 1. Make sure Docker is running
 2. Start the local network: `algokit localnet start`
-3. Comment out the TestNet section in `.env`
+3. Comment out the TestNet section in `.env.local`
 4. Uncomment the LocalNet section
 5. Restart the dev server
 

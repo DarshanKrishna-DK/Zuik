@@ -186,7 +186,10 @@ employee-payroll-demo.xlsx
 **/.algokit/
 .algokit/
 
-# ===== TEST SCRIPTS =====
+# ===== Local demo harness (optional; not needed to run Zuik) =====
+projects/Zuik-frontend/demo/screenshots/
+projects/Zuik-frontend/demo/demo.config.json
+
 # Do not push test scripts to GitHub
 **/test-*.ts
 **/test-*.js

@@ -390,7 +390,7 @@ export default function TransactionPanel({
           {phase === 'loading' && (
             <div className="sim-loading">
               <Loader2Icon size={28} />
-              <p>Running safety checks and building simulation...</p>
+              <p>Running safety checks and building your transaction preview...</p>
             </div>
           )}
 

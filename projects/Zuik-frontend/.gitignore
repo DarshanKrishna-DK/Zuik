@@ -16,6 +16,7 @@
 .env
 .env.*
 !.env.template
+.env-backup/
 env/
 
 # misc
@@ -29,6 +30,8 @@ yarn-error.log*
 /test-results/
 /playwright-report/
 /playwright/.cache/
+/demo/screenshots/
+/demo/demo.config.json
 
 # PyCharm
 .idea

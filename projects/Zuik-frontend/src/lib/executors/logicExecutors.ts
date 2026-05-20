@@ -6,11 +6,22 @@ export type ExecutorFn = (
   upstreamOutputs?: Record<string, unknown>
 ) => Promise<Record<string, unknown> | null>
 
+function pickComparableValue(
+  upstream: Record<string, unknown>,
+  field?: string,
+): unknown {
+  if (field && field in upstream) {
+    return upstream[field]
+  }
+  return upstream.value ?? upstream.result ?? upstream.amount ?? Object.values(upstream)[0]
+}
+
 export const comparatorExecutor: ExecutorFn = async (config, _context, upstreamOutputs) => {
   const operator = (config.operator as string) || '=='
   const threshold = config.threshold as string | number
   const upstream = upstreamOutputs ?? {}
-  const value = upstream.value ?? upstream.result ?? upstream.amount ?? Object.values(upstream)[0]
+  const compareField = typeof config.compareField === 'string' ? config.compareField.trim() : ''
+  const value = pickComparableValue(upstream, compareField || undefined)
 
   let result = false
   const numVal = Number(value)

@@ -130,7 +130,7 @@ export default function Dashboard() {
       <div className="zuik-connect-prompt">
         <DashboardIcon />
         <h2>Supabase Not Configured</h2>
-        <p>Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file to enable persistence. Workflows are currently saved to localStorage only.</p>
+        <p>Cloud sync is off. Your workflows are saved on this device only until you enable sync in Settings.</p>
       </div>
     )
   }

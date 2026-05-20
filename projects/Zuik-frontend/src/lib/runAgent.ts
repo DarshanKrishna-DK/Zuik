@@ -108,7 +108,7 @@ export interface LogEntry {
   nodeId: string
   blockId: string
   blockName: string
-  type: 'start' | 'success' | 'error' | 'skip' | 'trigger-fire' | 'info'
+  type: 'start' | 'success' | 'error' | 'skip' | 'trigger-fire' | 'info' | 'waiting'
   message: string
   data?: unknown
 }
@@ -122,6 +122,8 @@ export interface VariableContext {
 
 export interface FlowNode {
   id: string
+  type?: string
+  position?: { x: number; y: number }
   data: {
     blockId: string
     config: Record<string, string | number | undefined>

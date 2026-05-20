@@ -95,11 +95,11 @@ export default function Navbar({ onConnectWallet }: NavbarProps) {
         const algoBalance = Number(info.amount ?? 0) / 1_000_000
         const assets = Array.isArray(info.assets) ? info.assets : []
         const assetDetails = await Promise.all(
-          assets.map(async (asset: { ['asset-id']: number; amount: number }) => {
+          assets.map(async (asset) => {
             try {
-              const assetId = asset['asset-id']
-              if (!assetId || isNaN(assetId)) {
-                return null // Skip invalid asset IDs
+              const assetId = Number(asset.assetId ?? 0)
+              if (!assetId || Number.isNaN(assetId)) {
+                return null
               }
 
               // Handle known testnet assets
@@ -110,34 +110,38 @@ export default function Navbar({ onConnectWallet }: NavbarProps) {
 
               if (knownAssets[assetId]) {
                 const decimals = assetId === 10458941 ? 6 : 0
-                const amount = Number(asset.amount ?? 0) / Math.pow(10, decimals)
+                const amount = Number(asset.amount ?? 0n) / Math.pow(10, decimals)
                 return { assetId, label: knownAssets[assetId], amount, decimals }
               }
 
-              const details = await algod.getAssetByID(assetId).do()
+              const details = await algod.getAssetByID(BigInt(assetId)).do()
               const params = details?.params as { name?: string; ['unit-name']?: string; decimals?: number }
               const decimals = params?.decimals ?? 0
-              const amount = Number(asset.amount ?? 0) / Math.pow(10, decimals)
+              const amount = Number(asset.amount ?? 0n) / Math.pow(10, decimals)
               const label = params?.['unit-name'] || params?.name || `ASA ${assetId}`
               return { assetId, label, amount, decimals }
-            } catch (error) {
-              const assetId = asset['asset-id']
-              if (!assetId || isNaN(assetId)) {
-                return null // Skip invalid asset IDs
+            } catch {
+              const assetId = Number(asset.assetId ?? 0)
+              if (!assetId || Number.isNaN(assetId)) {
+                return null
               }
-              return { 
-                assetId, 
-                label: `ASA ${assetId}`, 
-                amount: Number(asset.amount ?? 0),
-                decimals: 0
+              return {
+                assetId,
+                label: `ASA ${assetId}`,
+                amount: Number(asset.amount ?? 0n),
+                decimals: 0,
               }
             }
           }),
         )
         if (cancelled) return
+        const validAssets = assetDetails.filter(
+          (asset): asset is { assetId: number; label: string; amount: number; decimals: number } =>
+            asset !== null && asset.amount > 0,
+        )
         const nextBalances = [
           { assetId: 0, label: 'ALGO', amount: algoBalance, decimals: 6 },
-          ...assetDetails.filter((asset) => asset && asset.amount > 0),
+          ...validAssets,
         ]
         setBalances(nextBalances)
         setSelectedAssetId((prev) => nextBalances.find((b) => b.assetId === prev)?.assetId ?? 0)
@@ -232,7 +236,12 @@ export default function Navbar({ onConnectWallet }: NavbarProps) {
             )}
           </div>
         ) : (
-          <button className="zuik-btn zuik-btn-primary zuik-btn-sm" onClick={onConnectWallet}>
+          <button
+            type="button"
+            className="zuik-btn zuik-btn-primary zuik-btn-sm"
+            data-testid="nav-connect-wallet"
+            onClick={onConnectWallet}
+          >
             <WalletIcon />
             Connect Wallet
           </button>

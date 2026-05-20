@@ -13,7 +13,7 @@ const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const BLOCK_CATALOG = `
 TRIGGERS: timer-loop (interval sec, maxIterations), wallet-event (address, assetId, pollInterval, amountMode received|total), webhook-receiver (path), telegram-trigger (chatId, pattern)
 ACTIONS: swap-token (fromAsset, toAsset, amount, slippage), send-payment (recipient, amount, asset, note), opt-in-asa (assetId), create-asa, call-contract
-LOGIC: comparator (operator, threshold), delay (duration sec), math-op (operation, b), filter, rate-limiter, variable-set
+LOGIC: comparator (operator, threshold, compareField optional), delay (duration sec), math-op (operation, b), filter, rate-limiter, variable-set
 NOTIFICATIONS: send-telegram (chatId, message), send-discord, browser-notify
 DATA: get-quote, price-monitor, pool-info, portfolio-balance, constant, merge, transform-data, http-request, log-debug
 

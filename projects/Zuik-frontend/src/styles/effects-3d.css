@@ -1,0 +1,545 @@
+/* ═══════════════════════════════════════════════════════════
+   ZUIK 3D EFFECTS - Premium depth layer
+   Hardware-accelerated transforms, subtle SaaS polish
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --z-perspective: 1200px;
+  --z-perspective-near: 800px;
+  --z-depth-sm: 8px;
+  --z-depth-md: 16px;
+  --z-depth-lg: 28px;
+  --z-shadow-3d:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 var(--z-depth-sm) var(--z-depth-md) rgba(5, 7, 11, 0.45);
+  --z-shadow-3d-hover:
+    0 1px 0 rgba(255, 255, 255, 0.1) inset,
+    0 calc(var(--z-depth-md) + 4px) calc(var(--z-depth-lg) + 12px) rgba(5, 7, 11, 0.55),
+    0 0 40px rgba(110, 231, 255, 0.12);
+  --z-transition-3d: transform 0.35s var(--z-ease), box-shadow 0.35s var(--z-ease), border-color 0.25s ease;
+}
+
+/* ── Keyframes ─────────────────────────────────────────── */
+
+@keyframes zFloat3d {
+  0%, 100% { transform: translate3d(0, 0, 0) rotateX(0deg); }
+  50% { transform: translate3d(0, -10px, 12px) rotateX(2deg); }
+}
+
+@keyframes zHeroOrbDrift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
+  33% { transform: translate3d(12px, -18px, 24px) scale(1.06); opacity: 0.75; }
+  66% { transform: translate3d(-8px, 10px, 12px) scale(0.96); opacity: 0.5; }
+}
+
+@keyframes zModalPop3d {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) perspective(var(--z-perspective-near)) rotateX(8deg) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) perspective(var(--z-perspective-near)) rotateX(0deg) scale(1);
+  }
+}
+
+@keyframes zEdgeGlow3d {
+  0%, 100% { filter: drop-shadow(0 2px 4px rgba(110, 231, 255, 0.15)); }
+  50% { filter: drop-shadow(0 4px 12px rgba(110, 231, 255, 0.35)); }
+}
+
+/* ── Utility classes ───────────────────────────────────── */
+
+.z-3d-scene {
+  perspective: var(--z-perspective);
+  perspective-origin: 50% 40%;
+}
+
+.z-3d-layer {
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+.z-3d-lift {
+  transform-style: preserve-3d;
+  transition: var(--z-transition-3d);
+  will-change: transform;
+}
+
+.z-3d-lift:hover {
+  transform: translateY(-4px) translateZ(var(--z-depth-sm)) rotateX(2deg);
+  box-shadow: var(--z-shadow-3d-hover);
+}
+
+.z-3d-press:active {
+  transform: translateY(1px) translateZ(0) rotateX(0deg) !important;
+}
+
+/* ── Hero 3D background ──────────────────────────────── */
+
+.landing-hero-3d-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  transform-style: preserve-3d;
+  perspective: var(--z-perspective);
+}
+
+.z-hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(48px);
+  transform-style: preserve-3d;
+  animation: zHeroOrbDrift 14s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.z-hero-orb-1 {
+  width: min(420px, 55vw);
+  height: min(420px, 55vw);
+  top: 8%;
+  left: 5%;
+  background: radial-gradient(circle, rgba(110, 231, 255, 0.22), transparent 68%);
+  animation-delay: 0s;
+}
+
+.z-hero-orb-2 {
+  width: min(320px, 42vw);
+  height: min(320px, 42vw);
+  top: 35%;
+  right: 8%;
+  background: radial-gradient(circle, rgba(242, 195, 124, 0.18), transparent 70%);
+  animation-delay: -4.5s;
+  animation-duration: 18s;
+}
+
+.z-hero-orb-3 {
+  width: min(200px, 30vw);
+  height: min(200px, 30vw);
+  bottom: 12%;
+  left: 38%;
+  background: radial-gradient(circle, rgba(110, 231, 255, 0.14), transparent 72%);
+  animation-delay: -9s;
+  animation-duration: 12s;
+}
+
+.landing-hero-glow {
+  transform: translateX(-50%) translateZ(-40px);
+  transform-style: preserve-3d;
+}
+
+.landing-hero::before,
+.landing-hero::after {
+  transform: translateZ(-20px);
+  transform-style: preserve-3d;
+}
+
+/* ── Laptop depth ──────────────────────────────────────── */
+
+.z-laptop {
+  perspective: var(--z-perspective-near);
+}
+
+.z-laptop-tilt {
+  will-change: transform;
+  filter: drop-shadow(0 32px 48px rgba(0, 0, 0, 0.45));
+}
+
+.z-laptop-bezel {
+  transform: translateZ(12px);
+  transform-style: preserve-3d;
+}
+
+.z-laptop-screen {
+  transform: translateZ(4px);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.z-laptop-base {
+  transform: translateZ(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.z-wf-block {
+  transform-style: preserve-3d;
+  transition: transform 0.35s var(--z-ease), box-shadow 0.35s var(--z-ease);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.z-wf-block-1 { transform: translateZ(16px); }
+.z-wf-block-2 { transform: translateZ(24px); }
+.z-wf-block-3 { transform: translateZ(12px); }
+
+.z-laptop:hover .z-wf-block-1 {
+  transform: translateZ(22px) rotateY(-2deg);
+}
+.z-laptop:hover .z-wf-block-2 {
+  transform: translateZ(32px) rotateY(1deg);
+}
+.z-laptop:hover .z-wf-block-3 {
+  transform: translateZ(18px) rotateY(2deg);
+}
+
+/* ── Buttons ───────────────────────────────────────────── */
+
+.z-btn,
+.zuik-btn {
+  transform-style: preserve-3d;
+  box-shadow: var(--z-shadow-3d);
+  transition: var(--z-transition-3d), background 0.2s var(--z-ease), border-color 0.2s var(--z-ease), color 0.2s;
+}
+
+.z-btn-primary,
+.zuik-btn-primary {
+  box-shadow:
+    0 6px 16px rgba(110, 231, 255, 0.22),
+    0 2px 0 rgba(242, 195, 124, 0.2),
+    var(--z-shadow-3d);
+}
+
+.z-btn-primary:hover,
+.zuik-btn-primary:hover {
+  transform: translateY(-2px) translateZ(6px) rotateX(3deg);
+  box-shadow:
+    0 14px 32px rgba(110, 231, 255, 0.28),
+    0 4px 0 rgba(242, 195, 124, 0.15),
+    var(--z-shadow-3d-hover);
+}
+
+.z-btn-ghost:hover,
+.zuik-btn-ghost:hover {
+  transform: translateY(-1px) translateZ(4px);
+  box-shadow: var(--z-shadow-3d-hover);
+}
+
+.landing-wallet-btn {
+  transform-style: preserve-3d;
+  box-shadow: 0 6px 18px rgba(110, 231, 255, 0.2);
+}
+
+.landing-wallet-btn:hover {
+  transform: translateY(-2px) translateZ(6px) rotateX(2deg);
+  box-shadow: 0 12px 28px rgba(110, 231, 255, 0.28);
+}
+
+.landing-cta-secondary {
+  transform-style: preserve-3d;
+  transition: var(--z-transition-3d);
+}
+
+.landing-cta-secondary:hover {
+  transform: translateY(-2px) translateZ(6px) rotateX(2deg);
+  box-shadow: 0 12px 28px rgba(110, 231, 255, 0.15);
+}
+
+/* ── Navigation ────────────────────────────────────────── */
+
+.zuik-navbar,
+.landing-nav {
+  transform-style: preserve-3d;
+  transition: transform 0.35s var(--z-ease), box-shadow 0.35s var(--z-ease), background 0.3s var(--z-ease);
+}
+
+.landing-nav.scrolled {
+  box-shadow:
+    0 12px 40px rgba(5, 7, 11, 0.55),
+    0 1px 0 rgba(110, 231, 255, 0.08) inset;
+  transform: translateZ(8px);
+}
+
+.zuik-nav-link {
+  transform-style: preserve-3d;
+  transition: var(--z-transition-3d), color 0.2s, background 0.2s;
+}
+
+.zuik-nav-link:hover {
+  transform: translateY(-1px) translateZ(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.zuik-nav-link.active {
+  transform: translateZ(6px);
+  box-shadow: 0 6px 16px rgba(110, 231, 255, 0.12);
+}
+
+/* ── Cards (landing) ───────────────────────────────────── */
+
+.z-step-card,
+.z-feature-card,
+.z-why-card,
+.z-use-case-card,
+.z-pricing-card,
+.z-stat {
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+.z-capabilities-core {
+  transform: translateZ(20px);
+  animation: zFloat3d 8s ease-in-out infinite;
+}
+
+.z-why-card:hover,
+.z-use-case-card:hover {
+  transform: translateY(-6px) translateZ(12px) rotateX(2deg);
+  box-shadow: var(--z-shadow-3d-hover);
+}
+
+.z-pricing-card {
+  transition: var(--z-transition-3d);
+}
+
+.z-pricing-card:not(.featured):hover {
+  transform: translateY(-4px) translateZ(10px) rotateX(2deg);
+  box-shadow: var(--z-shadow-3d-hover);
+}
+
+.z-pricing-card.featured {
+  transform: translateY(-8px) translateZ(16px);
+}
+
+.z-stat:hover {
+  transform: translateY(-5px) translateZ(10px) rotateX(3deg);
+}
+
+/* ── Form inputs ───────────────────────────────────────── */
+
+.zuik-node-field input,
+.zuik-node-field select,
+.zuik-node-field textarea,
+.zuik-sidebar-search input,
+.payroll-row input,
+.zuik-wf-name-input {
+  transform-style: preserve-3d;
+  transition: border-color 0.2s, box-shadow 0.25s var(--z-ease), transform 0.25s var(--z-ease);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.zuik-node-field input:focus,
+.zuik-node-field select:focus,
+.zuik-node-field textarea:focus,
+.zuik-sidebar-search input:focus,
+.payroll-row input:focus,
+.zuik-wf-name-input:focus {
+  transform: translateZ(4px);
+  box-shadow:
+    0 4px 12px rgba(110, 231, 255, 0.12),
+    0 0 0 1px rgba(110, 231, 255, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ── Settings panels ───────────────────────────────────── */
+
+.zuik-settings {
+  perspective: var(--z-perspective);
+}
+
+.st-card {
+  transform-style: preserve-3d;
+  transition: var(--z-transition-3d);
+}
+
+.st-card:hover {
+  transform: translateY(-2px) translateZ(8px);
+  box-shadow:
+    0 20px 40px rgba(8, 12, 16, 0.55),
+    0 0 24px rgba(110, 231, 255, 0.08);
+}
+
+/* ── Modals ────────────────────────────────────────────── */
+
+.z-modal-backdrop,
+.tpl-overlay {
+  perspective: var(--z-perspective);
+}
+
+.z-modal-box {
+  transform-style: preserve-3d;
+  animation: fadeIn 0.3s var(--z-ease) both;
+  box-shadow:
+    0 32px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(110, 231, 255, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.tpl-detail-modal {
+  transform-style: preserve-3d;
+  animation: zModalPop3d 0.35s var(--z-ease) both;
+  box-shadow:
+    0 40px 80px rgba(0, 0, 0, 0.6),
+    0 0 48px rgba(110, 231, 255, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.z-wallet-option {
+  transform-style: preserve-3d;
+  transition: var(--z-transition-3d);
+}
+
+.z-wallet-option:hover {
+  transform: translateY(-3px) translateZ(8px) rotateX(2deg);
+  box-shadow: var(--z-shadow-3d-hover);
+}
+
+/* ── Builder / React Flow ──────────────────────────────── */
+
+.zuik-node {
+  transform-style: preserve-3d;
+  transition: transform 0.3s var(--z-ease), border-color 0.2s, box-shadow 0.3s var(--z-ease);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.35),
+    0 2px 0 rgba(255, 255, 255, 0.04) inset,
+    0 0 12px rgba(110, 231, 255, 0.06);
+}
+
+.zuik-node:hover {
+  transform: translateY(-3px) translateZ(8px) rotateX(1.5deg);
+  box-shadow:
+    0 16px 32px rgba(0, 0, 0, 0.45),
+    0 0 24px rgba(110, 231, 255, 0.14);
+}
+
+.zuik-node.selected {
+  transform: translateY(-2px) translateZ(12px);
+}
+
+.zuik-node.selected:hover {
+  transform: translateY(-3px) translateZ(14px) rotateX(1.5deg);
+}
+
+.zuik-block-item {
+  transform-style: preserve-3d;
+  transition: var(--z-transition-3d), background 0.2s;
+}
+
+.zuik-block-item:hover {
+  transform: translateX(4px) translateZ(6px) rotateY(-2deg);
+  box-shadow: 0 8px 20px rgba(110, 231, 255, 0.12);
+}
+
+.react-flow__edge-path {
+  filter: drop-shadow(0 2px 4px rgba(110, 231, 255, 0.1));
+  transition: filter 0.3s ease;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  animation: zEdgeGlow3d 2.5s ease-in-out infinite;
+}
+
+.react-flow__handle {
+  transform-style: preserve-3d;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s var(--z-ease), box-shadow 0.2s;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.2) translateZ(4px);
+  box-shadow: 0 4px 12px rgba(110, 231, 255, 0.35);
+}
+
+.react-flow__controls,
+.react-flow__minimap {
+  transform: translateZ(8px);
+  box-shadow: var(--z-shadow-3d);
+}
+
+.tpl-card {
+  transform-style: preserve-3d;
+  transition: var(--z-transition-3d);
+}
+
+.tpl-card:hover {
+  transform: translateY(-4px) translateZ(10px) rotateX(2deg);
+  box-shadow: var(--z-shadow-3d-hover);
+}
+
+/* ── Dashboard / panels ────────────────────────────────── */
+
+.zuik-chat-panel,
+.zuik-sidebar {
+  box-shadow:
+    -8px 0 32px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(110, 231, 255, 0.06);
+}
+
+.zuik-wallet-menu {
+  transform-origin: top right;
+  animation: fadeIn 0.2s var(--z-ease) both;
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.5),
+    0 8px 16px rgba(110, 231, 255, 0.08);
+}
+
+/* ── Accessibility: reduced motion ───────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .z-laptop-tilt,
+  .z-capabilities-core,
+  .z-hero-orb,
+  .react-flow__edge.selected .react-flow__edge-path {
+    animation: none !important;
+  }
+
+  .z-btn:hover,
+  .zuik-btn:hover,
+  .z-step-card:hover,
+  .z-feature-card:hover,
+  .zuik-node:hover,
+  .st-card:hover,
+  .z-why-card:hover,
+  .z-use-case-card:hover,
+  .z-pricing-card:hover,
+  .z-stat:hover,
+  .zuik-nav-link:hover,
+  .landing-wallet-btn:hover,
+  .landing-cta-primary:hover,
+  .landing-cta-secondary:hover,
+  .z-laptop:hover .z-wf-block-1,
+  .z-laptop:hover .z-wf-block-2,
+  .z-laptop:hover .z-wf-block-3 {
+    transform: none !important;
+  }
+
+  .z-wf-connector-line,
+  .z-wf-connector-dot {
+    animation: none !important;
+  }
+
+  .z-3d-lift:hover {
+    transform: none;
+  }
+
+  .tpl-detail-modal {
+    animation: modalFadeIn 0.2s var(--z-ease) both;
+  }
+}
+
+/* ── Mobile: lighter 3D (performance) ──────────────────── */
+
+@media (max-width: 768px) {
+  :root {
+    --z-perspective: 900px;
+  }
+
+  .z-hero-orb {
+    filter: blur(36px);
+    animation-duration: 20s;
+  }
+
+  .z-laptop-tilt {
+    animation: none;
+    transform: rotateY(-6deg) rotateX(2deg);
+  }
+
+  .zuik-node:hover {
+    transform: none;
+  }
+}

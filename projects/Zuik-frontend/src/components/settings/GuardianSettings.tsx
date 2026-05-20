@@ -1,63 +1,111 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useWallet } from '@txnlab/use-wallet-react'
-import { guardianContract, AgentStatus, GlobalMetrics, GuardianPolicy } from '../../services/guardianContract'
+import {
+  guardianContract,
+  algoToMicroAlgos,
+  type AgentStatus,
+  type GlobalMetrics,
+  type GuardianPolicy,
+} from '../../services/guardianContract'
+import {
+  SettingsPanelHeader,
+  HelpCard,
+  SettingsCard,
+  SettingsField,
+  SettingsInput,
+  StatusBadge,
+  FeedbackMessage,
+  LoadingBlock,
+} from './SettingsPrimitives'
 import './GuardianSettings.css'
 
-interface GuardianSettingsProps {
-  className?: string
+const DEFAULT_DAILY_CAP_ALGO = '2'
+
+type GuardianStep = 1 | 2 | 3
+
+function formatNetworkLabel(network: string): string {
+  if (network === 'mainnet') return 'Mainnet'
+  if (network === 'localnet') return 'Local'
+  return 'Testnet'
 }
 
-export const GuardianSettings: React.FC<GuardianSettingsProps> = ({ className = '' }) => {
-  const { activeAccount } = useWallet()
+function microToAlgo(micro: number): string {
+  return (micro / 1_000_000).toFixed(2)
+}
+
+export function GuardianSettings() {
+  const { activeAccount, activeAddress, transactionSigner } = useWallet()
   const [loading, setLoading] = useState(false)
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null)
   const [globalMetrics, setGlobalMetrics] = useState<GlobalMetrics | null>(null)
   const [isPaused, setIsPaused] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [activeStep, setActiveStep] = useState<GuardianStep>(1)
 
-  // Deployment info from environment
-  const guardianAppId = import.meta.env.VITE_GUARDIAN_APP_ID || '0'
+  const guardianAppId = parseInt(import.meta.env.VITE_GUARDIAN_APP_ID || '0', 10)
   const guardianAppAddress = import.meta.env.VITE_GUARDIAN_APP_ADDRESS || ''
-  const network = import.meta.env.VITE_ALGOD_NETWORK || 'localnet'
-  
-  // Agent registration form
+  const network = import.meta.env.VITE_ALGOD_NETWORK || 'mainnet'
+  const guardianReady = guardianAppId > 0 && Boolean(guardianAppAddress)
+
   const [registrationForm, setRegistrationForm] = useState({
     agentAddress: '',
-    dailyCap: '100000000', // 100 ALGO in microAlgos
-    allowedAssets: '0,31566704', // ALGO and USDC
-    allowedMethods: 'swap(uint64,uint64,account)void,transfer(account,uint64)void'
+    dailyCapAlgo: DEFAULT_DAILY_CAP_ALGO,
   })
-  
-  // Policy update form
+
   const [policyForm, setPolicyForm] = useState({
     agentAddress: '',
-    newDailyCap: '100000000',
-    newAllowedAssets: '0,31566704',
-    newAllowedMethods: 'swap(uint64,uint64,account)void,transfer(account,uint64)void'
+    dailyCapAlgo: DEFAULT_DAILY_CAP_ALGO,
   })
 
-  useEffect(() => {
-    if (activeAccount) {
-      loadGuardianData()
-    }
-  }, [activeAccount])
+  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
+    setFeedback({ type, text })
+  }, [])
 
-  const loadGuardianData = async () => {
-    if (!activeAccount) return
-    
+  const loadGuardianData = useCallback(async () => {
+    if (!activeAccount || !guardianReady) return
+
     setLoading(true)
     try {
-      // Load global metrics
       const metrics = await guardianContract.getGlobalMetrics()
       setGlobalMetrics(metrics)
       setIsPaused(metrics?.isPaused || false)
-      
-      // Load agent status if agent address is provided
-      if (registrationForm.agentAddress) {
-        const status = await guardianContract.getAgentStatus(registrationForm.agentAddress)
+
+      const addr = registrationForm.agentAddress.trim()
+      if (addr) {
+        const status = await guardianContract.getAgentStatus(addr)
         setAgentStatus(status)
+        if (status?.isActive) setActiveStep(3)
       }
+    } catch {
+      showMessage('error', 'Could not load Guardian status. Try again in a moment.')
+    } finally {
+      setLoading(false)
+    }
+  }, [activeAccount, guardianReady, registrationForm.agentAddress, showMessage])
+
+  useEffect(() => {
+    if (activeAccount && guardianReady) {
+      void loadGuardianData()
+    }
+  }, [activeAccount, guardianReady, loadGuardianData])
+
+  const handleAgentOptIn = async () => {
+    if (!activeAddress || !transactionSigner) {
+      showMessage('info', 'Connect the wallet your automation uses, then approve signing in your wallet app.')
+      return
+    }
+    setLoading(true)
+    setFeedback(null)
+    try {
+      const txId = await guardianContract.agentOptIn(activeAddress, transactionSigner)
+      showMessage(
+        'success',
+        txId ? `Agent activated on Guardian. Transaction: ${txId.slice(0, 12)}...` : 'Agent activated on Guardian.',
+      )
+      setActiveStep(2)
     } catch (error) {
-      console.error('Failed to load Guardian data:', error)
+      showMessage('error', error instanceof Error ? error.message : 'Could not activate agent. Try again.')
     } finally {
       setLoading(false)
     }
@@ -65,27 +113,41 @@ export const GuardianSettings: React.FC<GuardianSettingsProps> = ({ className = 
 
   const handleRegisterAgent = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!activeAccount) return
-    
+    if (!activeAddress || !transactionSigner) {
+      showMessage('info', 'Connect your owner wallet to register spending limits.')
+      return
+    }
+
+    const capAlgo = parseFloat(registrationForm.dailyCapAlgo)
+    if (!Number.isFinite(capAlgo) || capAlgo <= 0) {
+      showMessage('error', 'Enter a valid daily spending limit in ALGO.')
+      return
+    }
+
     setLoading(true)
+    setFeedback(null)
     try {
       const policy: GuardianPolicy = {
-        dailyCap: parseInt(registrationForm.dailyCap),
-        allowedAssets: registrationForm.allowedAssets.split(',').map(id => parseInt(id.trim())),
-        allowedMethods: registrationForm.allowedMethods.split(',').map(method => method.trim())
+        dailyCap: algoToMicroAlgos(capAlgo),
+        allowedAssets: [],
+        allowedMethods: [],
       }
-      
+
       const txId = await guardianContract.registerAgent(
-        activeAccount,
-        registrationForm.agentAddress,
-        policy
+        activeAddress,
+        transactionSigner,
+        registrationForm.agentAddress.trim(),
+        policy,
       )
-      
-      alert(`Agent registered successfully! Transaction ID: ${txId}`)
+
+      showMessage('success', `Daily limit set to ${capAlgo} ALGO. Transaction: ${txId.slice(0, 12)}...`)
       await loadGuardianData()
+      setActiveStep(3)
     } catch (error) {
-      console.error('Failed to register agent:', error)
-      alert('Failed to register agent. Please check the console for details.')
+      showMessage(
+        'error',
+        error instanceof Error ? error.message : 'Registration failed. Confirm the agent wallet has opted in first.',
+      )
     } finally {
       setLoading(false)
     }
@@ -93,59 +155,77 @@ export const GuardianSettings: React.FC<GuardianSettingsProps> = ({ className = 
 
   const handleUpdatePolicy = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!activeAccount) return
-    
+    if (!activeAddress || !transactionSigner) {
+      showMessage('info', 'Connect your owner wallet to update limits.')
+      return
+    }
+
+    const capAlgo = parseFloat(policyForm.dailyCapAlgo)
+    if (!Number.isFinite(capAlgo) || capAlgo <= 0) {
+      showMessage('error', 'Enter a valid daily spending limit in ALGO.')
+      return
+    }
+
     setLoading(true)
+    setFeedback(null)
     try {
       const newPolicy: GuardianPolicy = {
-        dailyCap: parseInt(policyForm.newDailyCap),
-        allowedAssets: policyForm.newAllowedAssets.split(',').map(id => parseInt(id.trim())),
-        allowedMethods: policyForm.newAllowedMethods.split(',').map(method => method.trim())
+        dailyCap: algoToMicroAlgos(capAlgo),
+        allowedAssets: [],
+        allowedMethods: [],
       }
-      
+
       const txId = await guardianContract.updateAgentPolicy(
-        activeAccount,
-        policyForm.agentAddress,
-        newPolicy
+        activeAddress,
+        transactionSigner,
+        policyForm.agentAddress.trim(),
+        newPolicy,
       )
-      
-      alert(`Agent policy updated successfully! Transaction ID: ${txId}`)
+
+      showMessage('success', `Daily limit updated to ${capAlgo} ALGO. Transaction: ${txId.slice(0, 12)}...`)
       await loadGuardianData()
     } catch (error) {
-      console.error('Failed to update agent policy:', error)
-      alert('Failed to update agent policy. Please check the console for details.')
+      showMessage('error', error instanceof Error ? error.message : 'Could not update limit. Try again.')
     } finally {
       setLoading(false)
     }
   }
 
   const handleTogglePause = async () => {
-    if (!activeAccount) return
-    
+    if (!activeAddress || !transactionSigner) return
+
     setLoading(true)
+    setFeedback(null)
     try {
       const newPausedState = !isPaused
-      const txId = await guardianContract.setPaused(activeAccount, newPausedState)
-      
+      const txId = await guardianContract.setPaused(activeAddress, transactionSigner, newPausedState)
+
       setIsPaused(newPausedState)
-      alert(`Guardian ${newPausedState ? 'paused' : 'unpaused'} successfully! Transaction ID: ${txId}`)
-    } catch (error) {
-      console.error('Failed to toggle pause:', error)
-      alert('Failed to toggle pause state. You might not be the owner.')
+      showMessage(
+        'success',
+        newPausedState
+          ? `All agents paused. Transaction: ${txId.slice(0, 12)}...`
+          : `Agents resumed. Transaction: ${txId.slice(0, 12)}...`,
+      )
+      await loadGuardianData()
+    } catch {
+      showMessage('error', 'Only the contract owner can pause or resume Guardian.')
     } finally {
       setLoading(false)
     }
   }
 
   const handleCheckAgentStatus = async () => {
-    if (!registrationForm.agentAddress) return
-    
+    if (!registrationForm.agentAddress.trim()) return
+
     setLoading(true)
+    setFeedback(null)
     try {
-      const status = await guardianContract.getAgentStatus(registrationForm.agentAddress)
+      const status = await guardianContract.getAgentStatus(registrationForm.agentAddress.trim())
       setAgentStatus(status)
-    } catch (error) {
-      console.error('Failed to check agent status:', error)
+      if (status?.isActive) setActiveStep(3)
+    } catch {
+      showMessage('error', 'Could not load agent status for that address.')
     } finally {
       setLoading(false)
     }
@@ -153,244 +233,298 @@ export const GuardianSettings: React.FC<GuardianSettingsProps> = ({ className = 
 
   if (!activeAccount) {
     return (
-      <div className={`guardian-settings ${className}`}>
-        <div className="guardian-settings__not-connected">
-          <h3>🛡️ Guardian Smart Contract</h3>
-          <p>Please connect your wallet to manage AI agent governance.</p>
-        </div>
-      </div>
+      <section className="st-section guardian-settings" data-testid="guardian-settings">
+        <SettingsPanelHeader
+          title="Guardian protection"
+          subtitle="On-chain daily spending limits for automated agents."
+        />
+        <SettingsCard>
+          <p className="st-muted st-center">Connect your wallet to set up Guardian protection.</p>
+        </SettingsCard>
+      </section>
     )
   }
 
+  const steps = [
+    { id: 1 as const, label: 'Activate agent', desc: 'Opt in once' },
+    { id: 2 as const, label: 'Set limits', desc: 'Register daily cap' },
+    { id: 3 as const, label: 'Manage', desc: 'Monitor and adjust' },
+  ]
+
   return (
-    <div className={`guardian-settings ${className}`}>
-      <div className="guardian-settings__header">
-        <h3>🛡️ Guardian Smart Contract</h3>
-        <p>AI Agent Governance & Security Controls</p>
-        
-        {/* Deployment Information */}
-        <div className="guardian-settings__deployment">
-          <div className="deployment-info">
-            <span className="deployment-label">App ID:</span>
-            <span className="deployment-value" title={`Guardian Smart Contract ID on ${network}`}>{guardianAppId}</span>
-          </div>
-          <div className="deployment-info">
-            <span className="deployment-label">Contract Address:</span>
-            <span className="deployment-value" title={guardianAppAddress}>
-              {guardianAppAddress ? `${guardianAppAddress.slice(0, 8)}...${guardianAppAddress.slice(-8)}` : 'Not deployed'}
-            </span>
-          </div>
-          <div className="deployment-info">
-            <span className="deployment-label">Network:</span>
-            <span className="deployment-value network-badge">{network}</span>
-          </div>
+    <section className="st-section guardian-settings" data-testid="guardian-settings">
+      <SettingsPanelHeader
+        title="Guardian protection"
+        subtitle="Cap how much ALGO your automation can spend each day - enforced on-chain."
+      />
+
+      <HelpCard title="Why use Guardian?">
+        Guardian adds a safety layer so workflows and agents cannot spend more than you allow, even if
+        something goes wrong. Limits are stored on the Algorand blockchain.
+      </HelpCard>
+
+      {!guardianReady && (
+        <div className="guardian-settings__banner guardian-settings__banner-warn" role="alert">
+          Guardian is not available on this deployment yet. Contact support if you need on-chain spend limits.
         </div>
-        
-        {globalMetrics && (
-          <div className="guardian-settings__metrics">
-            <div className="metrics-grid">
-              <div className="metric-card">
-                <span className="metric-label">Total Transactions</span>
-                <span className="metric-value">{globalMetrics.totalTransactions.toLocaleString()}</span>
+      )}
+
+      {guardianReady && (
+        <>
+          {globalMetrics && (
+            <div className="guardian-overview">
+              <div className="guardian-stat-card">
+                <span className="guardian-stat-label">Protected transactions</span>
+                <span className="guardian-stat-value">{globalMetrics.totalTransactions.toLocaleString()}</span>
               </div>
-              <div className="metric-card">
-                <span className="metric-label">Total Volume</span>
-                <span className="metric-value">{(globalMetrics.totalVolume / 1_000_000).toFixed(2)} ALGO</span>
+              <div className="guardian-stat-card">
+                <span className="guardian-stat-label">Volume tracked</span>
+                <span className="guardian-stat-value">{microToAlgo(globalMetrics.totalVolume)} ALGO</span>
               </div>
-              <div className="metric-card">
-                <span className="metric-label">Status</span>
-                <span className={`metric-value status ${isPaused ? 'paused' : 'active'}`}>
-                  {isPaused ? '⏸️ Paused' : '✅ Active'}
+              <div className="guardian-stat-card">
+                <span className="guardian-stat-label">System status</span>
+                <StatusBadge variant={isPaused ? 'warning' : 'success'}>
+                  {isPaused ? 'Paused' : 'Active'}
+                </StatusBadge>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleTogglePause}
+            className={`guardian-pause-btn ${isPaused ? 'guardian-pause-btn--resume' : 'guardian-pause-btn--pause'}`}
+            disabled={loading}
+          >
+            {isPaused ? 'Resume all agents' : 'Emergency pause all agents'}
+          </button>
+
+          <div className="guardian-steps" aria-label="Setup progress">
+            {steps.map((step, index) => {
+              const done = activeStep > step.id
+              const current = activeStep === step.id
+              return (
+                <div
+                  key={step.id}
+                  className={`guardian-step${current ? ' guardian-step--current' : ''}${done ? ' guardian-step--done' : ''}`}
+                >
+                  <div className="guardian-step-marker">
+                    {done ? '✓' : step.id}
+                  </div>
+                  <div className="guardian-step-text">
+                    <span className="guardian-step-label">{step.label}</span>
+                    <span className="guardian-step-desc">{step.desc}</span>
+                  </div>
+                  {index < steps.length - 1 && <div className="guardian-step-line" aria-hidden />}
+                </div>
+              )
+            })}
+          </div>
+
+          {loading && <LoadingBlock label="Processing..." />}
+
+          <SettingsCard className="guardian-step-card">
+            <div className="guardian-step-card-head">
+              <span className="guardian-step-badge">Step 1</span>
+              <h3 className="st-card-title">Activate agent wallet</h3>
+            </div>
+            <p className="guardian-settings__hint">
+              Connect the wallet your automation will use, then opt in once on Guardian.
+            </p>
+            <button
+              type="button"
+              className="z-btn z-btn-primary"
+              data-testid="guardian-agent-opt-in"
+              disabled={loading}
+              onClick={handleAgentOptIn}
+            >
+              {loading ? 'Please wait...' : 'Activate agent on Guardian'}
+            </button>
+          </SettingsCard>
+
+          <SettingsCard className="guardian-step-card">
+            <div className="guardian-step-card-head">
+              <span className="guardian-step-badge">Step 2</span>
+              <h3 className="st-card-title">Register spending limit</h3>
+            </div>
+            <p className="guardian-settings__hint">
+              Connect your owner wallet and set how much ALGO this agent may spend per day.
+            </p>
+            <form onSubmit={handleRegisterAgent} className="guardian-form">
+              <SettingsField label="Agent wallet address" htmlFor="agentAddress">
+                <SettingsInput
+                  id="agentAddress"
+                  type="text"
+                  value={registrationForm.agentAddress}
+                  onChange={(e) =>
+                    setRegistrationForm((prev) => ({ ...prev, agentAddress: e.target.value }))
+                  }
+                  placeholder="Paste agent address"
+                  required
+                  mono
+                />
+                <button
+                  type="button"
+                  onClick={handleCheckAgentStatus}
+                  className="check-status-btn z-btn z-btn-ghost z-btn-sm"
+                  disabled={loading || !registrationForm.agentAddress}
+                >
+                  Refresh status
+                </button>
+              </SettingsField>
+
+              <SettingsField
+                label="Daily limit (ALGO)"
+                hint={`Example: ${DEFAULT_DAILY_CAP_ALGO} ALGO per day`}
+                htmlFor="dailyCapAlgo"
+              >
+                <SettingsInput
+                  id="dailyCapAlgo"
+                  type="number"
+                  min="0.001"
+                  step="0.1"
+                  value={registrationForm.dailyCapAlgo}
+                  onChange={(e) =>
+                    setRegistrationForm((prev) => ({ ...prev, dailyCapAlgo: e.target.value }))
+                  }
+                  placeholder={DEFAULT_DAILY_CAP_ALGO}
+                  required
+                />
+              </SettingsField>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="z-btn z-btn-primary"
+                data-testid="guardian-register-agent"
+              >
+                {loading ? 'Submitting...' : 'Register agent'}
+              </button>
+            </form>
+          </SettingsCard>
+
+          {(agentStatus || activeStep >= 3) && (
+            <SettingsCard className="guardian-step-card">
+              <div className="guardian-step-card-head">
+                <span className="guardian-step-badge">Step 3</span>
+                <h3 className="st-card-title">Agent status</h3>
+              </div>
+              {agentStatus ? (
+                <div className="guardian-status-grid">
+                  <div className="guardian-status-item">
+                    <span className="guardian-status-label">Active</span>
+                    <StatusBadge variant={agentStatus.isActive ? 'success' : 'neutral'}>
+                      {agentStatus.isActive ? 'Yes' : 'No'}
+                    </StatusBadge>
+                  </div>
+                  <div className="guardian-status-item">
+                    <span className="guardian-status-label">Daily limit</span>
+                    <span className="guardian-status-value">
+                      {microToAlgo(agentStatus.dailySpendingCap)} ALGO
+                    </span>
+                  </div>
+                  <div className="guardian-status-item">
+                    <span className="guardian-status-label">Spent today</span>
+                    <span className="guardian-status-value">
+                      {microToAlgo(agentStatus.dailySpentAmount)} ALGO
+                    </span>
+                  </div>
+                  <div className="guardian-status-item">
+                    <span className="guardian-status-label">Transactions</span>
+                    <span className="guardian-status-value">{agentStatus.transactionCount}</span>
+                  </div>
+                  {agentStatus.dailySpendingCap > 0 && (
+                    <div className="guardian-progress-wrap">
+                      <div className="guardian-progress-label">
+                        <span>Today&apos;s usage</span>
+                        <span>
+                          {microToAlgo(agentStatus.dailySpentAmount)} /{' '}
+                          {microToAlgo(agentStatus.dailySpendingCap)} ALGO
+                        </span>
+                      </div>
+                      <div className="guardian-progress-track">
+                        <div
+                          className="guardian-progress-fill"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (agentStatus.dailySpentAmount / agentStatus.dailySpendingCap) * 100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="st-muted">Enter an agent address and refresh status to see details.</p>
+              )}
+            </SettingsCard>
+          )}
+
+          <SettingsCard className="guardian-step-card">
+            <h3 className="st-card-title">Update daily limit</h3>
+            <form onSubmit={handleUpdatePolicy} className="guardian-form">
+              <SettingsField label="Agent wallet address" htmlFor="policyAgentAddress">
+                <SettingsInput
+                  id="policyAgentAddress"
+                  type="text"
+                  value={policyForm.agentAddress}
+                  onChange={(e) => setPolicyForm((prev) => ({ ...prev, agentAddress: e.target.value }))}
+                  placeholder="Paste agent address"
+                  required
+                  mono
+                />
+              </SettingsField>
+
+              <SettingsField label="New daily limit (ALGO)" htmlFor="policyDailyCapAlgo">
+                <SettingsInput
+                  id="policyDailyCapAlgo"
+                  type="number"
+                  min="0.001"
+                  step="0.1"
+                  value={policyForm.dailyCapAlgo}
+                  onChange={(e) => setPolicyForm((prev) => ({ ...prev, dailyCapAlgo: e.target.value }))}
+                  required
+                />
+              </SettingsField>
+
+              <button type="submit" disabled={loading} className="z-btn z-btn-ghost">
+                {loading ? 'Updating...' : 'Save new limit'}
+              </button>
+            </form>
+          </SettingsCard>
+
+          <button
+            type="button"
+            className="guardian-advanced-toggle"
+            onClick={() => setShowAdvanced((v) => !v)}
+          >
+            {showAdvanced ? 'Hide' : 'Show'} contract details
+          </button>
+
+          {showAdvanced && (
+            <SettingsCard className="guardian-deployment">
+              <div className="st-detail-row">
+                <span className="st-detail-label">Network</span>
+                <StatusBadge variant="accent">{formatNetworkLabel(network)}</StatusBadge>
+              </div>
+              <div className="st-detail-row">
+                <span className="st-detail-label">App ID</span>
+                <span className="st-detail-value st-detail-value--mono">{guardianAppId}</span>
+              </div>
+              <div className="st-detail-row">
+                <span className="st-detail-label">Contract</span>
+                <span className="st-detail-value st-detail-value--mono" title={guardianAppAddress}>
+                  {guardianAppAddress.slice(0, 10)}...{guardianAppAddress.slice(-8)}
                 </span>
               </div>
-            </div>
-            
-            <button 
-              onClick={handleTogglePause}
-              className={`guardian-settings__pause-btn ${isPaused ? 'unpause' : 'pause'}`}
-              disabled={loading}
-            >
-              {isPaused ? '▶️ Resume Guardian' : '⏸️ Emergency Pause'}
-            </button>
-          </div>
-        )}
-      </div>
+            </SettingsCard>
+          )}
+        </>
+      )}
 
-      <div className="guardian-settings__content">
-        {/* Agent Registration Form */}
-        <div className="guardian-settings__section">
-          <h4>Register AI Agent</h4>
-          <form onSubmit={handleRegisterAgent} className="guardian-form">
-            <div className="form-group">
-              <label htmlFor="agentAddress">Agent Address</label>
-              <input
-                type="text"
-                id="agentAddress"
-                value={registrationForm.agentAddress}
-                onChange={(e) => setRegistrationForm(prev => ({ ...prev, agentAddress: e.target.value }))}
-                placeholder="Agent's Algorand address"
-                required
-              />
-              <button 
-                type="button" 
-                onClick={handleCheckAgentStatus}
-                className="check-status-btn"
-                disabled={loading || !registrationForm.agentAddress}
-              >
-                Check Status
-              </button>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="dailyCap">Daily Spending Cap (microAlgos)</label>
-              <input
-                type="number"
-                id="dailyCap"
-                value={registrationForm.dailyCap}
-                onChange={(e) => setRegistrationForm(prev => ({ ...prev, dailyCap: e.target.value }))}
-                placeholder="100000000"
-                required
-              />
-              <small>1 ALGO = 1,000,000 microAlgos</small>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="allowedAssets">Allowed Assets (Asset IDs)</label>
-              <input
-                type="text"
-                id="allowedAssets"
-                value={registrationForm.allowedAssets}
-                onChange={(e) => setRegistrationForm(prev => ({ ...prev, allowedAssets: e.target.value }))}
-                placeholder="0,31566704"
-                required
-              />
-              <small>Comma-separated asset IDs (0 = ALGO, 31566704 = USDC)</small>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="allowedMethods">Allowed Methods</label>
-              <textarea
-                id="allowedMethods"
-                value={registrationForm.allowedMethods}
-                onChange={(e) => setRegistrationForm(prev => ({ ...prev, allowedMethods: e.target.value }))}
-                placeholder="swap(uint64,uint64,account)void,transfer(account,uint64)void"
-                rows={3}
-                required
-              />
-              <small>Comma-separated ABI method signatures</small>
-            </div>
-
-            <button type="submit" disabled={loading} className="guardian-form__submit">
-              {loading ? 'Registering...' : 'Register Agent'}
-            </button>
-          </form>
-        </div>
-
-        {/* Agent Status Display */}
-        {agentStatus && (
-          <div className="guardian-settings__section">
-            <h4>Agent Status</h4>
-            <div className="agent-status">
-              <div className="status-grid">
-                <div className="status-item">
-                  <span className="status-label">Active</span>
-                  <span className={`status-value ${agentStatus.isActive ? 'active' : 'inactive'}`}>
-                    {agentStatus.isActive ? '✅ Yes' : '❌ No'}
-                  </span>
-                </div>
-                <div className="status-item">
-                  <span className="status-label">Daily Cap</span>
-                  <span className="status-value">{(agentStatus.dailySpendingCap / 1_000_000).toFixed(2)} ALGO</span>
-                </div>
-                <div className="status-item">
-                  <span className="status-label">Spent Today</span>
-                  <span className="status-value">{(agentStatus.dailySpentAmount / 1_000_000).toFixed(2)} ALGO</span>
-                </div>
-                <div className="status-item">
-                  <span className="status-label">Transactions</span>
-                  <span className="status-value">{agentStatus.transactionCount}</span>
-                </div>
-                <div className="status-item">
-                  <span className="status-label">Risk Score</span>
-                  <span className={`status-value risk-score ${agentStatus.riskScore >= 100 ? 'high' : agentStatus.riskScore >= 50 ? 'medium' : 'low'}`}>
-                    {agentStatus.riskScore}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Policy Update Form */}
-        <div className="guardian-settings__section">
-          <h4>Update Agent Policy</h4>
-          <form onSubmit={handleUpdatePolicy} className="guardian-form">
-            <div className="form-group">
-              <label htmlFor="policyAgentAddress">Agent Address</label>
-              <input
-                type="text"
-                id="policyAgentAddress"
-                value={policyForm.agentAddress}
-                onChange={(e) => setPolicyForm(prev => ({ ...prev, agentAddress: e.target.value }))}
-                placeholder="Agent's Algorand address"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="newDailyCap">New Daily Cap (microAlgos)</label>
-              <input
-                type="number"
-                id="newDailyCap"
-                value={policyForm.newDailyCap}
-                onChange={(e) => setPolicyForm(prev => ({ ...prev, newDailyCap: e.target.value }))}
-                placeholder="100000000"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="newAllowedAssets">New Allowed Assets</label>
-              <input
-                type="text"
-                id="newAllowedAssets"
-                value={policyForm.newAllowedAssets}
-                onChange={(e) => setPolicyForm(prev => ({ ...prev, newAllowedAssets: e.target.value }))}
-                placeholder="0,31566704"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="newAllowedMethods">New Allowed Methods</label>
-              <textarea
-                id="newAllowedMethods"
-                value={policyForm.newAllowedMethods}
-                onChange={(e) => setPolicyForm(prev => ({ ...prev, newAllowedMethods: e.target.value }))}
-                placeholder="swap(uint64,uint64,account)void,transfer(account,uint64)void"
-                rows={3}
-                required
-              />
-            </div>
-
-            <button type="submit" disabled={loading} className="guardian-form__submit update">
-              {loading ? 'Updating...' : 'Update Policy'}
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <div className="guardian-settings__info">
-        <h4>About Guardian Smart Contract</h4>
-        <ul>
-          <li>🛡️ <strong>Policy-driven controls:</strong> Define what AI agents can and cannot do</li>
-          <li>💰 <strong>Spending limits:</strong> Daily caps and asset restrictions</li>
-          <li>📊 <strong>Risk monitoring:</strong> Automatic risk scoring and agent deactivation</li>
-          <li>📝 <strong>Audit trail:</strong> All agent actions logged on-chain</li>
-          <li>⚡ <strong>Real-time enforcement:</strong> Pre-execution authorization checks</li>
-          <li>🚨 <strong>Emergency controls:</strong> Owner can pause all agent activity</li>
-        </ul>
-      </div>
-    </div>
+      {feedback && <FeedbackMessage variant={feedback.type}>{feedback.text}</FeedbackMessage>}
+    </section>
   )
 }
