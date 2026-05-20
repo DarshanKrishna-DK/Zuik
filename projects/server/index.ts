@@ -1,3 +1,4 @@
+// Zuik Cloud Server - deploy root: projects/server
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
