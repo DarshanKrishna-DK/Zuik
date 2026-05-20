@@ -1,0 +1,27 @@
+- generic [ref=e4]:
+  - navigation [ref=e5]:
+    - link "Zuik ZUIK" [ref=e6] [cursor=pointer]:
+      - /url: /
+      - img "Zuik" [ref=e7]
+      - generic [ref=e8]: ZUIK
+    - generic [ref=e9]:
+      - link "Builder" [ref=e10] [cursor=pointer]:
+        - /url: /builder
+        - img [ref=e11]
+        - text: Builder
+      - link "Market" [ref=e15] [cursor=pointer]:
+        - /url: /market
+        - img [ref=e16]
+        - text: Market
+      - link "Dashboard" [ref=e19] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e20]
+        - text: Dashboard
+      - link "Settings" [ref=e25] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e26]
+        - text: Settings
+    - button "Connect Wallet" [ref=e30] [cursor=pointer]:
+      - img [ref=e31]
+      - text: Connect Wallet
+  - generic [ref=e36]: Loading...

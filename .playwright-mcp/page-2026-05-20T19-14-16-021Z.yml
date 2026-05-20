@@ -1,0 +1,284 @@
+- generic [ref=e3]:
+  - generic [ref=e8]:
+    - navigation [ref=e9]:
+      - link "Zuik ZUIK" [ref=e10] [cursor=pointer]:
+        - /url: /
+        - img "Zuik" [ref=e11]
+        - generic [ref=e12]: ZUIK
+      - generic "Page sections" [ref=e13]:
+        - button "Problem" [ref=e14] [cursor=pointer]
+        - button "How it works" [ref=e15] [cursor=pointer]
+        - button "Capabilities" [ref=e16] [cursor=pointer]
+        - button "Use cases" [ref=e17] [cursor=pointer]
+        - button "Pricing" [ref=e18] [cursor=pointer]
+      - button "Connect Wallet" [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+        - text: Connect Wallet
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - heading "AUTOMATE YOUR DeFi" [level=1] [ref=e27]:
+          - generic [ref=e28]: AUTOMATE
+          - generic [ref=e29]: YOUR DeFi
+        - paragraph [ref=e30]: Speak, type, or drag. Zuik translates your intent into atomic transactions on Algorand - no code, no complexity.
+        - button "LAUNCH BUILDER" [active] [ref=e32] [cursor=pointer]:
+          - text: LAUNCH BUILDER
+          - img [ref=e33]
+      - generic [ref=e40]:
+        - generic [ref=e46]: Zuik Flow Builder
+        - generic [ref=e48]:
+          - generic [ref=e49]:
+            - generic [ref=e50]: Wallet Event
+            - generic [ref=e52]: When USDC is received on your wallet.
+          - generic [ref=e57]:
+            - generic [ref=e58]: Swap Token
+            - generic [ref=e60]: USDC to ALGO on Tinyman.
+          - generic [ref=e66]:
+            - generic [ref=e67]: Telegram
+            - generic [ref=e69]: Send confirmation to your chat.
+    - generic [ref=e74]:
+      - generic [ref=e75]:
+        - text: VOICE TO WORKFLOW
+        - generic [ref=e76]: /
+      - generic [ref=e77]:
+        - text: ATOMIC TRANSACTIONS
+        - generic [ref=e78]: /
+      - generic [ref=e79]:
+        - text: AI INTENT ENGINE
+        - generic [ref=e80]: /
+      - generic [ref=e81]:
+        - text: DEX AGGREGATION
+        - generic [ref=e82]: /
+      - generic [ref=e83]:
+        - text: NON CUSTODIAL
+        - generic [ref=e84]: /
+      - generic [ref=e85]:
+        - text: TELEGRAM ALERTS
+        - generic [ref=e86]: /
+      - generic [ref=e87]:
+        - text: DCA AUTOMATION
+        - generic [ref=e88]: /
+      - generic [ref=e89]:
+        - text: STOP LOSS
+        - generic [ref=e90]: /
+      - generic [ref=e91]:
+        - text: PORTFOLIO REBALANCE
+        - generic [ref=e92]: /
+      - generic [ref=e93]:
+        - text: PRICE MONITORING
+        - generic [ref=e94]: /
+      - generic [ref=e95]:
+        - text: VOICE TO WORKFLOW
+        - generic [ref=e96]: /
+      - generic [ref=e97]:
+        - text: ATOMIC TRANSACTIONS
+        - generic [ref=e98]: /
+      - generic [ref=e99]:
+        - text: AI INTENT ENGINE
+        - generic [ref=e100]: /
+      - generic [ref=e101]:
+        - text: DEX AGGREGATION
+        - generic [ref=e102]: /
+      - generic [ref=e103]:
+        - text: NON CUSTODIAL
+        - generic [ref=e104]: /
+      - generic [ref=e105]:
+        - text: TELEGRAM ALERTS
+        - generic [ref=e106]: /
+      - generic [ref=e107]:
+        - text: DCA AUTOMATION
+        - generic [ref=e108]: /
+      - generic [ref=e109]:
+        - text: STOP LOSS
+        - generic [ref=e110]: /
+      - generic [ref=e111]:
+        - text: PORTFOLIO REBALANCE
+        - generic [ref=e112]: /
+      - generic [ref=e113]:
+        - text: PRICE MONITORING
+        - generic [ref=e114]: /
+    - generic [ref=e115]:
+      - generic [ref=e117]:
+        - generic [ref=e118]: // THE PROBLEM
+        - heading "DeFi is powerful but inaccessible" [level=2] [ref=e119]
+        - paragraph [ref=e120]: Managing token swaps, setting price alerts, rebalancing portfolios - it all requires constant monitoring, multiple tools, and deep technical knowledge. Zuik changes that.
+        - generic [ref=e121]:
+          - generic [ref=e122]:
+            - generic [ref=e123]: Typical workflow
+            - generic [ref=e124]: 5+ apps
+            - generic [ref=e125]: DEX, explorer, portfolio, alerts, scripts
+          - generic [ref=e126]:
+            - generic [ref=e127]: Time cost
+            - generic [ref=e128]: Always on
+            - generic [ref=e129]: Manual checks, missed windows, brittle automation
+          - generic [ref=e130]:
+            - generic [ref=e131]: Zuik path
+            - generic [ref=e132]: One canvas
+            - generic [ref=e133]: Describe intent, preview, sign once, atomic run
+      - generic [ref=e135]:
+        - generic [ref=e136]: // HOW IT WORKS
+        - heading "Three steps. That's it." [level=2] [ref=e137]
+        - generic [ref=e138]:
+          - generic [ref=e139]:
+            - generic [ref=e140]: "01"
+            - img [ref=e142]
+            - heading "Describe Your Intent" [level=3] [ref=e145]
+            - paragraph [ref=e146]: Use voice, text, or drag blocks onto the canvas. Say "Swap 50 USDC to ALGO" and the AI builds it instantly.
+          - generic [ref=e147]:
+            - generic [ref=e148]: "02"
+            - img [ref=e150]
+            - heading "Review & Preview" [level=3] [ref=e154]
+            - paragraph [ref=e155]: Visual cards show every step. Preview fees, routes, and safety checks before you sign once.
+          - generic [ref=e156]:
+            - generic [ref=e157]: "03"
+            - img [ref=e159]
+            - heading "Execute Atomically" [level=3] [ref=e161]
+            - paragraph [ref=e162]: One signature, multiple transactions. All-or-nothing execution on Algorand with sub-5-second finality.
+      - generic [ref=e164]:
+        - generic [ref=e165]: // CAPABILITIES
+        - heading "Built for real DeFi users" [level=2] [ref=e166]
+        - generic [ref=e167]:
+          - generic [ref=e168]:
+            - generic [ref=e169]: ZUIK CORE
+            - generic [ref=e170]: AI + FLOW
+          - generic [ref=e171]:
+            - generic [ref=e172]:
+              - img [ref=e174]
+              - heading "Visual Flow Builder" [level=3] [ref=e179]
+              - paragraph [ref=e180]: Drag-and-drop blocks - connect triggers, actions, and logic without code.
+            - generic [ref=e181]:
+              - img [ref=e183]
+              - heading "AI Intent Engine" [level=3] [ref=e187]
+              - paragraph [ref=e188]: Describe what you want in plain English. The AI builds the entire workflow.
+            - generic [ref=e189]:
+              - img [ref=e191]
+              - heading "Atomic Execution" [level=3] [ref=e193]
+              - paragraph [ref=e194]: All-or-nothing. If any step fails, the entire workflow rolls back.
+            - generic [ref=e195]:
+              - img [ref=e197]
+              - heading "DEX Aggregation" [level=3] [ref=e200]
+              - paragraph [ref=e201]: Best swap routes via Folks Router and Tinyman with multi-hop routing.
+            - generic [ref=e202]:
+              - img [ref=e204]
+              - heading "Non-Custodial" [level=3] [ref=e207]
+              - paragraph [ref=e208]: Your keys, your tokens. Every transaction requires your wallet signature.
+            - generic [ref=e209]:
+              - img [ref=e211]
+              - heading "Smart Advisor" [level=3] [ref=e214]
+              - paragraph [ref=e215]: AI-powered strategy recommendations, risk assessments, and portfolio guidance.
+      - generic [ref=e217]:
+        - generic [ref=e218]: // WHY ZUIK
+        - heading "Automation that feels effortless" [level=2] [ref=e219]
+        - paragraph [ref=e220]: Zuik pairs AI orchestration with Algorand finality so you can ship workflows once and trust them to execute while you are offline.
+        - generic [ref=e221]:
+          - generic [ref=e222]:
+            - heading "Why Zuik" [level=3] [ref=e223]
+            - list [ref=e224]:
+              - listitem [ref=e225]: Intent to execution in minutes, not hours
+              - listitem [ref=e226]: Atomic workflows with built-in safety checks
+              - listitem [ref=e227]: Telegram and voice alerts without extra tooling
+              - listitem [ref=e228]: Algorand speed with predictable fees
+          - generic [ref=e229]:
+            - heading "Who is this for" [level=3] [ref=e230]
+            - paragraph [ref=e231]: Zuik is for everyone - from someone who has never traded, to teams with no time to watch charts, to professionals who want precision. Use it for payroll, bridging, swapping tokens, or scheduling payments to anyone.
+      - generic [ref=e233]:
+        - generic [ref=e234]: // USE CASES
+        - heading "Built for how you actually use DeFi" [level=2] [ref=e235]
+        - paragraph [ref=e236]: From one-off swaps to recurring payments, Zuik handles the workflow so you do not have to babysit the chain.
+        - generic [ref=e237]:
+          - article [ref=e238]:
+            - heading "Smart trading" [level=3] [ref=e239]
+            - paragraph [ref=e240]: Set DCA, take-profit, and stop-loss flows with price triggers and best-route swaps.
+          - article [ref=e241]:
+            - heading "Automated payments" [level=3] [ref=e242]
+            - paragraph [ref=e243]: Send payroll, vendor payouts, or allowances on a schedule with spending caps.
+          - article [ref=e244]:
+            - heading "Scheduled transactions" [level=3] [ref=e245]
+            - paragraph [ref=e246]: Queue swaps, rebalances, and treasury moves to run while you are offline.
+      - generic [ref=e248]:
+        - generic [ref=e249]: // PLANS
+        - heading "Simple plans that scale with you" [level=2] [ref=e250]
+        - paragraph [ref=e251]: Start free, upgrade when you need more automations, alerts, and team controls.
+        - generic [ref=e252]:
+          - article [ref=e253]:
+            - heading "Starter" [level=3] [ref=e254]
+            - paragraph [ref=e255]: Free
+            - list [ref=e256]:
+              - listitem [ref=e257]: 3 active workflows
+              - listitem [ref=e258]: Market explorer
+              - listitem [ref=e259]: Wallet-connected execution
+              - listitem [ref=e260]: Community support
+            - button "Get started" [ref=e261] [cursor=pointer]
+          - article [ref=e262]:
+            - generic [ref=e263]: Most popular
+            - heading "Pro" [level=3] [ref=e264]
+            - paragraph [ref=e265]: $19/ month
+            - list [ref=e266]:
+              - listitem [ref=e267]: Unlimited workflows
+              - listitem [ref=e268]: Scheduled automations
+              - listitem [ref=e269]: Telegram alerts
+              - listitem [ref=e270]: Guardian spend limits
+              - listitem [ref=e271]: Priority support
+            - button "Start Pro trial" [ref=e272] [cursor=pointer]
+          - article [ref=e273]:
+            - heading "Business" [level=3] [ref=e274]
+            - paragraph [ref=e275]: $79/ month
+            - list [ref=e276]:
+              - listitem [ref=e277]: Team workspaces
+              - listitem [ref=e278]: Higher automation limits
+              - listitem [ref=e279]: Custom policies
+              - listitem [ref=e280]: Dedicated onboarding
+              - listitem [ref=e281]: SLA support
+            - button "Contact sales" [ref=e282] [cursor=pointer]
+      - generic [ref=e284]:
+        - generic [ref=e285]: // NETWORK
+        - heading "Powered by Algorand" [level=2] [ref=e286]
+        - generic [ref=e287]:
+          - generic [ref=e288]:
+            - img [ref=e289]
+            - generic [ref=e292]: < 4.5s
+            - generic [ref=e293]: Finality
+          - generic [ref=e294]:
+            - img [ref=e295]
+            - generic [ref=e298]: ~0.000
+            - generic [ref=e299]: ALGO / Txn
+          - generic [ref=e300]:
+            - img [ref=e301]
+            - generic [ref=e305]: 0+
+            - generic [ref=e306]: Block Types
+          - generic [ref=e307]:
+            - img [ref=e308]
+            - generic [ref=e311]: Carbon -
+            - generic [ref=e312]: Green Chain
+    - contentinfo [ref=e313]:
+      - generic [ref=e314]:
+        - link "Zuik ZUIK" [ref=e315] [cursor=pointer]:
+          - /url: /
+          - img "Zuik" [ref=e316]
+          - generic [ref=e317]: ZUIK
+        - generic [ref=e318]: "|"
+        - generic [ref=e319]: DeFi Automation on Algorand
+        - generic [ref=e320]:
+          - link "GitHub" [ref=e321] [cursor=pointer]:
+            - /url: https://github.com/DarshanKrishna-DK/Zuik
+            - img [ref=e322]
+            - text: GitHub
+          - link "Telegram" [ref=e324] [cursor=pointer]:
+            - /url: https://t.me/ZuikDeFiBot
+            - img [ref=e325]
+            - text: Telegram
+  - generic [ref=e328]:
+    - button "Close" [ref=e329] [cursor=pointer]:
+      - img [ref=e330]
+    - generic [ref=e333]:
+      - img [ref=e335]
+      - generic [ref=e338]: Connect Wallet
+    - generic [ref=e339]:
+      - button "Pera Pera" [ref=e340] [cursor=pointer]:
+        - img "Pera" [ref=e341]
+        - generic [ref=e342]: Pera
+      - button "Defly Defly" [ref=e343] [cursor=pointer]:
+        - img "Defly" [ref=e344]
+        - generic [ref=e345]: Defly
+      - button "Exodus Exodus" [ref=e346] [cursor=pointer]:
+        - img "Exodus" [ref=e347]
+        - generic [ref=e348]: Exodus

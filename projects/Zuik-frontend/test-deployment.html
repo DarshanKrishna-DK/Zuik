@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zuik Deployment Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h1>🛠️ Zuik Deployment Test</h1>
+    <p>Test the deployment configuration and service availability</p>
+
+    <div class="test-section">
+        <h2>🌐 Environment Detection</h2>
+        <div id="env-info">Loading...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>🤖 AI Service Test</h2>
+        <button onclick="testAIService()">Test AI Service</button>
+        <div id="ai-status">Ready to test</div>
+    </div>
+
+    <div class="test-section">
+        <h2>🎤 Voice Service Test</h2>
+        <button onclick="testVoiceService()">Test Voice Service</button>
+        <div id="voice-status">Ready to test</div>
+    </div>
+
+    <div class="test-section">
+        <h2>💾 Database Test</h2>
+        <button onclick="testDatabase()">Test Supabase Connection</button>
+        <div id="db-status">Ready to test</div>
+    </div>
+
+    <script>
+        // Environment Detection
+        function detectEnvironment() {
+            const info = {
+                hostname: window.location.hostname,
+                isDev: window.location.hostname === 'localhost',
+                isVercel: window.location.hostname.includes('vercel.app'),
+                isProduction: window.location.protocol === 'https:' && window.location.hostname !== 'localhost'
+            };
+            
+            let html = '<table>';
+            for (const [key, value] of Object.entries(info)) {
+                html += `<tr><td><strong>${key}:</strong></td><td>${value}</td></tr>`;
+            }
+            html += '</table>';
+            
+            document.getElementById('env-info').innerHTML = html;
+        }
+
+        // AI Service Test
+        async function testAIService() {
+            const statusEl = document.getElementById('ai-status');
+            statusEl.innerHTML = '<div class="status warning">Testing AI service...</div>';
+            
+            try {
+                // This should trigger our new error handling
+                const testMessage = "Test AI connection";
+                const response = await fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: testMessage })
+                });
+                
+                if (response.ok) {
+                    statusEl.innerHTML = '<div class="status success">✅ AI Service is available and working</div>';
+                } else {
+                    const error = await response.text();
+                    statusEl.innerHTML = `<div class="status error">❌ AI Service error: ${error}</div>`;
+                }
+            } catch (error) {
+                if (error.message.includes('not available in this deployment')) {
+                    statusEl.innerHTML = '<div class="status warning">⚠️ AI Service is disabled for this deployment (expected for frontend-only deployments)</div>';
+                } else {
+                    statusEl.innerHTML = `<div class="status error">❌ AI Service failed: ${error.message}</div>`;
+                }
+            }
+        }
+
+        // Voice Service Test
+        async function testVoiceService() {
+            const statusEl = document.getElementById('voice-status');
+            statusEl.innerHTML = '<div class="status warning">Testing voice service...</div>';
+            
+            try {
+                const response = await fetch('/api/voice/health');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    statusEl.innerHTML = `<div class="status success">✅ Voice Service is available: ${JSON.stringify(data)}</div>`;
+                } else {
+                    statusEl.innerHTML = `<div class="status error">❌ Voice Service error: ${response.status}</div>`;
+                }
+            } catch (error) {
+                statusEl.innerHTML = '<div class="status warning">⚠️ Voice Service is disabled for this deployment (expected for frontend-only deployments)</div>';
+            }
+        }
+
+        // Database Test  
+        async function testDatabase() {
+            const statusEl = document.getElementById('db-status');
+            statusEl.innerHTML = '<div class="status warning">Testing database connection...</div>';
+            
+            try {
+                // Simple test - try to check if Supabase is reachable
+                const supabaseUrl = 'https://kmokzptieczcyziekznk.supabase.co';
+                const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+                    headers: {
+                        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imttb2t6cHRpZWN6Y3l6aWVrem5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU2NTIxMTcsImV4cCI6MjA1MTIyODExN30.cNm-lEBJvUt0z3Z0aPEIhX5mzP3GIKOIhEI-Ic9RKDQ'
+                    }
+                });
+                
+                if (response.ok || response.status === 406) { // 406 is expected without proper headers
+                    statusEl.innerHTML = '<div class="status success">✅ Database connection is working</div>';
+                } else {
+                    statusEl.innerHTML = `<div class="status error">❌ Database error: ${response.status}</div>`;
+                }
+            } catch (error) {
+                statusEl.innerHTML = `<div class="status error">❌ Database failed: ${error.message}</div>`;
+            }
+        }
+
+        // Initialize
+        detectEnvironment();
+    </script>
+</body>
+</html>

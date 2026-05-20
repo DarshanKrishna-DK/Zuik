@@ -203,20 +203,12 @@ export default function Builder() {
 
   useEffect(() => {
     if (!activeAddress || !isSupabaseConfigured()) {
-      console.log('[LogicSig Debug] No active address or Supabase not configured')
       setDelegationAvailable(false)
       return
     }
-    console.log('[LogicSig Debug] Checking vault for address:', activeAddress)
     getActiveLogicSigVault(activeAddress)
-      .then((vault) => {
-        console.log('[LogicSig Debug] Vault result:', vault)
-        setDelegationAvailable(Boolean(vault))
-      })
-      .catch((err) => {
-        console.error('[LogicSig Debug] Error getting vault:', err)
-        setDelegationAvailable(false)
-      })
+      .then((vault) => setDelegationAvailable(Boolean(vault)))
+      .catch(() => setDelegationAvailable(false))
   }, [activeAddress])
 
   useEffect(() => {
@@ -312,24 +304,12 @@ export default function Builder() {
       const blockId = (node.data as Record<string, unknown>)?.blockId as string | undefined
       return blockId ? signerBlocks.has(blockId) : false
     })
-    if (!hasSignerBlocks) {
-      console.log('[Signer Debug] No signer blocks found, requiresSigner = false')
-      return false
-    }
+    if (!hasSignerBlocks) return false
     const hasUnsupported = nodes.some((node) => {
       const blockId = (node.data as Record<string, unknown>)?.blockId as string | undefined
       return blockId ? signerBlocks.has(blockId) && !delegationBlocks.has(blockId) : false
     })
-    console.log('[Signer Debug] hasSignerBlocks:', hasSignerBlocks, 'hasUnsupported:', hasUnsupported, 'delegationAvailable:', delegationAvailable)
-    
-    const workflowBlocks = nodes.map(n => (n.data as Record<string, unknown>)?.blockId).filter(Boolean)
-    console.log('[Signer Debug] Workflow blocks:', workflowBlocks)
-    
-    if (!hasUnsupported && delegationAvailable) {
-      console.log('[Signer Debug] No unsupported blocks and delegation available, requiresSigner = false')
-      return false
-    }
-    console.log('[Signer Debug] requiresSigner = true')
+    if (!hasUnsupported && delegationAvailable) return false
     return true
   }, [nodes, delegationAvailable])
 
