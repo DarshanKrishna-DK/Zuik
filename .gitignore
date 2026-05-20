@@ -223,3 +223,12 @@ Zuik-Go-To-Market-Plan.pdf
 **/test-*.js
 scripts/test-localnet.ts
 scripts/test-testnet.ts
+
+# Screenshot files and browser automation artifacts (from testing/debugging)
+*.screenshot.png
+zuik_*.png
+*_screenshot.png
+*_after_*.png
+*_homepage.png
+*_builder_*.png
+*_chat_*.png
