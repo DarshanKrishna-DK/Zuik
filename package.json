@@ -1,0 +1,7 @@
+{
+  "name": "zuik",
+  "version": "1.0.0",
+  "dependencies": {
+    "@vercel/node": "^3.0.0"
+  }
+}

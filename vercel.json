@@ -1,11 +1,6 @@
 {
   "buildCommand": "cd projects/Zuik-frontend && npm install && npm run build",
   "outputDirectory": "projects/Zuik-frontend/dist",
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "rewrites": [
     {
       "source": "/((?!api).*)",
