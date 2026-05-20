@@ -6,6 +6,7 @@ import { createAsa } from './createAsa'
 import { optInToAsa } from './optInAsa'
 import { sendPayment } from './sendPayment'
 import { executeSwap, getSwapQuote } from './swapToken'
+import { getActiveLogicSigVault, createLogicSigSigner } from './logicSigDelegation'
 
 async function getAssetDecimals(assetId: number): Promise<number> {
   if (assetId === 0) return 6
@@ -126,13 +127,39 @@ async function executeSendPayment(
     baseAmount = toBaseUnits(numericAmount, 6)
   }
 
+  // Check for LogicSig delegation
+  let signer: TransactionSigner = context.signer
+  try {
+    const vault = await getActiveLogicSigVault(context.sender)
+    if (vault) {
+      const vaultFromAsset = Number(vault.allowed_from_asset)
+      const vaultMaxPerTrade = Number(vault.max_per_trade)
+      
+      console.log(`[LogicSig] Vault found: Asset ${vaultFromAsset}, Max ${vaultMaxPerTrade}, Daily ${vault.daily_cap}`)
+      console.log(`[LogicSig] Transaction: Asset ${assetId}, Amount ${baseAmount}`)
+      console.log(`[LogicSig] Asset match: ${vaultFromAsset === assetId}, Amount OK: ${baseAmount <= vaultMaxPerTrade}`)
+      
+      // Check if this transaction is supported by the vault
+      if (vaultFromAsset === assetId && baseAmount <= vaultMaxPerTrade) {
+        console.log(`[LogicSig] ✅ AUTOMATED SIGNING ACTIVATED`)
+        signer = await createLogicSigSigner(vault.lsig_account_b64)
+      } else {
+        console.log(`[LogicSig] ❌ Outside vault limits - Asset: ${vaultFromAsset}=${assetId}? Amount: ${baseAmount}<=${vaultMaxPerTrade}?`)
+      }
+    } else {
+      console.log(`[LogicSig] ❌ No vault found for ${context.sender}`)
+    }
+  } catch (err) {
+    console.error(`[LogicSig] Error checking vault:`, err)
+  }
+
   const result = await sendPayment({
     sender: context.sender,
     receiver: recipient,
     amount: baseAmount,
     assetId: assetId ? Number(assetId) : 0,
     note,
-    signer: context.signer,
+    signer,
   })
   return { txId: result.txId }
 }

@@ -290,3 +290,41 @@ CREATE POLICY "Users manage own LogicSig vaults"
   ON logic_sig_vaults FOR ALL
   USING (true);
 `
+
+/**
+ * Create a TransactionSigner from a base64-encoded LogicSig account.
+ * This signer can automatically sign transactions that meet the LogicSig's conditions.
+ */
+export async function createLogicSigSigner(lsigAccountB64: string): Promise<TransactionSigner> {
+  try {
+    // Decode the base64 LogicSig account
+    const lsigAccountBytes = Uint8Array.from(atob(lsigAccountB64), c => c.charCodeAt(0))
+    const lsigAccount = algosdk.LogicSigAccount.fromByte(lsigAccountBytes)
+    
+    console.log('[LogicSig] ✅ Automated signer ready for:', lsigAccount.address())
+    
+    // Create a TransactionSigner that uses the LogicSig
+    const signer: TransactionSigner = async (txnGroup: algosdk.Transaction[], indexesToSign: number[]) => {
+      const signedTxns: (Uint8Array | null)[] = []
+      
+      for (let i = 0; i < txnGroup.length; i++) {
+        if (indexesToSign.includes(i)) {
+          // Sign this transaction with the LogicSig
+          const signedTxn = algosdk.signLogicSigTransactionObject(txnGroup[i], lsigAccount)
+          signedTxns.push(signedTxn.blob)
+          console.log(`[LogicSig] ✅ Auto-signed transaction ${i}`)
+        } else {
+          // Don't sign this transaction
+          signedTxns.push(null)
+        }
+      }
+      
+      return signedTxns
+    }
+    
+    return signer
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`Failed to create LogicSig signer: ${message}`)
+  }
+}

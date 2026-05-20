@@ -13,7 +13,16 @@ const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'llama-3.3-70b-versatile'
 function resolveAiChatUrl(): string {
   // In dev, always use the Vite proxy to avoid CORS (even when VITE_SERVER_URL is set for demos).
   if (import.meta.env.DEV) return '/api/ai/chat'
+  
+  // Check if we're in production deployment without backend
+  const isProductionDeployment = import.meta.env.PROD && (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
   const serverBase = (import.meta.env.VITE_SERVER_URL as string | undefined)?.trim()
+  
+  if (isProductionDeployment && (!serverBase || serverBase.includes('localhost'))) {
+    // No backend server configured for production deployment
+    throw new Error('AI service is not available in this deployment. Please configure VITE_SERVER_URL for production.')
+  }
+  
   if (!serverBase) return '/api/ai/chat'
   const normalized = serverBase.replace(/\/$/, '').replace(/\/api\/?$/i, '')
   return `${normalized}/api/ai/chat`

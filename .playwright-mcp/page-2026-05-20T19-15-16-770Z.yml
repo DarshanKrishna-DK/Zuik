@@ -1,0 +1,257 @@
+- generic [ref=e4]:
+  - navigation [ref=e5]:
+    - link "Zuik ZUIK" [ref=e6] [cursor=pointer]:
+      - /url: /
+      - img "Zuik" [ref=e7]
+      - generic [ref=e8]: ZUIK
+    - generic [ref=e9]:
+      - link "Builder" [ref=e10] [cursor=pointer]:
+        - /url: /builder
+        - img [ref=e11]
+        - text: Builder
+      - link "Market" [ref=e15] [cursor=pointer]:
+        - /url: /market
+        - img [ref=e16]
+        - text: Market
+      - link "Dashboard" [ref=e19] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e20]
+        - text: Dashboard
+      - link "Settings" [ref=e25] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e26]
+        - text: Settings
+    - button "Connect Wallet" [ref=e30] [cursor=pointer]:
+      - img [ref=e31]
+      - text: Connect Wallet
+  - generic [ref=e37]:
+    - complementary [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - img [ref=e42]
+            - textbox "Search blocks..." [ref=e45]
+          - generic [ref=e46]:
+            - generic [ref=e47]:
+              - generic [ref=e48] [cursor=pointer]:
+                - generic [ref=e49]: Triggers
+                - generic [ref=e50]:
+                  - text: "5"
+                  - img [ref=e51]
+              - generic "Repeats an action on a schedule - e.g. check prices every 60 seconds or buy tokens every hour" [ref=e53]:
+                - img [ref=e55]
+                - generic [ref=e58]: Timer Loop
+              - generic "Starts your workflow when an external service sends a signal - useful for connecting to other apps or bots" [ref=e59]:
+                - img [ref=e61]
+                - generic [ref=e65]: Webhook Receiver
+              - 'generic "Watches your wallet on a timer. When the chain advances a round, the agent runs your workflow. For {{wallet-event.amount}}, use \"Net received\" (default): the change in this asset since the last poll (approximates what you just received). Use \"Total balance\" only if you intend to swap your whole balance (not typical for \"when I receive\" flows)." [ref=e66]':
+                - img [ref=e68]
+                - generic [ref=e71]: Wallet Event
+              - generic "Starts your workflow when someone sends a message to your Telegram bot - control trades via chat" [ref=e72]:
+                - img [ref=e74]
+                - generic [ref=e76]: Telegram Message
+              - generic "Listens for named events published by other agents or external sources." [ref=e77]:
+                - img [ref=e79]
+                - generic [ref=e85]: Event Trigger
+            - generic [ref=e86]:
+              - generic [ref=e87] [cursor=pointer]:
+                - generic [ref=e88]: Actions
+                - generic [ref=e89]:
+                  - text: "8"
+                  - img [ref=e90]
+              - generic "Exchange one token for another - e.g. convert your USDC into ALGO at the best available rate" [ref=e92]:
+                - img [ref=e94]
+                - generic [ref=e97]: Swap Token
+              - generic "Send ALGO or any token to an address" [ref=e98]:
+                - img [ref=e100]
+                - generic [ref=e103]: Send Payment
+              - generic "Enable a token in your wallet so you can receive it" [ref=e104]:
+                - img [ref=e106]
+                - generic [ref=e108]: Opt-In Token
+              - generic "Create a new custom token on Algorand" [ref=e109]:
+                - img [ref=e111]
+                - generic [ref=e113]: Create Token
+              - generic "Interact with a smart contract on Algorand - for advanced users who want to call on-chain programs" [ref=e114]:
+                - img [ref=e116]
+                - generic [ref=e121]: Call Smart Contract
+              - generic "Publishes a named event with payload to the event bus for other agents." [ref=e122]:
+                - img [ref=e124]
+                - generic [ref=e130]: Emit Event
+              - generic "Calls any web API or service - fetch price data, trigger external tools, or connect to other platforms" [ref=e131]:
+                - img [ref=e133]
+                - generic [ref=e136]: HTTP Request
+              - generic "Records values in the execution log - useful for debugging and seeing what is happening in your workflow" [ref=e137]:
+                - img [ref=e139]
+                - generic [ref=e148]: Log / Debug
+            - generic [ref=e149]:
+              - generic [ref=e150] [cursor=pointer]:
+                - generic [ref=e151]: Logic
+                - generic [ref=e152]:
+                  - text: "14"
+                  - img [ref=e153]
+              - generic "Makes decisions in your workflow - e.g. only swap if the price is below a target, otherwise skip" [ref=e155]:
+                - img [ref=e157]
+                - generic [ref=e161]: Comparator
+              - generic "Adds a waiting period between steps - e.g. wait 30 seconds before checking the price again" [ref=e162]:
+                - img [ref=e164]
+                - generic [ref=e167]: Delay
+              - generic "Does calculations - e.g. compute 50% of a received amount, add fees, or calculate a fraction" [ref=e168]:
+                - img [ref=e170]
+                - generic [ref=e172]: Math Operation
+              - generic "Acts as a gate - only lets data through if a condition is met, like amount > 100" [ref=e173]:
+                - img [ref=e175]
+                - generic [ref=e177]: Filter
+              - generic "Prevents actions from running too often - e.g. max 5 swaps per minute to avoid spam" [ref=e178]:
+                - img [ref=e180]
+                - generic [ref=e183]: Rate Limiter
+              - generic "Saves a value (like a price or amount) so other blocks in the workflow can use it later" [ref=e184]:
+                - img [ref=e186]
+                - generic [ref=e191]: Set Variable
+              - generic "Combines multiple triggers with AND/OR/SEQUENCE logic. Fires downstream only when condition is met within time window." [ref=e192]:
+                - img [ref=e194]
+                - generic [ref=e201]: Merge Gate
+              - generic "Splits execution into multiple parallel branches. All branches run simultaneously." [ref=e202]:
+                - img [ref=e204]
+                - generic [ref=e209]: Fork
+              - generic "Waits for multiple branches to complete before proceeding. Collects all outputs." [ref=e210]:
+                - img [ref=e212]
+                - generic [ref=e216]: Join
+              - generic "Spawns a child sub-workflow as an independent agent running in parallel." [ref=e217]:
+                - img [ref=e219]
+                - generic [ref=e224]: Spawn Agent
+              - generic "Monitors a running agent sub-tree. Triggers error branch if child exceeds timeout." [ref=e225]:
+                - img [ref=e227]
+                - generic [ref=e230]: Watchdog
+              - generic "Provides a fixed value (like a number or text) that other blocks can use as input" [ref=e231]:
+                - img [ref=e233]
+                - generic [ref=e236]: Constant
+              - generic "Combines data from multiple blocks into one - useful when you need results from different sources together" [ref=e237]:
+                - img [ref=e239]
+                - generic [ref=e243]: Merge
+              - generic "Converts data from one format to another - e.g. turn text into a number for calculations" [ref=e244]:
+                - img [ref=e246]
+                - generic [ref=e251]: Transform Data
+            - generic [ref=e252]:
+              - generic [ref=e253] [cursor=pointer]:
+                - generic [ref=e254]: Notifications
+                - generic [ref=e255]:
+                  - text: "3"
+                  - img [ref=e256]
+              - generic "Sends you a Telegram notification - e.g. alert when a swap completes or a price target is hit" [ref=e258]:
+                - img [ref=e260]
+                - generic [ref=e262]: Send Telegram
+              - generic "Posts a message to your Discord server channel - great for team alerts or trade notifications" [ref=e263]:
+                - img [ref=e265]
+                - generic [ref=e267]: Send Discord
+              - generic "Shows a pop-up notification on your computer screen when something important happens" [ref=e268]:
+                - img [ref=e270]
+                - generic [ref=e273]: Browser Notification
+            - generic [ref=e274]:
+              - generic [ref=e275] [cursor=pointer]:
+                - generic [ref=e276]: DeFi
+                - generic [ref=e277]:
+                  - text: "4"
+                  - img [ref=e278]
+              - generic "Watch a token price via DEX pools" [ref=e280]:
+                - img [ref=e282]
+                - generic [ref=e285]: Price Monitor
+              - generic "Checks how much liquidity a trading pair has - helps you know if a swap will have good rates" [ref=e286]:
+                - img [ref=e288]
+                - generic [ref=e291]: Liquidity Pool Info
+              - generic "Shows all your token holdings and their balances - see your full portfolio at a glance" [ref=e292]:
+                - img [ref=e294]
+                - generic [ref=e297]: Portfolio Balance
+              - generic "Checks how much you would receive from a swap without actually doing it - preview before you trade" [ref=e298]:
+                - img [ref=e300]
+                - generic [ref=e303]: Get Swap Quote
+        - button "Collapse blocks panel" [ref=e304] [cursor=pointer]:
+          - img [ref=e305]
+    - generic [ref=e307]:
+      - generic [ref=e308]:
+        - textbox "Workflow name" [ref=e309]: Untitled Workflow
+        - generic [ref=e311]:
+          - generic [ref=e314]: idle
+          - button "Run" [ref=e315] [cursor=pointer]:
+            - img [ref=e316]
+            - text: Run
+          - button "Clear" [ref=e318] [cursor=pointer]:
+            - img [ref=e319]
+            - text: Clear
+        - button "AI" [ref=e323] [cursor=pointer]:
+          - img [ref=e324]
+          - text: AI
+        - button "Templates" [ref=e334] [cursor=pointer]:
+          - img [ref=e335]
+          - text: Templates
+        - button "More actions" [ref=e342] [cursor=pointer]:
+          - img [ref=e343]
+      - generic [ref=e344]:
+        - generic [ref=e345]:
+          - heading "Execution Log" [level=3] [ref=e346]
+          - generic [ref=e347]:
+            - button "Clear log" [ref=e348] [cursor=pointer]:
+              - img [ref=e349]
+            - button "Close" [ref=e352] [cursor=pointer]:
+              - img [ref=e353]
+        - generic [ref=e357]: No log entries yet. Run the agent to see execution logs.
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - img
+              - text: Schedule Run
+            - generic: Untitled Workflow
+          - button:
+            - img
+        - generic:
+          - generic: Run at
+          - textbox: 2026-05-21T00:54
+        - generic:
+          - generic: Current schedule
+          - generic: None
+        - generic:
+          - button "Close"
+          - button "Schedule Run" [disabled]
+      - generic [ref=e377]:
+        - generic [ref=e378]:
+          - generic [ref=e379]:
+            - img [ref=e380]
+            - generic [ref=e390]: AI Builder
+          - generic [ref=e391]:
+            - button "Builder" [ref=e392] [cursor=pointer]:
+              - img [ref=e393]
+              - text: Builder
+            - button "Advisor" [ref=e395] [cursor=pointer]:
+              - img [ref=e396]
+              - text: Advisor
+          - generic [ref=e398]:
+            - button "Start voice call" [ref=e399] [cursor=pointer]:
+              - img [ref=e400]
+            - button [ref=e402] [cursor=pointer]:
+              - img [ref=e403]
+        - generic [ref=e406]:
+          - generic [ref=e408]:
+            - img [ref=e409]
+            - generic [ref=e411]: Describe what you want to do in plain language - or pick a template below. I will build the workflow for you.
+          - generic [ref=e445]: Swap 10 USDC to ALGO
+          - generic [ref=e453]:
+            - img [ref=e454]
+            - paragraph [ref=e457]: "AI service error (429): Rate limit exceeded. Please try again in a few moments."
+        - generic [ref=e434]:
+          - button "Voice input" [ref=e435] [cursor=pointer]:
+            - img [ref=e436]
+          - textbox "Describe your workflow..." [ref=e439]
+          - button [disabled] [ref=e440]:
+            - img [ref=e441]
+      - application [ref=e358]:
+        - img
+        - generic "Control Panel" [ref=e361]:
+          - button "Zoom In" [ref=e362] [cursor=pointer]:
+            - img [ref=e363]
+          - button "Zoom Out" [ref=e365] [cursor=pointer]:
+            - img [ref=e366]
+          - button "Fit View" [ref=e368] [cursor=pointer]:
+            - img [ref=e369]
+          - button "Toggle Interactivity" [ref=e371] [cursor=pointer]:
+            - img [ref=e372]
+        - img "Mini Map" [ref=e375]

@@ -1,0 +1,18 @@
+{
+  "buildCommand": "cd projects/Zuik-frontend && npm run build",
+  "outputDirectory": "projects/Zuik-frontend/dist",
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node@3"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
