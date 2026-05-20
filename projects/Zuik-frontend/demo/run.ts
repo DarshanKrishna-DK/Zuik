@@ -70,13 +70,13 @@ Config file (optional):
 }
 
 async function main(): Promise<void> {
-  const arg = process.argv[2] as DemoKey | undefined
+  const arg = process.argv[2]
   if (!arg || arg === 'help' || arg === '--help') {
     printUsage()
     process.exit(arg ? 0 : 1)
   }
 
-  const entry = DEMOS[arg]
+  const entry = DEMOS[arg as DemoKey]
   if (!entry) {
     console.error(`Unknown demo: ${arg}`)
     printUsage()
