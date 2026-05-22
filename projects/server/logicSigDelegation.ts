@@ -87,14 +87,14 @@ export async function executeDelegatedPayment(params: {
   const noteBytes = note ? new TextEncoder().encode(note) : undefined
   const spendTxn = assetId === 0
     ? algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-      sender,
+      sender: vault.lsig_address, // LogicSig address as sender
       receiver: recipient,
       amount: baseAmount,
       note: noteBytes,
       suggestedParams: spendParams,
     })
     : algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-      sender,
+      sender: vault.lsig_address, // LogicSig address as sender
       receiver: recipient,
       assetIndex: BigInt(assetId),
       amount: baseAmount,
@@ -105,21 +105,41 @@ export async function executeDelegatedPayment(params: {
   const method = assetId === 0 ? DELEGATION_METHODS.algo : DELEGATION_METHODS.asset
   const appId = BigInt(vault.verifier_app_id)
 
-  // Create the AtomicTransactionComposer and build the group correctly
-  const atc = new algosdk.AtomicTransactionComposer()
+  // Create manual transaction group that matches LogicSig expectations
+  // Structure: [Payment/AssetTransfer, ApplicationCall]
   
-  // IMPORTANT: Add the method call with the transaction as argument
-  // The ATC will structure the group as: [spendTxn, appCallTxn]
-  // which matches what the LogicSig expects
-  atc.addMethodCall({
-    appID: appId,
-    method,
-    sender: vault.lsig_address, // The LogicSig address should be the sender
-    signer,
+  // Create the verifier application call transaction
+  const appCallTxn = algosdk.makeApplicationNoOpTxnFromObject({
+    sender: vault.lsig_address, // LogicSig address as sender
+    appIndex: appId,
+    appArgs: [method.getSelector()], // Just the method selector, no transaction reference needed
     suggestedParams,
-    methodArgs: [{ txn: spendTxn, signer }],
   })
 
-  const result = await atc.execute(algod, 3)
-  return result.txIDs
+  // Create the transaction group with correct order
+  const txnGroup = [spendTxn, appCallTxn]
+  
+  // Assign group ID to link the transactions
+  algosdk.assignGroupID(txnGroup)
+  
+  console.log(`[LogicSig] Creating group: [${spendTxn.type} at index 0, ${appCallTxn.type} at index 1]`)
+  console.log(`[LogicSig] Payment sender: ${spendTxn.from}, App call sender: ${appCallTxn.from}`)
+  
+  // Sign both transactions with the LogicSig
+  const signedSpendTxn = algosdk.signLogicSigTransactionObject(spendTxn, lsigAccount)
+  const signedAppCallTxn = algosdk.signLogicSigTransactionObject(appCallTxn, lsigAccount)
+
+  // Submit the group
+  const txnBlobs = [signedSpendTxn.blob, signedAppCallTxn.blob]
+  const submitResult = await algod.sendRawTransaction(txnBlobs).do()
+  
+  console.log(`[LogicSig] Group submitted, first txID: ${submitResult.txid}`)
+  
+  // Wait for confirmation
+  const txId = txnGroup[0].txID()
+  await algosdk.waitForConfirmation(algod, txId, 4)
+  
+  console.log(`[LogicSig] ✅ Group confirmed`)
+  
+  return txnGroup.map(txn => txn.txID())
 }

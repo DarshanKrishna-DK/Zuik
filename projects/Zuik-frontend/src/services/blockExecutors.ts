@@ -129,22 +129,27 @@ async function executeSendPayment(
 
   // Check for LogicSig delegation
   let signer: TransactionSigner = context.signer
+  let vault: any = null
   try {
-    const vault = await getActiveLogicSigVault(context.sender)
+    vault = await getActiveLogicSigVault(context.sender)
     if (vault) {
       const vaultFromAsset = Number(vault.allowed_from_asset)
       const vaultMaxPerTrade = Number(vault.max_per_trade)
+      const transactionAssetId = Number(assetId)
       
       console.log(`[LogicSig] Vault found: Asset ${vaultFromAsset}, Max ${vaultMaxPerTrade}, Daily ${vault.daily_cap}`)
-      console.log(`[LogicSig] Transaction: Asset ${assetId}, Amount ${baseAmount}`)
-      console.log(`[LogicSig] Asset match: ${vaultFromAsset === assetId}, Amount OK: ${baseAmount <= vaultMaxPerTrade}`)
+      console.log(`[LogicSig] Transaction: Asset ${transactionAssetId}, Amount ${baseAmount}`)
+      console.log(`[LogicSig] Asset types: vault=${typeof vaultFromAsset}, txn=${typeof transactionAssetId}`)
+      console.log(`[LogicSig] Asset values: vault="${vaultFromAsset}", txn="${transactionAssetId}"`)
+      console.log(`[LogicSig] Asset match: ${vaultFromAsset === transactionAssetId}, Amount OK: ${baseAmount <= vaultMaxPerTrade}`)
       
       // Check if this transaction is supported by the vault
-      if (vaultFromAsset === assetId && baseAmount <= vaultMaxPerTrade) {
+      if (vaultFromAsset === transactionAssetId && baseAmount <= vaultMaxPerTrade) {
         console.log(`[LogicSig] ✅ AUTOMATED SIGNING ACTIVATED`)
         signer = await createLogicSigSigner(vault.lsig_account_b64)
       } else {
-        console.log(`[LogicSig] ❌ Outside vault limits - Asset: ${vaultFromAsset}=${assetId}? Amount: ${baseAmount}<=${vaultMaxPerTrade}?`)
+        console.log(`[LogicSig] ❌ Outside vault limits - Asset: ${vaultFromAsset}=${transactionAssetId}? Amount: ${baseAmount}<=${vaultMaxPerTrade}?`)
+        vault = null // Don't use delegation if outside limits
       }
     } else {
       console.log(`[LogicSig] ❌ No vault found for ${context.sender}`)
@@ -153,6 +158,11 @@ async function executeSendPayment(
     console.error(`[LogicSig] Error checking vault:`, err)
   }
 
+  // Debug logging for userSigner issue
+  console.log(`[LogicSig] Debug: context.signer provided:`, !!context.signer)
+  console.log(`[LogicSig] Debug: signer (may be LogicSig):`, !!signer)
+  console.log(`[LogicSig] Debug: vault passed:`, !!vault)
+  
   const result = await sendPayment({
     sender: context.sender,
     receiver: recipient,
@@ -160,6 +170,8 @@ async function executeSendPayment(
     assetId: assetId ? Number(assetId) : 0,
     note,
     signer,
+    vault: vault && signer !== context.signer ? vault : undefined, // Pass vault only if using LogicSig
+    userSigner: context.signer, // Pass user's original signer for funding transactions
   })
   return { txId: result.txId }
 }
