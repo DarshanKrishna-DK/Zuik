@@ -10,6 +10,7 @@ import type { SettingsSectionId } from '../components/settings/types'
 const VALID_SECTIONS: SettingsSectionId[] = ['account', 'automation', 'telegram', 'guardian']
 
 function parseSection(value: string | null): SettingsSectionId {
+  if (value === 'agent-wallets') return 'automation'
   if (value && VALID_SECTIONS.includes(value as SettingsSectionId)) {
     return value as SettingsSectionId
   }

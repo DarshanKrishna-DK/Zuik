@@ -5,26 +5,27 @@ import cors from 'cors'
 import { startTelegramBot, handleTelegramWebhook } from './telegram.js'
 import { executeWorkflowHeadless } from './workflowRunner.js'
 import { fetchActiveLogicSigVault } from './logicSigDelegation.js'
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { createValidatedSupabaseClient } from './supabaseClient.js'
 import { createVoiceRouter, startVoiceServer } from './voiceServer.js'
 import { createAiChatRouter } from './aiChatRouter.js'
 import { createMarketProxyRouter } from './marketProxyRouter.js'
+import { createAgentWalletRouter } from './agentWalletRouter.js'
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const VOICE_SERVER_PORT = parseInt(process.env.VOICE_SERVER_PORT || '3002', 10)
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS ?? '15000', 10)
 const INLINE_VOICE = process.env.NODE_ENV === 'production'
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL ?? 'http://localhost:5173,http://localhost:5174'
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('[Server] Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in .env')
+if (!SUPABASE_URL) {
+  console.error('[Server] Missing SUPABASE_URL in .env')
   process.exit(1)
 }
 
-const sb: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY)
+let sb: SupabaseClient
 
 async function getLinkedTelegramChats(walletAddress: string): Promise<string[]> {
   const { data } = await sb
@@ -192,6 +193,9 @@ async function startServer() {
   console.log(`[Server] Voice server: ${INLINE_VOICE ? 'inline' : `port ${VOICE_SERVER_PORT}`}`)
   console.log(`[Server] Polling interval: ${POLL_INTERVAL}ms`)
   console.log(`[Server] Supabase: ${SUPABASE_URL}`)
+
+  sb = await createValidatedSupabaseClient()
+  app.use('/api/agent-wallets', await createAgentWalletRouter())
 
   // Start main HTTP server
   app.listen(PORT, '0.0.0.0', () => {

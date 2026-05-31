@@ -487,7 +487,7 @@ export function subscribeAgent(
         ;(async () => {
           let requiresSigner = hasOnChainActions
           if (hasOnChainActions && !hasUnsupportedOnChain && context.sender) {
-            const vault = await getActiveLogicSigVault(context.sender)
+            const vault = await getActiveLogicSigVault(context.sender, 0) // Default to ALGO (asset 0)
             requiresSigner = !vault
           }
           const id = await saveSchedule({

@@ -6,7 +6,7 @@ import { createAsa } from './createAsa'
 import { optInToAsa } from './optInAsa'
 import { sendPayment } from './sendPayment'
 import { executeSwap, getSwapQuote } from './swapToken'
-import { getActiveLogicSigVault, createLogicSigSigner } from './logicSigDelegation'
+import { getActiveLogicSigVault } from './logicSigDelegation'
 
 async function getAssetDecimals(assetId: number): Promise<number> {
   if (assetId === 0) return 6
@@ -127,51 +127,78 @@ async function executeSendPayment(
     baseAmount = toBaseUnits(numericAmount, 6)
   }
 
-  // Check for LogicSig delegation
-  let signer: TransactionSigner = context.signer
-  let vault: any = null
+  let delegationVault = null
   try {
-    vault = await getActiveLogicSigVault(context.sender)
+    console.log('[DIAGNOSTIC] Checking delegation vault:', {
+      sender: context.sender,
+      assetId: assetId,
+      numericAssetId: Number(assetId) || 0,
+      baseAmount: baseAmount,
+      numericAmount: numericAmount
+    })
+    
+    // Also store diagnostics globally for UI access
+    window.__zuikDiagnostics = window.__zuikDiagnostics || []
+    window.__zuikDiagnostics.push(`🔍 VAULT LOOKUP: sender=${context.sender}, assetId=${Number(assetId) || 0}, amount=${baseAmount}`)
+
+    const vault = await getActiveLogicSigVault(context.sender, Number(assetId) || 0)
+    console.log('[DIAGNOSTIC] Vault lookup result:', vault ? 'FOUND' : 'NOT FOUND')
+    
+    if (vault) {
+      window.__zuikDiagnostics.push(`✅ VAULT FOUND: id=${vault.id}, maxPerTrade=${vault.max_per_trade}, asset=${vault.allowed_from_asset}`)
+    } else {
+      window.__zuikDiagnostics.push(`❌ NO VAULT FOUND - will use manual signing`)
+    }
+    
     if (vault) {
       const vaultFromAsset = Number(vault.allowed_from_asset)
       const vaultMaxPerTrade = Number(vault.max_per_trade)
       const transactionAssetId = Number(assetId)
-      
-      console.log(`[LogicSig] Vault found: Asset ${vaultFromAsset}, Max ${vaultMaxPerTrade}, Daily ${vault.daily_cap}`)
-      console.log(`[LogicSig] Transaction: Asset ${transactionAssetId}, Amount ${baseAmount}`)
-      console.log(`[LogicSig] Asset types: vault=${typeof vaultFromAsset}, txn=${typeof transactionAssetId}`)
-      console.log(`[LogicSig] Asset values: vault="${vaultFromAsset}", txn="${transactionAssetId}"`)
-      console.log(`[LogicSig] Asset match: ${vaultFromAsset === transactionAssetId}, Amount OK: ${baseAmount <= vaultMaxPerTrade}`)
-      
-      // Check if this transaction is supported by the vault
+
+      console.log('[DIAGNOSTIC] Vault comparison:', {
+        vaultFromAsset,
+        transactionAssetId,
+        vaultAssetMatch: vaultFromAsset === transactionAssetId,
+        vaultMaxPerTrade,
+        baseAmount,
+        amountWithinLimit: baseAmount <= vaultMaxPerTrade,
+        vaultExpiryRound: vault.expiry_round,
+        vaultId: vault.id
+      })
+
       if (vaultFromAsset === transactionAssetId && baseAmount <= vaultMaxPerTrade) {
-        console.log(`[LogicSig] ✅ AUTOMATED SIGNING ACTIVATED`)
-        signer = await createLogicSigSigner(vault.lsig_account_b64)
+        console.log(`[DIAGNOSTIC] ✅ DELEGATION WILL BE USED - all conditions met`)
+        window.__zuikDiagnostics.push(`✅ DELEGATION APPROVED - will use LogicSig`)
+        delegationVault = vault
       } else {
-        console.log(`[LogicSig] ❌ Outside vault limits - Asset: ${vaultFromAsset}=${transactionAssetId}? Amount: ${baseAmount}<=${vaultMaxPerTrade}?`)
-        vault = null // Don't use delegation if outside limits
+        console.log(`[DIAGNOSTIC] ❌ DELEGATION REJECTED:`)
+        let rejectReason = '❌ DELEGATION REJECTED: '
+        if (vaultFromAsset !== transactionAssetId) {
+          console.log(`  - Asset mismatch: vault=${vaultFromAsset}, tx=${transactionAssetId}`)
+          rejectReason += `asset mismatch (vault=${vaultFromAsset}, tx=${transactionAssetId})`
+        }
+        if (baseAmount > vaultMaxPerTrade) {
+          console.log(`  - Amount too high: ${baseAmount} > ${vaultMaxPerTrade}`)
+          rejectReason += `amount too high (${baseAmount} > ${vaultMaxPerTrade})`
+        }
+        window.__zuikDiagnostics.push(rejectReason)
       }
     } else {
-      console.log(`[LogicSig] ❌ No vault found for ${context.sender}`)
+      console.log('[DIAGNOSTIC] ❌ NO VAULT FOUND - will fall back to manual signing')
     }
   } catch (err) {
-    console.error(`[LogicSig] Error checking vault:`, err)
+    console.error('[DIAGNOSTIC] Error checking vault:', err)
+    console.error('[DIAGNOSTIC] Stack trace:', err.stack)
   }
 
-  // Debug logging for userSigner issue
-  console.log(`[LogicSig] Debug: context.signer provided:`, !!context.signer)
-  console.log(`[LogicSig] Debug: signer (may be LogicSig):`, !!signer)
-  console.log(`[LogicSig] Debug: vault passed:`, !!vault)
-  
   const result = await sendPayment({
     sender: context.sender,
     receiver: recipient,
     amount: baseAmount,
     assetId: assetId ? Number(assetId) : 0,
     note,
-    signer,
-    vault: vault && signer !== context.signer ? vault : undefined, // Pass vault only if using LogicSig
-    userSigner: context.signer, // Pass user's original signer for funding transactions
+    signer: context.signer,
+    vault: delegationVault ?? undefined,
   })
   return { txId: result.txId }
 }

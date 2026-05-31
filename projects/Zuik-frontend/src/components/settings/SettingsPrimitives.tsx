@@ -165,3 +165,54 @@ export function LoadingBlock({ label = 'Loading...' }: { label?: string }) {
     </div>
   )
 }
+
+export function LoadingSpinner() {
+  return <span className="z-spinner" aria-hidden />
+}
+
+export function PanelSection({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+}) {
+  return (
+    <section className="st-section">
+      <div className="st-section-header">
+        <h3 className="st-section-title">{title}</h3>
+        {description && <p className="st-section-description">{description}</p>}
+      </div>
+      <div className="st-section-content">
+        {children}
+      </div>
+    </section>
+  )
+}
+
+export function PanelRow({
+  children,
+  className = '',
+}: {
+  children: ReactNode
+  className?: string
+}) {
+  return <div className={`st-row ${className}`.trim()}>{children}</div>
+}
+
+export function InfoBox({
+  type = 'info',
+  children,
+}: {
+  type?: 'info' | 'warning' | 'error' | 'success' | 'neutral'
+  children: ReactNode
+}) {
+  return (
+    <div className={`st-info-box st-info-box--${type}`}>
+      <IconInfo />
+      <div className="st-info-box-content">{children}</div>
+    </div>
+  )
+}

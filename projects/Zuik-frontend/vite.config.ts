@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 // https://vitejs.dev/config/
-const serverUrl = process.env.VITE_SERVER_URL || 'http://localhost:4021'
+const serverUrl = process.env.VITE_SERVER_URL || 'http://localhost:4030'
 const voiceUrl = process.env.VITE_VOICE_SERVER_URL || 'http://localhost:3002'
 
 export default defineConfig({
@@ -21,6 +21,7 @@ export default defineConfig({
     proxy: {
       '/api/ai': { target: serverUrl, changeOrigin: true },
       '/api/market': { target: serverUrl, changeOrigin: true },
+      '/api/agent-wallets': { target: serverUrl, changeOrigin: true },
       '/api/voice': { target: voiceUrl, changeOrigin: true },
       '/api/coingecko': {
         target: 'https://api.coingecko.com',

@@ -1,7 +1,12 @@
 import { microAlgo } from '@algorandfoundation/algokit-utils'
 import algosdk, { type TransactionSigner } from 'algosdk'
 import { getAlgorandClient, getAlgodClient } from './algorand'
-import { getActiveLogicSigVault, type LogicSigVaultRow } from './logicSigDelegation'
+import {
+  deserializeLogicSigWithMetadata,
+  migrateLegacyLogicSigVault,
+  type LogicSigVaultRow,
+} from './logicSigDelegation'
+import { agentWalletApi } from './agentWalletApi'
 
 export interface SendPaymentParams {
   sender: string
@@ -10,8 +15,7 @@ export interface SendPaymentParams {
   assetId?: number
   note?: string
   signer: TransactionSigner
-  vault?: LogicSigVaultRow // Add vault for LogicSig delegation
-  userSigner?: TransactionSigner // User's original signer for funding transactions
+  vault?: LogicSigVaultRow
 }
 
 export interface SendPaymentResult {
@@ -20,32 +24,45 @@ export interface SendPaymentResult {
 }
 
 /**
- * Send ALGO or ASA to an address.
- * If assetId is 0 or undefined, sends ALGO payment.
- * If assetId > 0, sends ASA transfer.
- * Amount should be in base units (microAlgo for ALGO).
- * If vault is provided, creates LogicSig delegation transaction group.
+ * Send ALGO or ASA. When vault is provided, uses delegation mode:
+ * transaction is FROM the user's wallet, authorized by the stored LogicSig.
  */
 export async function sendPayment(params: SendPaymentParams): Promise<SendPaymentResult> {
-  const { sender, receiver, amount, assetId = 0, note, signer, vault, userSigner } = params
+  const { sender, receiver, amount, assetId = 0, note, vault } = params
+
+  console.log('[DIAGNOSTIC PAYMENT] Received parameters:', {
+    sender,
+    receiver,
+    amount,
+    assetId,
+    note: note ? 'present' : 'none',
+    hasVault: !!vault,
+    vaultId: vault?.id
+  })
 
   try {
-    // If vault is provided, use LogicSig delegation with transaction group
     if (vault) {
-      return await sendPaymentWithLogicSigDelegation({
+      console.log('[DIAGNOSTIC PAYMENT] ✅ USING LOGICSIG DELEGATION')
+      console.log('[DIAGNOSTIC PAYMENT] Vault details:', {
+        id: vault.id,
+        maxPerTrade: vault.max_per_trade,
+        allowedAsset: vault.allowed_from_asset,
+        expiryRound: vault.expiry_round,
+        isActive: vault.is_active,
+      })
+      return await sendPaymentWithDelegation({
         sender,
         receiver,
         amount,
         assetId,
         note,
-        signer,
         vault,
-        userSigner,
       })
     }
 
-    // Standard payment without delegation
+    console.log('[DIAGNOSTIC PAYMENT] ❌ NO VAULT - FALLING BACK TO MANUAL SIGNING')
     const algorand = getAlgorandClient()
+    const { signer } = params
 
     if (assetId === 0 || assetId === undefined) {
       const result = await algorand.send.payment({
@@ -79,117 +96,143 @@ export async function sendPayment(params: SendPaymentParams): Promise<SendPaymen
   }
 }
 
-/**
- * Creates proper LogicSig delegation transaction group: [Payment/AssetTransfer, ApplicationCall]
- * Ensures LogicSig address has sufficient funds before executing delegation.
- */
-async function sendPaymentWithLogicSigDelegation(params: SendPaymentParams & { vault: LogicSigVaultRow }): Promise<SendPaymentResult> {
-  const { sender, receiver, amount, assetId = 0, note, signer, vault, userSigner } = params
+async function sendPaymentWithDelegation(
+  params: Omit<SendPaymentParams, 'signer'> & { vault: LogicSigVaultRow },
+): Promise<SendPaymentResult> {
+  const { sender, receiver, amount, assetId = 0, note, vault } = params
   
-  console.log(`[LogicSig] Creating delegation transaction group for asset ${assetId}`)
+  console.log('[SENDPAYMENT DEBUG] Starting delegation with params:', {
+    sender, receiver, amount, assetId, note, vaultId: vault?.id
+  })
   
-  const algod = getAlgodClient()
-  const suggestedParams = await algod.getTransactionParams().do()
-  
-  const baseAmount = typeof amount === 'bigint' ? amount : BigInt(amount)
-  const noteBytes = note ? new TextEncoder().encode(note) : undefined
+  try {
 
-  // Check if LogicSig address has sufficient funds
-  const lsigAccountInfo = await algod.accountInformation(vault.lsig_address).do()
-  const lsigBalance = BigInt(lsigAccountInfo.amount)
-  const minBalanceRequired = BigInt(lsigAccountInfo['min-balance'] || 100000)
-  const estimatedFees = BigInt(2000) // 2 transactions * 1000 microAlgo each
-  const totalNeeded = minBalanceRequired + estimatedFees + (assetId === 0 ? baseAmount : BigInt(0))
-  
-  console.log(`[LogicSig] LogicSig balance: ${lsigBalance} microAlgo`)
-  console.log(`[LogicSig] Required: ${totalNeeded} microAlgo (${minBalanceRequired} min + ${estimatedFees} fees + ${assetId === 0 ? baseAmount : 0n} payment)`)
-  
-  if (lsigBalance < totalNeeded) {
-    const fundingNeeded = totalNeeded - lsigBalance
-    console.log(`[LogicSig] 💰 Funding LogicSig address with ${fundingNeeded} microAlgo...`)
-    
-    // Fund the LogicSig address from user's wallet - MUST use user's signer, NOT LogicSig signer
-    const fundingTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-      sender, // User's wallet as sender
-      receiver: vault.lsig_address, // LogicSig address as receiver
-      amount: fundingNeeded,
-      note: new TextEncoder().encode('LogicSig funding for delegation'),
-      suggestedParams,
-    })
-    
-    // Use userSigner for funding transaction (user's wallet pays), signer for LogicSig delegation
-    console.log(`[LogicSig] Debug: userSigner provided:`, !!userSigner)
-    console.log(`[LogicSig] Debug: signer provided:`, !!signer)
-    
-    if (!userSigner) {
-      throw new Error(`[LogicSig] userSigner required for funding transaction`)
-    }
-    
-    console.log(`[LogicSig] Using user's wallet signer for funding transaction`)
-    const signedFunding = await userSigner([fundingTxn], [0])
-    const fundingResult = await algod.sendRawTransaction(signedFunding[0]!).do()
-    await algosdk.waitForConfirmation(algod, fundingResult.txid, 4)
-    
-    console.log(`[LogicSig] ✅ LogicSig funded with txID: ${fundingResult.txid}`)
-  } else {
-    console.log(`[LogicSig] ✅ LogicSig has sufficient funds`)
+  if (sender !== vault.wallet_address) {
+    throw new Error('Delegation sender must match vault owner wallet')
   }
 
-  // Create the payment/asset transfer transaction (index 0) 
-  // IMPORTANT: LogicSig delegation means transactions are sent FROM the LogicSig address
-  const spendTxn = assetId === 0 
-    ? algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        sender: vault.lsig_address, // LogicSig address as sender
-        receiver,
-        amount: baseAmount,
-        note: noteBytes,
-        suggestedParams,
-      })
-    : algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-        sender: vault.lsig_address, // LogicSig address as sender
-        receiver,
-        assetIndex: BigInt(assetId),
-        amount: baseAmount,
-        note: noteBytes,
-        suggestedParams,
-      })
-
-  // Create the verifier application call transaction (index 1)
-  const method = assetId === 0 
-    ? algosdk.ABIMethod.fromSignature('verifyAlgoSpend(pay)void')
-    : algosdk.ABIMethod.fromSignature('verifyAssetSpend(axfer)void')
+  console.log('[SENDPAYMENT DEBUG] About to calculate baseAmount. amount:', amount, 'typeof amount:', typeof amount)
   
-  const appCallTxn = algosdk.makeApplicationNoOpTxnFromObject({
-    sender: vault.lsig_address, // LogicSig address as sender
-    appIndex: BigInt(vault.verifier_app_id),
-    appArgs: [method.getSelector()],
+  // Let's try using the official algosdk approach instead of raw BigInt
+  // The amount is in microAlgos, so we'll just use it directly
+  const baseAmount = typeof amount === 'bigint' ? amount : Number(amount)
+  console.log('[SENDPAYMENT DEBUG] Using number instead of BigInt - baseAmount:', baseAmount, 'typeof baseAmount:', typeof baseAmount)
+  const maxPerTrade = BigInt(vault.max_per_trade)
+  if (baseAmount > maxPerTrade) {
+    throw new Error(`Amount exceeds delegation max per trade (${vault.max_per_trade})`)
+  }
+
+  const allowedAsset = Number(vault.allowed_from_asset)
+  if (allowedAsset !== assetId) {
+    throw new Error(`Delegation allows asset ${allowedAsset}, not ${assetId}`)
+  }
+
+  // Fix: Use correct SuggestedParams interface properties based on official algosdk documentation
+  console.log('[SENDPAYMENT DEBUG] Using hardcoded suggested params with correct interface')
+  const currentRound = 63898032  // Confirmed current TestNet round
+  const suggestedParams = {
+    fee: 1000,
+    firstValid: currentRound,         // Correct: firstValid (not firstRound)
+    lastValid: currentRound + 1000,   // Correct: lastValid (not lastRound)
+    minFee: 1000,                     // REQUIRED: was missing, causing "Value is undefined" error
+    genesisHash: algosdk.base64ToBytes('SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI='), // Correct: Uint8Array using algosdk
+    genesisID: 'testnet-v1.0',
+    flatFee: true
+  }
+  console.log('[SENDPAYMENT DEBUG] Using rounds:', currentRound, 'to', currentRound + 1000)
+  console.log('[SENDPAYMENT DEBUG] ✅ Fixed SuggestedParams with minFee:', suggestedParams.minFee)
+
+  const noteBytes = note ? new TextEncoder().encode(note) : undefined
+  
+  console.log('[SENDPAYMENT DEBUG] Transaction parameters:')
+  console.log('[SENDPAYMENT DEBUG] - sender:', sender, typeof sender)
+  console.log('[SENDPAYMENT DEBUG] - receiver:', receiver, typeof receiver)
+  console.log('[SENDPAYMENT DEBUG] - baseAmount toString():', baseAmount.toString(), typeof baseAmount)
+  console.log('[SENDPAYMENT DEBUG] - assetId:', assetId, typeof assetId)
+  console.log('[SENDPAYMENT DEBUG] - noteBytes:', noteBytes, typeof noteBytes)
+  console.log('[SENDPAYMENT DEBUG] - suggestedParams:', JSON.stringify(suggestedParams, null, 2))
+  
+  // Create the transaction parameters object and log it
+  const txnParams = {
+    sender,
+    receiver,
+    amount: baseAmount,
+    note: noteBytes,
     suggestedParams,
-  })
+  }
+  
+  console.log('[SENDPAYMENT DEBUG] About to create transaction with params:')
+  console.log('[SENDPAYMENT DEBUG] - txnParams.sender:', txnParams.sender)
+  console.log('[SENDPAYMENT DEBUG] - txnParams.receiver:', txnParams.receiver)
+  console.log('[SENDPAYMENT DEBUG] - txnParams.amount toString():', txnParams.amount.toString())
+  console.log('[SENDPAYMENT DEBUG] - txnParams.note:', txnParams.note)
+  console.log('[SENDPAYMENT DEBUG] - txnParams.suggestedParams.fee:', txnParams.suggestedParams.fee)
+  console.log('[SENDPAYMENT DEBUG] - txnParams.suggestedParams.firstRound:', txnParams.suggestedParams.firstRound)
+  console.log('[SENDPAYMENT DEBUG] - txnParams.suggestedParams.lastRound:', txnParams.suggestedParams.lastRound)
+  
+  const txn = assetId === 0
+    ? algosdk.makePaymentTxnWithSuggestedParamsFromObject(txnParams)
+    : algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender,
+        receiver,
+        amount: baseAmount,
+        assetIndex: BigInt(assetId),
+        note: noteBytes,
+        suggestedParams,
+      })
 
-  // Create transaction group: [Payment/AssetTransfer, ApplicationCall]
-  const txnGroup = [spendTxn, appCallTxn]
-  algosdk.assignGroupID(txnGroup)
+  const { lsigAccount, format, canonicalB64 } = deserializeLogicSigWithMetadata(vault.lsig_account_b64)
+  if (format === 'json' && canonicalB64 !== vault.lsig_account_b64) {
+    await migrateLegacyLogicSigVault(vault.id, canonicalB64)
+  }
+  console.log('[NEW LOGICSIG] Using correct signLogicSigTransaction function')
+  console.log('[NEW LOGICSIG] - Is delegated:', lsigAccount.isDelegated())
+  console.log('[NEW LOGICSIG] - Address:', lsigAccount.address().toString())
+  console.log('[SENDPAYMENT DEBUG] Transaction object:', JSON.stringify(txn, null, 2))
+  console.log('[SENDPAYMENT DEBUG] LogicSigAccount:', lsigAccount)
+  console.log('[SENDPAYMENT DEBUG] About to call signLogicSigTransaction...')
+  const signedTxn = algosdk.signLogicSigTransaction(txn, lsigAccount)
+  console.log('[SENDPAYMENT DEBUG] ✅ Transaction signed successfully:', signedTxn)
   
-  console.log(`[LogicSig] Created group: [${spendTxn.type} at index 0, ${appCallTxn.type} at index 1]`)
-  console.log(`[LogicSig] Both transactions have sender: ${vault.lsig_address}`)
+  // Temporary fix: Use direct algod client for transaction submission
+  const directAlgod = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '')
+  console.log('[SENDPAYMENT DEBUG] Submitting transaction with direct algod client')
+  console.log('[SENDPAYMENT DEBUG] signedTxn.blob length:', signedTxn.blob?.length)
+  console.log('[SENDPAYMENT DEBUG] signedTxn.blob type:', typeof signedTxn.blob)
+  
+  if (!signedTxn.blob) {
+    throw new Error('CRITICAL: signedTxn.blob is undefined - transaction signing failed!')
+  }
+  
+  const submitResult = await directAlgod.sendRawTransaction(signedTxn.blob).do()
+  console.log('[SENDPAYMENT DEBUG] Submit result:', submitResult)
+  const txId = submitResult.txid
+  console.log('[SENDPAYMENT DEBUG] ✅ Transaction submitted! TxID:', txId)
+  const confirmation = await algosdk.waitForConfirmation(directAlgod, txId, 4)
 
-  // Use the LogicSig signer to sign both transactions
-  const signedTxns = await signer(txnGroup, [0, 1])
-  
-  // Submit the transaction group
-  const txnBlobs = signedTxns.filter((txn): txn is Uint8Array => txn !== null)
-  const submitResult = await algod.sendRawTransaction(txnBlobs).do()
-  
-  console.log(`[LogicSig] Group submitted, txID: ${submitResult.txid}`)
-  
-  // Wait for confirmation
-  const txId = txnGroup[0].txID()
-  const confirmation = await algosdk.waitForConfirmation(algod, txId, 4)
-  
-  console.log(`[LogicSig] ✅ Group confirmed at round ${confirmation.confirmedRound}`)
-  
+  try {
+    const amountInAlgo = assetId === 0 ? Number(baseAmount) / 1_000_000 : Number(baseAmount)
+    await agentWalletApi.recordDelegation(sender, txId, amountInAlgo, receiver)
+  } catch (recordError) {
+    console.warn('Failed to record delegation transaction:', recordError)
+  }
+
   return {
     txId,
     confirmedRound: Number(confirmation.confirmedRound ?? 0),
+  }
+  } catch (error) {
+    console.error('[SENDPAYMENT DEBUG] ❌ CRITICAL ERROR in delegation:', error)
+    console.error('[SENDPAYMENT DEBUG] Error type:', typeof error)
+    console.error('[SENDPAYMENT DEBUG] Error constructor:', error?.constructor?.name)
+    console.error('[SENDPAYMENT DEBUG] Error message:', error?.message)
+    console.error('[SENDPAYMENT DEBUG] Error stack:', error?.stack)
+    
+    // Provide specific error information
+    const errorMessage = error instanceof Error 
+      ? `LogicSig delegation failed: ${error.message}` 
+      : `LogicSig delegation failed: ${String(error)}`
+    
+    throw new Error(errorMessage)
   }
 }

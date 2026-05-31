@@ -206,7 +206,7 @@ export default function Builder() {
       setDelegationAvailable(false)
       return
     }
-    getActiveLogicSigVault(activeAddress)
+    getActiveLogicSigVault(activeAddress, 0) // Default to ALGO (asset 0)
       .then((vault) => setDelegationAvailable(Boolean(vault)))
       .catch(() => setDelegationAvailable(false))
   }, [activeAddress])

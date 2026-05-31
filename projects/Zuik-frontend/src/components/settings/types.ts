@@ -15,7 +15,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   {
     id: 'automation',
     label: 'Automation',
-    description: 'Spending permissions',
+    description: 'Permissions and delegation',
   },
   {
     id: 'telegram',
