@@ -5,8 +5,9 @@ import { getAlgodClient } from './algorand'
 import { createAsa } from './createAsa'
 import { optInToAsa } from './optInAsa'
 import { sendPayment } from './sendPayment'
+import { sendPaymentViaAgent } from './agentPayment'
+import type { ExecutionMode } from '../lib/executionMode'
 import { executeSwap, getSwapQuote } from './swapToken'
-import { getActiveLogicSigVault } from './logicSigDelegation'
 
 async function getAssetDecimals(assetId: number): Promise<number> {
   if (assetId === 0) return 6
@@ -61,6 +62,9 @@ export interface ExecutorContext {
   sender: string
   signer: TransactionSigner
   algorand: AlgorandClient
+  executionMode?: ExecutionMode
+  agentAddress?: string
+  ownerAddress?: string
 }
 
 export type BlockConfig = Record<string, string | number | undefined>
@@ -127,68 +131,21 @@ async function executeSendPayment(
     baseAmount = toBaseUnits(numericAmount, 6)
   }
 
-  let delegationVault = null
-  try {
-    console.log('[DIAGNOSTIC] Checking delegation vault:', {
-      sender: context.sender,
-      assetId: assetId,
-      numericAssetId: Number(assetId) || 0,
-      baseAmount: baseAmount,
-      numericAmount: numericAmount
+  if (
+    context.executionMode === 'agent' &&
+    context.agentAddress &&
+    context.ownerAddress &&
+    assetId === 0
+  ) {
+    const result = await sendPaymentViaAgent({
+      ownerAddress: context.ownerAddress,
+      agentAddress: context.agentAddress,
+      recipient,
+      amountMicroAlgos: baseAmount,
+      assetId: 0,
+      note,
     })
-    
-    // Also store diagnostics globally for UI access
-    window.__zuikDiagnostics = window.__zuikDiagnostics || []
-    window.__zuikDiagnostics.push(`🔍 VAULT LOOKUP: sender=${context.sender}, assetId=${Number(assetId) || 0}, amount=${baseAmount}`)
-
-    const vault = await getActiveLogicSigVault(context.sender, Number(assetId) || 0)
-    console.log('[DIAGNOSTIC] Vault lookup result:', vault ? 'FOUND' : 'NOT FOUND')
-    
-    if (vault) {
-      window.__zuikDiagnostics.push(`✅ VAULT FOUND: id=${vault.id}, maxPerTrade=${vault.max_per_trade}, asset=${vault.allowed_from_asset}`)
-    } else {
-      window.__zuikDiagnostics.push(`❌ NO VAULT FOUND - will use manual signing`)
-    }
-    
-    if (vault) {
-      const vaultFromAsset = Number(vault.allowed_from_asset)
-      const vaultMaxPerTrade = Number(vault.max_per_trade)
-      const transactionAssetId = Number(assetId)
-
-      console.log('[DIAGNOSTIC] Vault comparison:', {
-        vaultFromAsset,
-        transactionAssetId,
-        vaultAssetMatch: vaultFromAsset === transactionAssetId,
-        vaultMaxPerTrade,
-        baseAmount,
-        amountWithinLimit: baseAmount <= vaultMaxPerTrade,
-        vaultExpiryRound: vault.expiry_round,
-        vaultId: vault.id
-      })
-
-      if (vaultFromAsset === transactionAssetId && baseAmount <= vaultMaxPerTrade) {
-        console.log(`[DIAGNOSTIC] ✅ DELEGATION WILL BE USED - all conditions met`)
-        window.__zuikDiagnostics.push(`✅ DELEGATION APPROVED - will use LogicSig`)
-        delegationVault = vault
-      } else {
-        console.log(`[DIAGNOSTIC] ❌ DELEGATION REJECTED:`)
-        let rejectReason = '❌ DELEGATION REJECTED: '
-        if (vaultFromAsset !== transactionAssetId) {
-          console.log(`  - Asset mismatch: vault=${vaultFromAsset}, tx=${transactionAssetId}`)
-          rejectReason += `asset mismatch (vault=${vaultFromAsset}, tx=${transactionAssetId})`
-        }
-        if (baseAmount > vaultMaxPerTrade) {
-          console.log(`  - Amount too high: ${baseAmount} > ${vaultMaxPerTrade}`)
-          rejectReason += `amount too high (${baseAmount} > ${vaultMaxPerTrade})`
-        }
-        window.__zuikDiagnostics.push(rejectReason)
-      }
-    } else {
-      console.log('[DIAGNOSTIC] ❌ NO VAULT FOUND - will fall back to manual signing')
-    }
-  } catch (err) {
-    console.error('[DIAGNOSTIC] Error checking vault:', err)
-    console.error('[DIAGNOSTIC] Stack trace:', err.stack)
+    return { txId: result.txId }
   }
 
   const result = await sendPayment({
@@ -198,7 +155,6 @@ async function executeSendPayment(
     assetId: assetId ? Number(assetId) : 0,
     note,
     signer: context.signer,
-    vault: delegationVault ?? undefined,
   })
   return { txId: result.txId }
 }

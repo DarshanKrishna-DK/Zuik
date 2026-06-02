@@ -1,4 +1,4 @@
-export type SettingsSectionId = 'account' | 'automation' | 'telegram' | 'guardian'
+export type SettingsSectionId = 'account' | 'agents' | 'guardian' | 'risk' | 'telegram'
 
 export interface SettingsNavItem {
   id: SettingsSectionId
@@ -13,18 +13,23 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     description: 'Wallet and network',
   },
   {
-    id: 'automation',
-    label: 'Automation',
-    description: 'Permissions and delegation',
+    id: 'agents',
+    label: 'Agent wallets',
+    description: 'Create, fund, and manage',
+  },
+  {
+    id: 'guardian',
+    label: 'Guardian',
+    description: 'On-chain spending limits',
+  },
+  {
+    id: 'risk',
+    label: 'Risk management',
+    description: 'Token safety thresholds',
   },
   {
     id: 'telegram',
     label: 'Telegram',
     description: 'Bot notifications',
-  },
-  {
-    id: 'guardian',
-    label: 'Guardian',
-    description: 'On-chain protection',
   },
 ]

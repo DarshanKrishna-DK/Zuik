@@ -49,7 +49,6 @@
 - [Smart contracts](#smart-contracts)
   - [Contract interaction flow](#contract-interaction-flow)
   - [ZuikGuardian](#zuikguardian)
-  - [Delegation verifier and LogicSig](#delegation-verifier-and-logicsig)
   - [TestNet deployment](#testnet-deployment)
 - [Technology and integrations](#technology-and-integrations)
 
@@ -86,7 +85,7 @@ Zuik is an intent-based DeFi automation platform on Algorand. You describe what 
 | Unclear fees and risk before signing | Safety preview with fee estimates and on-chain limits |
 | Missed off-hours opportunities | Optional cloud agent for 24/7 schedules and alerts |
 
-**Live on Algorand TestNet:** Guardian contract deployed and wired into Settings. Swaps route through Tinyman on TestNet and Folks Router where available.
+**Live on Algorand TestNet:** Guardian App `763727553` deployed and wired into Settings (policy, recipients, agent wallets, risk scoring). Headless ALGO payments run via server atomic groups. Swaps route through Tinyman on TestNet and Folks Router where available. See [docs/testing/README.md](docs/testing/README.md) for the demo validation path.
 
 ---
 
@@ -138,7 +137,7 @@ You stay non-custodial throughout: Zuik orchestrates, your wallet signs, and mul
 | **Non-custodial execution** | Wallet-signed transactions; assets stay in your control |
 | **Atomic groups** | Multi-step trades succeed together or not at all |
 | **DEX connectivity** | Tinyman direct pools and Folks Router aggregation |
-| **On-chain safety** | Guardian daily caps and LogicSig delegation with verifier apps |
+| **On-chain safety** | Guardian atomic enforcement (max per trade, daily cap, allowlists, expiry) |
 | **Cloud agent** | Background schedules, price monitors, and Telegram alerts |
 | **Persistence** | Supabase-backed workflows and run history |
 | **Trading and investing** | Weekly DCA, conditional swaps on price drops, take-profit flows |
@@ -206,7 +205,7 @@ graph TB
 |-------|------|
 | **Experience** | Web builder, chat, voice, and Telegram as entry points |
 | **Orchestration** | Ordered steps with logic, math, conditions, and multi-agent flows |
-| **Safety** | Pre-sign previews, advisor context, Guardian caps, LogicSig delegation rules |
+| **Safety** | Pre-sign previews, advisor context, Guardian on-chain caps, ASA risk scoring |
 | **Execution** | Wallet-signed transactions and atomic groups on Algorand |
 | **Persistence** | Supabase stores workflows and run history across sessions |
 | **Cloud agent** | Background triggers when you opt in (Node.js server on Railway or local) |
@@ -219,7 +218,7 @@ Monorepo managed with [AlgoKit](https://github.com/algorandfoundation/algokit-cl
 |---------|------|------|
 | **Frontend** | `projects/Zuik-frontend` | React web app: builder, dashboard, wallet, swap execution |
 | **Backend** | `projects/server` | AI proxy, market proxy, cloud agent, Telegram, voice |
-| **Contracts** | `projects/Zuik-contracts` | Guardian and LogicSig delegation smart contracts (Algorand TypeScript / Puya) |
+| **Contracts** | `projects/Zuik-contracts` | ZuikGuardian smart contract (Algorand TypeScript / Puya) |
 
 ---
 
@@ -235,10 +234,10 @@ flowchart TD
     REFINE -->|"Chat or voice"| PARSE
     REFINE -->|"Drag and drop"| MATERIALIZE
     REFINE -->|"Looks good"| PREVIEW["Safety preview: fees, slippage, limits"]
-    PREVIEW --> POLICY{"Guardian or LogicSig enabled?"}
+    PREVIEW --> POLICY{"Agent mode + Guardian?"}
     POLICY -->|"Yes"| VERIFY["On-chain policy check"]
     POLICY -->|"No"| SIGN
-    VERIFY --> SIGN["Wallet signs atomic group"]
+    VERIFY --> SIGN["Wallet or agent signs atomic group"]
     SIGN --> RUN["Workflow runs on trigger or schedule"]
     RUN --> HISTORY["Results stored in dashboard"]
 
@@ -263,72 +262,58 @@ sequenceDiagram
     participant User
     participant Frontend
     participant Wallet
+    participant Server
+    participant Agent as Agent sub-account
     participant Guardian as ZuikGuardian
-    participant Verifier as DelegationVerifier
     participant DEX as Tinyman / Folks Router
 
-    User->>Frontend: Enable automation with limits
-    Frontend->>Wallet: Request signature
-    Wallet->>Guardian: Register agent and daily cap
-    Note over User,Verifier: LogicSig path (optional)
-    User->>Frontend: Configure delegation policy
-    Frontend->>Verifier: Deploy per-user verifier app
-    Frontend->>Wallet: Sign LogicSig template
+    User->>Frontend: Create agent + set Guardian policy
+    Frontend->>Wallet: bootstrap + allowRecipient (owner signs)
+    User->>Wallet: Fund agent sub-account (one-time)
+    Wallet->>Agent: ALGO transfer
 
-    User->>Frontend: Run workflow
-    Frontend->>Wallet: Sign atomic transaction group
-    Wallet->>Guardian: attemptSpend (if delegated)
-    Guardian-->>Wallet: Approve or revert
-    Wallet->>DEX: Swap transactions
-    Wallet->>Verifier: Policy validation call
-    Verifier-->>Wallet: Approve or revert
-    DEX-->>Frontend: Execution result
+    User->>Frontend: Run workflow (Agent mode)
+    Frontend->>Server: Execute headless flow
+    Server->>Agent: Build payment txn
+    Server->>Guardian: authorize_trade atomic group
+    Guardian-->>Server: Approve or revert entire group
+    Server->>DEX: Optional swap path (wallet or future headless)
+    Server-->>Frontend: Execution result + tx ids
 ```
 
 ### ZuikGuardian
 
-On-chain **daily spending limits** for delegated or automated agents. The contract owner registers agents with a daily cap in microAlgos. Only the registered agent may call `attemptSpend`; the contract reverts if the cap is exceeded or the contract is paused.
+On-chain **policy store** for funded agent sub-accounts. The owner registers each agent with max per trade, daily cap, expiry, execution count, and allowed assets/DEX apps. Autonomous spends use an atomic group: payment from the agent, then `authorize_trade(pay)` (or `authorize_asset_trade` for ASAs). If any assert fails, the whole group reverts.
 
 | Method | Caller | Purpose |
 |--------|--------|---------|
-| `createApplication` | Deployer | Sets contract owner |
-| `optIn` | Agent | Creates local state before registration |
-| `registerAgent(address,uint64)` | Owner | Sets daily cap for an opted-in agent |
-| `updateDailyCap(address,uint64)` | Owner | Updates an agent cap |
-| `attemptSpend(address,uint64)` | Agent | Records spend against daily limit |
-| `setPaused(bool)` | Owner | Emergency pause |
+| `bootstrap` | Owner | Register or update agent policy in box storage |
+| `allowRecipient` | Owner | Allowlist payout addresses per agent |
+| `authorize_trade` | Keeper | Assert payment txn against policy (atomic with pay) |
+| `authorize_asset_trade` | Keeper | Assert ASA transfer against policy |
+| `emergency_stop` / `resume` | Owner | Pause or resume all enforcement |
+| Readonly getters | Any | `getPolicy`, `isRecipientAllowed`, pause state |
 
 Source: `projects/Zuik-contracts/smart_contracts/guardian/contract.algo.ts`
 
-### Delegation verifier and LogicSig
-
-**LogicSig delegation** for server-side automation with strict on-chain guardrails. The user deploys a verifier application with trade size, daily cap, allowed assets, allowed DEX application ID, and expiry round. A templated LogicSig may only submit payments, asset transfers, or application calls that match those rules and include a paired verifier call in the same atomic group.
-
-| Component | Purpose |
-|-----------|---------|
-| `ZuikDelegationVerifier` | Validates each spend against owner policy |
-| `ZuikDelegationLsig` | Template LogicSig bound to verifier and DEX allowlist |
-
-Source: `projects/Zuik-contracts/smart_contracts/lsig_delegation/contract.algo.ts`
-
-Verifier applications deploy **per user** from the Settings screen when enabling LogicSig automation. Policy is stored in Supabase for the cloud agent.
+LogicSig delegation was removed in the June 2026 MVP pivot. Use funded agent wallets plus Guardian instead.
 
 ### TestNet deployment
 
 | Contract | Network | Application ID | Application address | Status |
 |----------|---------|----------------|---------------------|--------|
-| **ZuikGuardian** | TestNet | `762678299` | `Y3L2MA2ZFE7TV2RP6SUH5ULCKVM5K7NSDBRCC6SSPXLCHL3GKWXPL5VR2Y` | Deployed (2026-05-17) |
-| **ZuikDelegationVerifier** | TestNet | Per-user deploy | Per-user | Deployed via Settings |
-| **ZuikDelegationLsig** | TestNet | Per-user template | Per-user | Created with verifier |
+| **ZuikGuardian** | TestNet | `763727553` | `RMZRRH5YEVQCAXLSPYDUG7RTCXNJ6MHA77KGDC3DMNRHG3SYNLVW32YS2M` | Deployed (2026-05-31) |
 
 Deployment artifact: `projects/Zuik-contracts/smart_contracts/artifacts/guardian/deployment.json`
 
-**Configure the frontend** after Guardian deploy:
+**Configure the frontend** (see `projects/Zuik-frontend/.env.template`):
 
 ```bash
-VITE_GUARDIAN_APP_ID=762678299
-VITE_GUARDIAN_APP_ADDRESS=Y3L2MA2ZFE7TV2RP6SUH5ULCKVM5K7NSDBRCC6SSPXLCHL3GKWXPL5VR2Y
+VITE_GUARDIAN_APP_ID=763727553
+VITE_GUARDIAN_APP_ADDRESS=RMZRRH5YEVQCAXLSPYDUG7RTCXNJ6MHA77KGDC3DMNRHG3SYNLVW32YS2M
 ```
+
+**Validate the MVP** (~0.25 ALGO on TestNet): see [docs/testing/README.md](docs/testing/README.md).
 
 **Redeploy contracts** (LocalNet or TestNet):
 
@@ -350,7 +335,7 @@ Integration tests: `npm run test:localnet` and `npm run test:testnet` in `projec
 | **Frontend** | React 18, TypeScript, Vite, React Router, `@xyflow/react`, `@txnlab/use-wallet` |
 | **Backend** | Node.js 20+, Express-style routing, cloud workflow runner |
 | **Smart contracts** | Algorand TypeScript (Puya), AlgoKit CLI, AlgoKit Utils, generated ARC-56 clients |
-| **Blockchain** | `algosdk`, Algorand atomic transaction groups, LogicSig templates |
+| **Blockchain** | `algosdk`, Algorand atomic transaction groups, Guardian enforcement |
 | **AI** | Groq (intent parsing and chat via server proxy) |
 | **Database** | Supabase (workflows, execution history, delegation vault records) |
 | **Voice** | Groq Whisper transcription, ElevenLabs text-to-speech (optional) |
@@ -511,7 +496,7 @@ npm run dev
 |-----------|------------|
 | **Non-custodial** | Zuik cannot move funds without your wallet signature |
 | **Transparent workflows** | Every step visible before approval |
-| **On-chain limits** | Guardian and LogicSig verifier cap automated spending |
+| **On-chain limits** | Guardian `authorize_trade` caps automated agent spending |
 | **Atomic safety** | Multi-step actions avoid partial execution |
 | **You own your keys** | Export, rotate, and disconnect wallets at any time |
 

@@ -1,436 +1,248 @@
 import express from 'express'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createValidatedSupabaseClient } from './supabaseClient.js'
-import algosdk from 'algosdk'
 import { getAlgodClient } from './algorand.js'
-
-const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
+import { storeAgentKey, hasAgentKey, removeAgentKey, getAgentExecutionContext } from './agentSigner.js'
+import { sendAuthorizedPayment } from './guardianExecutor.js'
 
 let sb: SupabaseClient
+
 interface AgentWalletBalance {
   balance: number
   minBalance: number
   available: number
-  usdValue?: number
 }
 
-interface AgentWalletStats {
-  totalFunded: number
-  totalSpent: number
-  transactionCount: number
-  lastActivity?: string
-  dailySpending: number
-  weeklySpending: number
-}
-
-interface AgentWalletActivity {
-  txId: string
-  type: 'funding' | 'delegation' | 'deactivation'
-  amount: number
-  timestamp: string
-  status: 'confirmed' | 'pending' | 'failed'
-  fromAddress?: string
-  toAddress?: string
-}
-
-async function fetchWalletBalance(lsigAddress: string): Promise<AgentWalletBalance> {
+async function fetchWalletBalance(agentAddress: string): Promise<AgentWalletBalance> {
   const algod = getAlgodClient()
   try {
-    const accountInfo = await algod.accountInformation(lsigAddress).do()
-    const balance = Number(accountInfo.amount) / 1_000_000 // Convert to ALGO
+    const accountInfo = await algod.accountInformation(agentAddress).do()
+    const balance = Number(accountInfo.amount) / 1_000_000
     const minBalance = Number(accountInfo.minBalance || 100_000) / 1_000_000
     const available = Math.max(0, balance - minBalance)
-    
-    return {
-      balance,
-      minBalance,
-      available,
-      // TODO: Add USD value conversion using price API
-    }
+    return { balance, minBalance, available }
   } catch (error) {
-    console.warn(`Failed to fetch balance for ${lsigAddress}:`, error)
-    return {
-      balance: 0,
-      minBalance: 0.1,
-      available: 0,
-    }
+    console.warn(`[AgentWallet] Failed to fetch balance for ${agentAddress}:`, error)
+    return { balance: 0, minBalance: 0.1, available: 0 }
   }
 }
 
-async function fetchWalletStats(lsigAddress: string): Promise<AgentWalletStats> {
-  try {
-    // Query funding transactions from the database
-    const { data: fundingTxns, error: fundingError } = await sb
-      .from('agent_wallet_transactions')
-      .select('amount, created_at')
-      .eq('wallet_address', lsigAddress)
-      .eq('transaction_type', 'funding')
-      .eq('status', 'confirmed')
-
-    if (fundingError) {
-      console.warn(`Failed to fetch funding stats for ${lsigAddress}:`, fundingError)
-    }
-
-    // Query spending transactions
-    const { data: spendingTxns, error: spendingError } = await sb
-      .from('agent_wallet_transactions')
-      .select('amount, created_at')
-      .eq('wallet_address', lsigAddress)
-      .eq('transaction_type', 'delegation')
-      .eq('status', 'confirmed')
-
-    if (spendingError) {
-      console.warn(`Failed to fetch spending stats for ${lsigAddress}:`, spendingError)
-    }
-
-    const totalFunded = (fundingTxns || []).reduce((sum, txn) => sum + Number(txn.amount), 0) / 1_000_000
-    const totalSpent = (spendingTxns || []).reduce((sum, txn) => sum + Number(txn.amount), 0) / 1_000_000
-    const transactionCount = (fundingTxns?.length || 0) + (spendingTxns?.length || 0)
-
-    // Calculate daily and weekly spending
-    const now = new Date()
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-    const dailySpending = (spendingTxns || [])
-      .filter(txn => new Date(txn.created_at) > oneDayAgo)
-      .reduce((sum, txn) => sum + Number(txn.amount), 0) / 1_000_000
-
-    const weeklySpending = (spendingTxns || [])
-      .filter(txn => new Date(txn.created_at) > oneWeekAgo)
-      .reduce((sum, txn) => sum + Number(txn.amount), 0) / 1_000_000
-
-    const lastActivity = [...(fundingTxns || []), ...(spendingTxns || [])]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.created_at
-
-    return {
-      totalFunded,
-      totalSpent,
-      transactionCount,
-      lastActivity,
-      dailySpending,
-      weeklySpending,
-    }
-  } catch (error) {
-    console.warn(`Failed to fetch wallet stats for ${lsigAddress}:`, error)
-    return {
-      totalFunded: 0,
-      totalSpent: 0,
-      transactionCount: 0,
-      dailySpending: 0,
-      weeklySpending: 0,
-    }
-  }
-}
-
-async function fetchWalletActivity(lsigAddress: string, limit = 10): Promise<AgentWalletActivity[]> {
-  try {
-    const { data: transactions, error } = await sb
-      .from('agent_wallet_transactions')
-      .select('*')
-      .eq('wallet_address', lsigAddress)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-
-    if (error) {
-      console.warn(`Failed to fetch wallet activity for ${lsigAddress}:`, error)
-      return []
-    }
-
-    return (transactions || []).map(txn => ({
-      txId: txn.transaction_id,
-      type: txn.transaction_type as 'funding' | 'delegation' | 'deactivation',
-      amount: Number(txn.amount) / 1_000_000, // Convert to ALGO
-      timestamp: txn.created_at,
-      status: txn.status as 'confirmed' | 'pending' | 'failed',
-      fromAddress: txn.from_address,
-      toAddress: txn.to_address,
-    }))
-  } catch (error) {
-    console.warn(`Failed to fetch wallet activity for ${lsigAddress}:`, error)
-    return []
-  }
-}
-
-async function recordTransaction(
-  walletAddress: string,
-  transactionId: string,
-  transactionType: 'funding' | 'delegation' | 'deactivation',
-  amount: number,
-  status: 'confirmed' | 'pending' | 'failed' = 'confirmed',
-  fromAddress?: string,
-  toAddress?: string
-): Promise<void> {
-  try {
-    const { error } = await sb
-      .from('agent_wallet_transactions')
-      .insert({
-        wallet_address: walletAddress,
-        transaction_id: transactionId,
-        transaction_type: transactionType,
-        amount: amount.toString(),
-        status,
-        from_address: fromAddress,
-        to_address: toAddress,
-        network: process.env.ALGOD_NETWORK || 'testnet',
-      })
-
-    if (error) {
-      console.error('Failed to record transaction:', error)
-    }
-  } catch (error) {
-    console.error('Failed to record transaction:', error)
-  }
-}
-
+/**
+ * REST routes for the funded agent sub-account model.
+ *
+ * - POST /register   stores the agent mnemonic in the server keystore (never persisted to DB)
+ *                    and upserts public metadata into the agent_wallets table.
+ * - GET  /:agentAddress/balance   reads the on-chain balance of an agent sub-account.
+ * - GET  /by-wallet/:ownerAddress lists agent wallets owned by a connected wallet.
+ *
+ * The agent secret is NEVER stored in Supabase or returned to the client.
+ */
 export async function createAgentWalletRouter(): Promise<express.Router> {
   if (!sb) {
     sb = await createValidatedSupabaseClient()
   }
   const router = express.Router()
-  // Get enhanced wallet data with balance, stats, and activity
-  router.get('/wallets/:walletAddress', async (req, res) => {
-    try {
-      const { walletAddress } = req.params
-      
-      // Get LogicSig vaults for the wallet
-      const { data: vaults, error } = await sb
-        .from('logic_sig_vaults')
-        .select('*')
-        .eq('wallet_address', walletAddress)
-        .order('created_at', { ascending: false })
 
-      if (error) {
-        return res.status(500).json({ error: 'Failed to fetch wallets' })
+  router.post('/register', async (req, res) => {
+    try {
+      const { workflowId, ownerAddress, agentAddress, mnemonic, guardianAppId, budgetMicroAlgos } = req.body ?? {}
+
+      if (!ownerAddress || !agentAddress || !mnemonic) {
+        return res.status(400).json({ error: 'ownerAddress, agentAddress and mnemonic are required' })
       }
 
-      // Enhance each vault with balance, stats, and activity
-      const enhancedVaults = await Promise.all(
-        (vaults || []).map(async (vault) => {
-          const accountAddress = vault.wallet_address
-          const [balance, stats, activity] = await Promise.all([
-            fetchWalletBalance(accountAddress),
-            fetchWalletStats(accountAddress),
-            fetchWalletActivity(accountAddress),
-          ])
+      // Persist the secret server-side only. Throws if the mnemonic does not derive agentAddress.
+      storeAgentKey(agentAddress, mnemonic)
 
-          return {
-            ...vault,
-            balance,
-            stats,
-            recentActivity: activity,
-          }
-        })
-      )
+      // workflow_id is a UUID column; ignore non-UUID values (e.g. demo placeholders).
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      const safeWorkflowId = typeof workflowId === 'string' && UUID_RE.test(workflowId) ? workflowId : null
 
-      res.json({ wallets: enhancedVaults })
+      const { error } = await sb
+        .from('agent_wallets')
+        .upsert(
+          {
+            workflow_id: safeWorkflowId,
+            wallet_address: ownerAddress,
+            agent_address: agentAddress,
+            guardian_app_id: guardianAppId ? Number(guardianAppId) : null,
+            budget_microalgos: budgetMicroAlgos ? Number(budgetMicroAlgos) : null,
+            status: 'active',
+          },
+          { onConflict: 'agent_address' },
+        )
+
+      if (error) {
+        console.error('[AgentWallet] Failed to persist metadata:', error.message)
+        return res.status(500).json({ error: 'Failed to persist agent wallet metadata' })
+      }
+
+      // Do not echo the mnemonic back.
+      res.json({ success: true, agentAddress })
     } catch (error) {
-      console.error('Agent wallet fetch error:', error)
-      res.status(500).json({ error: 'Internal server error' })
+      const message = error instanceof Error ? error.message : 'Failed to register agent wallet'
+      console.error('[AgentWallet] register error:', message)
+      res.status(500).json({ error: message })
     }
   })
 
-  // Get balance for a specific agent wallet
-  router.get('/balance/:lsigAddress', async (req, res) => {
+  router.get('/:agentAddress/balance', async (req, res) => {
     try {
-      const { lsigAddress } = req.params
-      const balance = await fetchWalletBalance(lsigAddress)
-      res.json({ balance })
+      const { agentAddress } = req.params
+      const balance = await fetchWalletBalance(agentAddress)
+      res.json({ balance, hasKey: hasAgentKey(agentAddress) })
     } catch (error) {
-      console.error('Balance fetch error:', error)
+      console.error('[AgentWallet] balance error:', error)
       res.status(500).json({ error: 'Failed to fetch balance' })
     }
   })
 
-  // Get stats for a specific agent wallet
-  router.get('/stats/:lsigAddress', async (req, res) => {
+  router.get('/by-wallet/:ownerAddress', async (req, res) => {
     try {
-      const { lsigAddress } = req.params
-      const stats = await fetchWalletStats(lsigAddress)
-      res.json({ stats })
+      const { ownerAddress } = req.params
+      const { data, error } = await sb
+        .from('agent_wallets')
+        .select('id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, created_at')
+        .eq('wallet_address', ownerAddress)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        return res.status(500).json({ error: 'Failed to fetch agent wallets' })
+      }
+      res.json({ wallets: data ?? [] })
     } catch (error) {
-      console.error('Stats fetch error:', error)
-      res.status(500).json({ error: 'Failed to fetch stats' })
+      console.error('[AgentWallet] by-wallet error:', error)
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
-  // Get activity for a specific agent wallet
-  router.get('/activity/:lsigAddress', async (req, res) => {
+  router.patch('/:agentAddress', async (req, res) => {
     try {
-      const { lsigAddress } = req.params
-      const limit = parseInt(req.query.limit as string) || 20
-      const activity = await fetchWalletActivity(lsigAddress, limit)
-      res.json({ activity })
-    } catch (error) {
-      console.error('Activity fetch error:', error)
-      res.status(500).json({ error: 'Failed to fetch activity' })
-    }
-  })
+      const { agentAddress } = req.params
+      const { status, budgetMicroAlgos, ownerAddress } = req.body ?? {}
 
-  // Record a funding transaction
-  router.post('/record-funding', async (req, res) => {
-    try {
-      const { walletAddress, transactionId, amount, fromAddress } = req.body
-
-      if (!walletAddress || !transactionId || !amount) {
-        return res.status(400).json({ error: 'Missing required fields' })
+      if (!ownerAddress) {
+        return res.status(400).json({ error: 'ownerAddress is required' })
       }
 
-      await recordTransaction(
-        walletAddress,
-        transactionId,
-        'funding',
-        Number(amount) * 1_000_000, // Convert to microALGO
-        'confirmed',
-        fromAddress,
-        walletAddress
-      )
-
-      res.json({ success: true })
-    } catch (error) {
-      console.error('Record funding error:', error)
-      res.status(500).json({ error: 'Failed to record funding' })
-    }
-  })
-
-  // Record a delegation transaction
-  router.post('/record-delegation', async (req, res) => {
-    try {
-      const { walletAddress, transactionId, amount, toAddress } = req.body
-
-      if (!walletAddress || !transactionId || !amount) {
-        return res.status(400).json({ error: 'Missing required fields' })
+      const patch: Record<string, unknown> = {}
+      if (status === 'active' || status === 'inactive' || status === 'archived') {
+        patch.status = status
+      }
+      if (budgetMicroAlgos != null) {
+        const n = Number(budgetMicroAlgos)
+        if (!Number.isFinite(n) || n < 0) {
+          return res.status(400).json({ error: 'budgetMicroAlgos must be a non-negative number' })
+        }
+        patch.budget_microalgos = n
+      }
+      if (Object.keys(patch).length === 0) {
+        return res.status(400).json({ error: 'No valid fields to update' })
       }
 
-      await recordTransaction(
-        walletAddress,
-        transactionId,
-        'delegation',
-        Number(amount) * 1_000_000, // Convert to microALGO
-        'confirmed',
-        walletAddress,
-        toAddress
-      )
-
-      res.json({ success: true })
-    } catch (error) {
-      console.error('Record delegation error:', error)
-      res.status(500).json({ error: 'Failed to record delegation' })
-    }
-  })
-
-  // Get auto-funding settings for a wallet
-  router.get('/auto-funding/:walletAddress/:lsigAddress', async (req, res) => {
-    try {
-      const { walletAddress, lsigAddress } = req.params
-
-      const { data: settings, error } = await sb
-        .from('agent_wallet_auto_funding')
-        .select('*')
-        .eq('wallet_address', walletAddress)
-        .eq('lsig_address', lsigAddress)
+      const { data, error } = await sb
+        .from('agent_wallets')
+        .update(patch)
+        .eq('agent_address', agentAddress)
+        .eq('wallet_address', ownerAddress)
+        .select('id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, created_at')
         .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') {
-        return res.status(500).json({ error: 'Failed to fetch auto-funding settings' })
+      if (error) {
+        return res.status(500).json({ error: 'Failed to update agent wallet' })
       }
-
-      res.json({ settings: settings || null })
+      if (!data) {
+        return res.status(404).json({ error: 'Agent wallet not found for this owner' })
+      }
+      res.json({ wallet: data })
     } catch (error) {
-      console.error('Auto-funding fetch error:', error)
-      res.status(500).json({ error: 'Failed to fetch auto-funding settings' })
+      console.error('[AgentWallet] patch error:', error)
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
-  // Update auto-funding settings for a wallet
-  router.post('/auto-funding', async (req, res) => {
+  router.post('/:agentAddress/send-payment', async (req, res) => {
     try {
-      const { walletAddress, lsigAddress, enabled, threshold, fundingAmount } = req.body
+      const { agentAddress } = req.params
+      const { ownerAddress, recipient, amountMicroAlgos, assetId = 0, note } = req.body ?? {}
 
-      if (!walletAddress || !lsigAddress) {
-        return res.status(400).json({ error: 'Missing required fields' })
+      if (!ownerAddress || !recipient || amountMicroAlgos == null) {
+        return res.status(400).json({ error: 'ownerAddress, recipient, and amountMicroAlgos are required' })
+      }
+
+      const { data: row, error } = await sb
+        .from('agent_wallets')
+        .select('agent_address, wallet_address, guardian_app_id, status')
+        .eq('agent_address', agentAddress)
+        .eq('wallet_address', ownerAddress)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      if (error || !row) {
+        return res.status(404).json({ error: 'Agent wallet not found for this owner' })
+      }
+
+      if (Number(assetId) !== 0) {
+        return res.status(400).json({ error: 'Agent path supports ALGO (asset 0) only' })
+      }
+
+      const amount = Number(amountMicroAlgos)
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ error: 'amountMicroAlgos must be a positive number' })
+      }
+
+      const agentContext = await getAgentExecutionContext(agentAddress)
+      if (!agentContext) {
+        return res.status(400).json({ error: 'Agent signing key not available on server' })
+      }
+
+      const result = await sendAuthorizedPayment({
+        agentAddress,
+        recipient: String(recipient),
+        amountMicroAlgos: BigInt(Math.round(amount)),
+        guardianAppId: agentContext.guardianAppId,
+        signer: agentContext.signer,
+        note: typeof note === 'string' ? note : undefined,
+      })
+
+      res.json({
+        txIds: result.txIds,
+        txId: result.txIds[0] ?? '',
+        confirmedRound: result.confirmedRound,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Agent payment failed'
+      console.error('[AgentWallet] send-payment error:', message)
+      res.status(500).json({ error: message })
+    }
+  })
+
+  router.delete('/:agentAddress', async (req, res) => {
+    try {
+      const { agentAddress } = req.params
+      const ownerAddress = (req.query.ownerAddress as string) || (req.body?.ownerAddress as string)
+
+      if (!ownerAddress) {
+        return res.status(400).json({ error: 'ownerAddress is required' })
       }
 
       const { error } = await sb
-        .from('agent_wallet_auto_funding')
-        .upsert({
-          wallet_address: walletAddress,
-          lsig_address: lsigAddress,
-          enabled: Boolean(enabled),
-          threshold_algo: threshold ? Number(threshold) : 1,
-          funding_amount_algo: fundingAmount ? Number(fundingAmount) : 5,
-          updated_at: new Date().toISOString(),
-        })
+        .from('agent_wallets')
+        .update({ status: 'archived' })
+        .eq('agent_address', agentAddress)
+        .eq('wallet_address', ownerAddress)
 
       if (error) {
-        return res.status(500).json({ error: 'Failed to update auto-funding settings' })
+        return res.status(500).json({ error: 'Failed to archive agent wallet' })
       }
 
+      removeAgentKey(agentAddress)
       res.json({ success: true })
     } catch (error) {
-      console.error('Auto-funding update error:', error)
-      res.status(500).json({ error: 'Failed to update auto-funding settings' })
+      console.error('[AgentWallet] delete error:', error)
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
   return router
 }
-
-// Database table creation SQL (run this to set up the required tables)
-export const AGENT_WALLET_TABLES_SQL = `
--- Agent wallet transaction history
-CREATE TABLE IF NOT EXISTS agent_wallet_transactions (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  wallet_address TEXT NOT NULL,
-  transaction_id TEXT NOT NULL,
-  transaction_type TEXT NOT NULL CHECK (transaction_type IN ('funding', 'delegation', 'deactivation')),
-  amount TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'pending', 'failed')),
-  from_address TEXT,
-  to_address TEXT,
-  network TEXT NOT NULL DEFAULT 'testnet',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(transaction_id, network)
-);
-
--- Auto-funding settings
-CREATE TABLE IF NOT EXISTS agent_wallet_auto_funding (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  wallet_address TEXT NOT NULL,
-  lsig_address TEXT NOT NULL,
-  enabled BOOLEAN NOT NULL DEFAULT false,
-  threshold_algo DECIMAL NOT NULL DEFAULT 1.0,
-  funding_amount_algo DECIMAL NOT NULL DEFAULT 5.0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(wallet_address, lsig_address)
-);
-
--- Enable row level security
-ALTER TABLE agent_wallet_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agent_wallet_auto_funding ENABLE ROW LEVEL SECURITY;
-
--- Create policies for agent wallet transactions
-CREATE POLICY "Users see own agent wallet transactions"
-  ON agent_wallet_transactions FOR SELECT
-  USING (true);
-
-CREATE POLICY "Users manage own agent wallet transactions"
-  ON agent_wallet_transactions FOR ALL
-  USING (true);
-
--- Create policies for auto-funding settings
-CREATE POLICY "Users see own auto-funding settings"
-  ON agent_wallet_auto_funding FOR SELECT
-  USING (true);
-
-CREATE POLICY "Users manage own auto-funding settings"
-  ON agent_wallet_auto_funding FOR ALL
-  USING (true);
-
--- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_agent_wallet_transactions_wallet_address ON agent_wallet_transactions(wallet_address);
-CREATE INDEX IF NOT EXISTS idx_agent_wallet_transactions_created_at ON agent_wallet_transactions(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_agent_wallet_auto_funding_wallet_lsig ON agent_wallet_auto_funding(wallet_address, lsig_address);
-`

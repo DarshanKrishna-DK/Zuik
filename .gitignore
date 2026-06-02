@@ -178,6 +178,9 @@ reference_docs/
 .firecrawl/
 employee-payroll-demo.xlsx
 .playwright-mcp/
+projects/Zuik-frontend/e2e/report/
+projects/Zuik-frontend/test-results/
+projects/Zuik-frontend/playwright-report/
 
 # ===== IDE =====
 .vscode/

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "Guardian minimal payment (TestNet)",
+  "nodes": [
+    {
+      "id": "trigger-1",
+      "type": "generic",
+      "position": { "x": 80, "y": 200 },
+      "data": {
+        "blockId": "manual-trigger",
+        "label": "Manual trigger",
+        "config": {}
+      }
+    },
+    {
+      "id": "pay-1",
+      "type": "generic",
+      "position": { "x": 360, "y": 200 },
+      "data": {
+        "blockId": "send-payment",
+        "label": "Send payment",
+        "config": {
+          "amount": "0.05",
+          "recipient": "ZMDNZ4VGMVTKWIJNTYUGMBJR2GAKWVDCQ4WOGNGMITYAJ3BDSA7OOWXBYA",
+          "note": "Zuik guardian test"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-trigger-pay",
+      "source": "trigger-1",
+      "target": "pay-1",
+      "sourceHandle": null,
+      "targetHandle": null
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { sendTelegram, fetchPrice, executeWorkflowHeadless } from './workflowRunner.js'
 import { buildWorkflowFromText } from './workflowIntentGroq.js'
 import { workflowNeedsZuikApp } from './flowSigner.js'
-import { fetchActiveLogicSigVault } from './logicSigDelegation.js'
+import { getAgentExecutionContextForWorkflow } from './agentSigner.js'
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? ''
 const ZUIK_APP_URL = (process.env.ZUIK_APP_URL ?? 'https://zuik.vercel.app').replace(/\/$/, '')
@@ -528,10 +528,7 @@ async function handleRunWorkflowExecute(chatId: number, workflowId: string) {
     return
   }
 
-  const delegationVault = await fetchActiveLogicSigVault(supabase, walletAddress)
-  const hasDelegation = Boolean(delegationVault)
-
-  if (workflowNeedsZuikApp(flowJson as Parameters<typeof workflowNeedsZuikApp>[0], { hasDelegation })) {
+  if (workflowNeedsZuikApp(flowJson as Parameters<typeof workflowNeedsZuikApp>[0])) {
     await sendReply(
       chatId,
       [
@@ -546,12 +543,13 @@ async function handleRunWorkflowExecute(chatId: number, workflowId: string) {
   await sendReply(chatId, `Running <b>${escapeHtml(wf.name || 'workflow')}</b> on the server…`)
 
   try {
+    const agentContext = await getAgentExecutionContextForWorkflow(supabase, wf.id)
     await executeWorkflowHeadless(
       flowJson as Parameters<typeof executeWorkflowHeadless>[0],
       walletAddress,
       wf.name,
       getLinkedTelegramChats,
-      delegationVault,
+      agentContext,
     )
     await sendReply(chatId, `Done. Finished running "${escapeHtml(wf.name || 'workflow')}".`)
   } catch (e) {

@@ -42,6 +42,7 @@ import Sidebar from '../components/flow/Sidebar'
 import GenericNode from '../components/flow/GenericNode'
 import TransactionPanel from '../components/flow/TransactionPanel'
 import AgentControls from '../components/flow/AgentControls'
+import ExecutionModeSelector from '../components/flow/ExecutionModeSelector'
 import ExecutionLog from '../components/flow/ExecutionLog'
 import ChatPanel from '../components/flow/ChatPanel'
 import SchedulePanel from '../components/flow/SchedulePanel'
@@ -71,7 +72,13 @@ import {
 import { WorkflowSelectOptionsProvider } from '../context/WorkflowSelectOptionsContext'
 import { fetchAlgoUsdPrice, estimateStepFee } from '../services/transactionSimulator'
 import { scheduleWorkflowStart, deactivateSchedule } from '../services/workflowScheduler'
-import { getActiveLogicSigVault } from '../services/logicSigDelegation'
+import {
+  type ExecutionMode,
+  type AgentReadiness,
+  getStoredExecutionMode,
+  setStoredExecutionMode,
+  checkAgentReadiness,
+} from '../lib/executionMode'
 
 /* ── Inline SVG Icons ─────────────────────────────────── */
 
@@ -184,7 +191,9 @@ export default function Builder() {
   const navigate = useNavigate()
   const [prefillIntent, setPrefillIntent] = useState<string | null>(null)
   const prefillAppliedRef = useRef<string | null>(null)
-  const [delegationAvailable, setDelegationAvailable] = useState(false)
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>(() => getStoredExecutionMode(null))
+  const [agentReadiness, setAgentReadiness] = useState<AgentReadiness | null>(null)
+  const agentAddressRef = useRef<string | undefined>(undefined)
 
   const refreshSpawnWorkflowOptions = useCallback(async () => {
     if (!activeAddress || !isSupabaseConfigured()) {
@@ -202,18 +211,27 @@ export default function Builder() {
   }, [activeAddress])
 
   useEffect(() => {
-    if (!activeAddress || !isSupabaseConfigured()) {
-      setDelegationAvailable(false)
-      return
-    }
-    getActiveLogicSigVault(activeAddress, 0) // Default to ALGO (asset 0)
-      .then((vault) => setDelegationAvailable(Boolean(vault)))
-      .catch(() => setDelegationAvailable(false))
-  }, [activeAddress])
-
-  useEffect(() => {
     void refreshSpawnWorkflowOptions()
   }, [refreshSpawnWorkflowOptions])
+
+  useEffect(() => {
+    setExecutionMode(getStoredExecutionMode(workflowId))
+  }, [workflowId])
+
+  const flowNodesForMode = useMemo((): FlowNode[] => {
+    return nodes.map((n) => ({
+      id: n.id,
+      data: n.data as FlowNode['data'],
+    }))
+  }, [nodes])
+
+  useEffect(() => {
+    if (executionMode !== 'agent' || !agentReadiness?.ok) {
+      agentAddressRef.current = undefined
+      return
+    }
+    agentAddressRef.current = agentReadiness.wallet.agent_address
+  }, [executionMode, agentReadiness])
 
   useEffect(() => {
     const state = location.state as { prefillIntent?: string } | null
@@ -298,20 +316,14 @@ export default function Builder() {
   }, [nodes, edges])
 
   const requiresSigner = useMemo(() => {
-    const signerBlocks = new Set(['swap-token', 'send-payment', 'opt-in-asa', 'create-asa', 'call-contract'])
-    const delegationBlocks = new Set(['send-payment'])
-    const hasSignerBlocks = nodes.some((node) => {
+    // send-payment executes headless via the server agent sub-account + Guardian,
+    // so it does not force the browser to stay open. Other on-chain blocks still do.
+    const browserSignerBlocks = new Set(['swap-token', 'opt-in-asa', 'create-asa', 'call-contract'])
+    return nodes.some((node) => {
       const blockId = (node.data as Record<string, unknown>)?.blockId as string | undefined
-      return blockId ? signerBlocks.has(blockId) : false
+      return blockId ? browserSignerBlocks.has(blockId) : false
     })
-    if (!hasSignerBlocks) return false
-    const hasUnsupported = nodes.some((node) => {
-      const blockId = (node.data as Record<string, unknown>)?.blockId as string | undefined
-      return blockId ? signerBlocks.has(blockId) && !delegationBlocks.has(blockId) : false
-    })
-    if (!hasUnsupported && delegationAvailable) return false
-    return true
-  }, [nodes, delegationAvailable])
+  }, [nodes])
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -511,6 +523,23 @@ export default function Builder() {
       return
     }
 
+    if (executionMode === 'agent') {
+      const readiness = await checkAgentReadiness(workflowIdRef.current, flowNodesForMode, activeAddress)
+      setAgentReadiness(readiness)
+      if (!readiness.ok) {
+        addLog({
+          nodeId: '',
+          blockId: 'agent-wallet',
+          blockName: 'Execution',
+          type: 'error',
+          message: readiness.message,
+        })
+        setLogOpen(true)
+        return
+      }
+      agentAddressRef.current = readiness.wallet.agent_address
+    }
+
     setLogOpen(true)
 
     agentHandleRef.current?.stop()
@@ -530,9 +559,9 @@ export default function Builder() {
     let execId: string | null = null
     const startTime = Date.now()
     let execFinalized = false
-    if (workflowId && isSupabaseConfigured()) {
+    if (workflowIdRef.current && isSupabaseConfigured()) {
       try {
-        execId = await recordExecution(workflowId, activeAddress, flowNodes.length)
+        execId = await recordExecution(workflowIdRef.current, activeAddress, flowNodes.length)
       } catch { /* non-blocking */ }
     }
 
@@ -573,6 +602,14 @@ export default function Builder() {
       } catch { /* non-blocking */ }
     }
 
+    const agentCtx = executionMode === 'agent' && agentAddressRef.current
+      ? {
+          executionMode: 'agent' as const,
+          agentAddress: agentAddressRef.current,
+          ownerAddress: activeAddress,
+        }
+      : {}
+
     if (hasTriggers) {
       const handle = subscribeAgent(flowNodes, flowEdges, {
         sender: activeAddress,
@@ -584,6 +621,7 @@ export default function Builder() {
         onNodeStatusChange: updateNodeStatus,
         abortSignal: abortController.signal,
         workflowId: workflowId ?? undefined,
+        ...agentCtx,
       }, setAgentStatus, workflowId, (evResult) => {
         setAgentStatus('idle')
         if (evResult.success) {
@@ -610,6 +648,7 @@ export default function Builder() {
         onNodeStatusChange: updateNodeStatus,
         abortSignal: abortController.signal,
         workflowId: workflowId ?? undefined,
+        ...agentCtx,
       }).then(() => {
         setAgentStatus('idle')
         void finishExecution('success')
@@ -627,7 +666,7 @@ export default function Builder() {
         resume() { setAgentStatus('running') },
       }
     }
-  }, [nodes, edges, transactionSigner, activeAddress, addLog, updateNodeStatus, workflowId])
+  }, [nodes, edges, transactionSigner, activeAddress, addLog, updateNodeStatus, workflowId, executionMode, flowNodesForMode])
 
   const handleScheduleRun = useCallback(async (runAtLocal: string) => {
     if (!activeAddress) {
@@ -657,11 +696,19 @@ export default function Builder() {
     }
 
     const flowJson = buildFlowJson()
+    let scheduleRequiresSigner = requiresSigner
+    let scheduleAgentAddress: string | undefined
+    if (executionMode === 'agent' && agentReadiness?.ok) {
+      scheduleRequiresSigner = false
+      scheduleAgentAddress = agentReadiness.wallet.agent_address
+    }
+
     const scheduleId = await scheduleWorkflowStart({
       workflowId: id,
       walletAddress: activeAddress,
       runAtIso: runAt.toISOString(),
-      requiresSigner,
+      requiresSigner: scheduleRequiresSigner,
+      agentAddress: scheduleAgentAddress,
       flowJson,
     })
     if (!scheduleId) {
@@ -676,7 +723,7 @@ export default function Builder() {
       message: `Scheduled run at ${runAt.toLocaleString()}`,
     })
     return { ok: true, message: `Scheduled for ${runAt.toLocaleString()}` }
-  }, [activeAddress, addLog, buildFlowJson, nodes.length, requiresSigner, saveToSupabase])
+  }, [activeAddress, addLog, buildFlowJson, nodes.length, requiresSigner, saveToSupabase, executionMode, agentReadiness])
 
   const handleCancelSchedule = useCallback(async () => {
     const id = workflowIdRef.current
@@ -1037,6 +1084,19 @@ export default function Builder() {
           />
           <div className="zuik-agent-separator" />
 
+          <ExecutionModeSelector
+            mode={executionMode}
+            onModeChange={(m) => {
+              setStoredExecutionMode(workflowId, m)
+              setExecutionMode(m)
+            }}
+            workflowId={workflowId}
+            flowNodes={flowNodesForMode}
+            onReadinessChange={setAgentReadiness}
+            compact
+          />
+          <div className="zuik-agent-separator" />
+
           <AgentControls
             status={agentStatus}
             onStart={handleStartAgent}
@@ -1162,6 +1222,8 @@ export default function Builder() {
           onHighlightNode={handleHighlightNode}
           workflowId={workflowId}
           workflowName={workflowName}
+          executionMode={executionMode}
+          agentAddress={agentReadiness?.ok ? agentReadiness.wallet.agent_address : undefined}
         />
         <ExecutionLog
           isOpen={logOpen}

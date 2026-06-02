@@ -20,6 +20,9 @@ function wrapActionExecutor(
       sender: context.sender,
       signer: context.signer,
       algorand: context.algorand,
+      executionMode: context.executionMode,
+      agentAddress: context.agentAddress,
+      ownerAddress: context.ownerAddress ?? context.sender,
     })
   }
 }

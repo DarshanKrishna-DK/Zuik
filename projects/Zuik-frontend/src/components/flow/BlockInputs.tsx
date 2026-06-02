@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import type { ConfigField } from '../../lib/blockRegistry'
+import TokenPicker from './TokenPicker'
 
 interface BlockInputsProps {
   fields: ConfigField[]
@@ -50,7 +51,7 @@ export default function BlockInputs({ fields, values, onChange, extraSelectOptio
 
         return (
           <div key={field.id} className="zuik-node-field">
-            <label>{field.label}</label>
+            {field.type !== 'token' && <label>{field.label}</label>}
 
             {field.type === 'select' ? (
               <div style={{ position: 'relative' }}>
@@ -100,6 +101,12 @@ export default function BlockInputs({ fields, values, onChange, extraSelectOptio
               </div>
             ) : field.type === 'password' ? (
               <input type="password" placeholder={field.placeholder} value={currentVal} onChange={handleChange(field.id, field.type)} onKeyDown={stopRfKeys} />
+            ) : field.type === 'token' ? (
+              <TokenPicker
+                label={field.label}
+                value={currentVal}
+                onChange={(v) => onChange(field.id, v)}
+              />
             ) : (
               <input
                 type={field.type === 'number' && !hasTemplateExpr(currentVal) ? 'number' : 'text'}

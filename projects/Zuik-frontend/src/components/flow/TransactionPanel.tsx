@@ -20,6 +20,8 @@ import {
   recordExecution as recordSupabaseExecution,
   completeExecution as completeSupabaseExecution,
 } from '../../services/supabase'
+import type { ExecutionMode } from '../../lib/executionMode'
+import { checkAgentReadiness } from '../../lib/executionMode'
 import type { Node, Edge } from '@xyflow/react'
 
 /* ── Inline SVG Icons ─────────────────────────── */
@@ -123,6 +125,8 @@ export interface TransactionPanelProps {
   onHighlightNode?: (nodeId: string) => void
   workflowId?: string | null
   workflowName?: string
+  executionMode?: ExecutionMode
+  agentAddress?: string
 }
 
 export default function TransactionPanel({
@@ -133,6 +137,8 @@ export default function TransactionPanel({
   onHighlightNode,
   workflowId,
   workflowName,
+  executionMode = 'user',
+  agentAddress,
 }: TransactionPanelProps) {
   const { transactionSigner, activeAddress } = useWallet()
   const { enqueueSnackbar } = useSnackbar()
@@ -205,6 +211,11 @@ export default function TransactionPanel({
   const allErrors: SimulationWarning[] = [
     ...(safety?.errors ?? []),
   ]
+  const flowNodesPreview: FlowNode[] = nodes.map((n) => ({
+    id: n.id,
+    data: n.data as FlowNode['data'],
+  }))
+
   const canExecute =
     phase === 'review' &&
     allErrors.length === 0 &&
@@ -222,6 +233,20 @@ export default function TransactionPanel({
       return
     }
 
+    let resolvedAgentAddress = agentAddress
+    if (executionMode === 'agent') {
+      const readiness = await checkAgentReadiness(
+        workflowId ?? null,
+        flowNodesPreview,
+        activeAddress,
+      )
+      if (!readiness.ok) {
+        enqueueSnackbar(readiness.message, { variant: 'warning' })
+        return
+      }
+      resolvedAgentAddress = readiness.wallet.agent_address
+    }
+
     setPhase('executing')
     setGlobalError(null)
 
@@ -235,10 +260,7 @@ export default function TransactionPanel({
     const nodeIdToStepIndex = new Map<string, number>()
     actionBlocks.forEach((b, i) => nodeIdToStepIndex.set(b.nodeId, i + 1))
 
-    const flowNodes: FlowNode[] = nodes.map((n) => ({
-      id: n.id,
-      data: n.data as FlowNode['data'],
-    }))
+    const flowNodes = flowNodesPreview
     const flowEdges: FlowEdge[] = edges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -264,6 +286,9 @@ export default function TransactionPanel({
         variables,
         blockOutputs,
         workflowId: workflowId ?? undefined,
+        executionMode,
+        agentAddress: executionMode === 'agent' ? resolvedAgentAddress : undefined,
+        ownerAddress: activeAddress,
         log: (entry) => {
           const stepIdx = nodeIdToStepIndex.get(entry.nodeId)
           if (!stepIdx) return
@@ -401,6 +426,18 @@ export default function TransactionPanel({
                 <XCircleIcon size={14} /> Errors ({allErrors.length})
               </div>
               {allErrors.map((w, i) => <WarningBadge key={`err-${i}`} w={w} />)}
+            </div>
+          )}
+
+          {executionMode === 'agent' && phase === 'review' && (
+            <div className="sim-section">
+              <div className="sim-section-title" style={{ color: 'var(--z-success)' }}>
+                <ZapIcon size={14} /> Agent wallet mode
+              </div>
+              <p className="sim-agent-mode-note" style={{ margin: 0, fontSize: 13, color: 'var(--z-text-dim)' }}>
+                ALGO send-payment steps are signed by your workflow agent on the server (Guardian limits apply).
+                You only sign if you fund the agent or use swap blocks that need your wallet.
+              </p>
             </div>
           )}
 

@@ -22,6 +22,7 @@ export default defineConfig({
       '/api/ai': { target: serverUrl, changeOrigin: true },
       '/api/market': { target: serverUrl, changeOrigin: true },
       '/api/agent-wallets': { target: serverUrl, changeOrigin: true },
+      '/api/workflows': { target: serverUrl, changeOrigin: true },
       '/api/voice': { target: voiceUrl, changeOrigin: true },
       '/api/coingecko': {
         target: 'https://api.coingecko.com',

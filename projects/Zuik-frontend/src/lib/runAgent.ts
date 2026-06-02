@@ -4,7 +4,7 @@ import { getBlockById } from './blockRegistry'
 import type { BlockCategory } from './blockRegistry'
 import { allExecutors } from './executors'
 import { saveSchedule, deactivateSchedule, recordScheduleIteration } from '../services/workflowScheduler'
-import { getActiveLogicSigVault } from '../services/logicSigDelegation'
+import { getAgentWallet } from '../services/agentWallet'
 
 /**
  * Creates a Web Worker-based interval that is NOT throttled when the tab
@@ -188,6 +188,12 @@ export interface AgentContext {
   parentWorkflowId?: string
   /** Optional current node ID for logging */
   currentNodeId?: string
+  /** Who signs on-chain txs: connected wallet vs server agent sub-account */
+  executionMode?: 'user' | 'agent'
+  /** Agent sub-account address when executionMode is agent */
+  agentAddress?: string
+  /** Owner wallet (for agent payment API authorization) */
+  ownerAddress?: string
 }
 
 /**
@@ -466,10 +472,12 @@ export function subscribeAgent(
     })
   }
 
+  // send-payment runs headless via the server agent sub-account + Guardian atomic group.
+  // The remaining on-chain blocks still need the browser wallet signer.
   const onChainBlocks = new Set(['send-payment', 'swap-token', 'opt-in-asa', 'create-asa', 'call-contract'])
-  const delegationBlocks = new Set(['send-payment'])
-  const hasOnChainActions = nodes.some((n) => onChainBlocks.has(n.data.blockId))
-  const hasUnsupportedOnChain = nodes.some((n) => onChainBlocks.has(n.data.blockId) && !delegationBlocks.has(n.data.blockId))
+  const headlessBlocks = new Set(['send-payment'])
+  const hasSendPayment = nodes.some((n) => n.data.blockId === 'send-payment')
+  const hasUnsupportedOnChain = nodes.some((n) => onChainBlocks.has(n.data.blockId) && !headlessBlocks.has(n.data.blockId))
 
   const scheduleIds: string[] = []
 
@@ -485,10 +493,14 @@ export function subscribeAgent(
 
       if (workflowId) {
         ;(async () => {
-          let requiresSigner = hasOnChainActions
-          if (hasOnChainActions && !hasUnsupportedOnChain && context.sender) {
-            const vault = await getActiveLogicSigVault(context.sender, 0) // Default to ALGO (asset 0)
-            requiresSigner = !vault
+          // A schedule can run headless only when its on-chain action is send-payment
+          // backed by a registered agent sub-account. Anything else needs the browser.
+          let requiresSigner = hasUnsupportedOnChain
+          let agentAddress: string | undefined
+          if (!hasUnsupportedOnChain && hasSendPayment && context.sender) {
+            const agentWallet = await getAgentWallet(workflowId).catch(() => null)
+            agentAddress = agentWallet?.agent_address
+            requiresSigner = !agentAddress
           }
           const id = await saveSchedule({
             workflowId,
@@ -496,6 +508,7 @@ export function subscribeAgent(
             intervalSec,
             maxIterations: maxIterations === Infinity ? null : maxIterations,
             requiresSigner,
+            agentAddress,
             flowJson: {
               nodes: nodes.map((n) => ({ id: n.id, data: n.data })),
               edges: edges.map((e) => ({ source: e.source, target: e.target })),

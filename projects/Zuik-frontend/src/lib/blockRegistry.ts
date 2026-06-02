@@ -8,6 +8,7 @@ import {
   // Multi-Agent Icons
   Zap, Split, Combine, Users, Radio, RadioIcon, 
   Eye, Settings, Network,
+  Bot,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -168,6 +169,33 @@ const blocks: BlockDefinition[] = [
       { id: 'amount', label: 'Amount', type: 'number' },
       { id: 'asset', label: 'Asset', type: 'token' },
       { id: 'note', label: 'Note', type: 'text', placeholder: 'Optional tx note' },
+    ],
+  },
+  {
+    id: 'ai-agent',
+    name: 'AI Agent',
+    description:
+      'Server-side AI decision step. Reads your agent balance, live market data, and the on-chain Guardian limits, ' +
+      'then makes ONE Groq decision (pay / hold / notify) from your strategy. Any payment still goes through the ' +
+      'Guardian contract, so the AI can never exceed your on-chain limits.',
+    category: 'action',
+    icon: Bot,
+    inputs: [{ id: 'trigger', label: 'Trigger', type: 'any' }],
+    outputs: [{ id: 'decision', label: 'Decision', type: 'object' }],
+    config: [
+      {
+        id: 'strategy',
+        label: 'Strategy (natural language)',
+        type: 'textarea',
+        placeholder: 'e.g. Send 0.1 ALGO to the treasury when ALGO drops more than 3% in 24h, otherwise hold.',
+      },
+      { id: 'recipient', label: 'Recipient (allowlisted)', type: 'address' },
+      {
+        id: 'maxAmount',
+        label: 'Max Amount per run (ALGO)',
+        type: 'number',
+        placeholder: 'Optional cap on top of Guardian maxPerTrade',
+      },
     ],
   },
   {

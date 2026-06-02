@@ -53,6 +53,7 @@ export interface ParsedIntent {
   modifications?: BlockModification[]
   replaceCanvas?: boolean
   deleteNodeIds?: string[]
+  userMessage?: string
 }
 
 export interface UserContext {
@@ -112,18 +113,16 @@ const EXAMPLE_USDC_ASA =
 
 function buildWellKnownAssetsSection(): string {
   const net = (import.meta.env.VITE_ALGOD_NETWORK || 'testnet').toLowerCase()
-  if (net === 'mainnet') {
-    return `## Well-known Algorand MainNet assets (use ONLY these ASA IDs for these names; never guess unknown ASA IDs):
-${Object.entries(MAINNET_ASSETS).map(([name, id]) => `- ${name} = ASA ID ${id}`).join('\n')}
-- ALGO = asset ID 0 (native token)`
-  }
-  const testLines = Object.entries(WELL_KNOWN_ASSETS)
+  const defaults = net === 'mainnet' ? MAINNET_ASSETS : WELL_KNOWN_ASSETS
+  const lines = Object.entries(defaults)
     .filter(([name]) => name !== 'USDt')
     .map(([name, id]) => `- ${name} = ASA ID ${id}`)
     .join('\n')
-  return `## Well-known Algorand TestNet assets:
-${testLines}
-- ALGO = asset ID 0 (native token)`
+  return `## Default Algorand assets (use these ASA IDs for common names):
+${lines}
+- ALGO = asset ID 0 (native token)
+## Arbitrary ASAs:
+Users may reference any ASA by numeric ID (e.g. "swap 10 of asset 12345678"). Use the numeric ASA ID the user provides. Do NOT invent ASA IDs for unknown token names. If the user names a token without an ID and it is not in the default list above, ask them to confirm the ASA ID.`
 }
 
 function buildCanvasSummary(canvasBlocks?: CanvasBlock[]): string {

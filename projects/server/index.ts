@@ -4,13 +4,13 @@ import express from 'express'
 import cors from 'cors'
 import { startTelegramBot, handleTelegramWebhook } from './telegram.js'
 import { executeWorkflowHeadless } from './workflowRunner.js'
-import { fetchActiveLogicSigVault } from './logicSigDelegation.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createValidatedSupabaseClient } from './supabaseClient.js'
 import { createVoiceRouter, startVoiceServer } from './voiceServer.js'
 import { createAiChatRouter } from './aiChatRouter.js'
 import { createMarketProxyRouter } from './marketProxyRouter.js'
 import { createAgentWalletRouter } from './agentWalletRouter.js'
+import { getAgentExecutionContext, getAgentExecutionContextForWorkflow } from './agentSigner.js'
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const VOICE_SERVER_PORT = parseInt(process.env.VOICE_SERVER_PORT || '3002', 10)
@@ -45,6 +45,7 @@ interface ScheduleRow {
   next_run_at: string
   is_active: boolean
   requires_signer: boolean
+  agent_address?: string | null
   schedule_type?: 'interval' | 'start_at'
   flow_json: { nodes: any[]; edges: any[] }
 }
@@ -112,13 +113,15 @@ app.post('/webhook/:workflowId', async (req, res) => {
     }
 
     // Execute workflow
-    const delegationVault = await fetchActiveLogicSigVault(sb, workflow.wallet_address)
+    const agentContext = await getAgentExecutionContextForWorkflow(sb, workflowId)
     await executeWorkflowHeadless(
       workflow.flow_json,
       workflow.wallet_address,
       `webhook-${workflowId}`,
       getLinkedTelegramChats,
-      delegationVault,
+      agentContext,
+      sb,
+      workflowId,
     )
 
     res.json({ success: true, executed: workflowId })
@@ -151,13 +154,17 @@ async function pollSchedules(): Promise<void> {
 
   for (const schedule of schedules as ScheduleRow[]) {
     try {
-      const delegationVault = await fetchActiveLogicSigVault(sb, schedule.wallet_address)
+      const agentContext = schedule.agent_address
+        ? await getAgentExecutionContext(schedule.agent_address)
+        : await getAgentExecutionContextForWorkflow(sb, schedule.workflow_id)
       await executeWorkflowHeadless(
         schedule.flow_json,
         schedule.wallet_address,
         schedule.workflow_id,
         getLinkedTelegramChats,
-        delegationVault,
+        agentContext,
+        sb,
+        schedule.workflow_id,
       )
 
       const maxIter = schedule.max_iterations
@@ -196,6 +203,39 @@ async function startServer() {
 
   sb = await createValidatedSupabaseClient()
   app.use('/api/agent-wallets', await createAgentWalletRouter())
+
+  app.post('/api/workflows/execute', async (req, res) => {
+    try {
+      const { workflowId, ownerAddress, flowJson } = req.body ?? {}
+      if (!workflowId || !ownerAddress || !flowJson?.nodes) {
+        return res.status(400).json({ success: false, error: 'workflowId, ownerAddress, and flowJson are required' })
+      }
+
+      const agentContext = await getAgentExecutionContextForWorkflow(sb, workflowId)
+      if (!agentContext) {
+        return res.status(400).json({
+          success: false,
+          error: 'No active agent wallet for this workflow. Create and fund an agent in Settings.',
+        })
+      }
+
+      await executeWorkflowHeadless(
+        flowJson,
+        ownerAddress,
+        workflowId,
+        getLinkedTelegramChats,
+        agentContext,
+        sb,
+        workflowId,
+      )
+
+      res.json({ success: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Workflow execution failed'
+      console.error('[Server] /api/workflows/execute error:', message)
+      res.status(500).json({ success: false, error: message })
+    }
+  })
 
   // Start main HTTP server
   app.listen(PORT, '0.0.0.0', () => {

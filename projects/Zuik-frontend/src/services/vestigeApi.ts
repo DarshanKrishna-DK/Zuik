@@ -167,7 +167,8 @@ function normalizeCoingeckoDetails(id: string, row: RawRow): MarketToken {
   }
 }
 
-async function fetchVestige<T>(path: string): Promise<T> {
+/** Shared Vestige HTTP helper (used by tokenResolver and market data). */
+export async function fetchVestige<T>(path: string): Promise<T> {
   const res = await fetch(`${VESTIGE_BASE}${path}`, {
     headers: {
       Accept: 'application/json',

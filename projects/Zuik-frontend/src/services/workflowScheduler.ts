@@ -26,6 +26,7 @@ export interface ScheduleEntry {
   next_run_at: string
   is_active: boolean
   requires_signer: boolean
+  agent_address: string | null
   schedule_type: ScheduleType
   flow_json: { nodes: unknown[]; edges: unknown[] }
   created_at: string
@@ -42,6 +43,8 @@ export async function saveSchedule(params: {
   intervalSec: number
   maxIterations: number | null
   requiresSigner: boolean
+  /** Agent sub-account address that the server uses to sign headless send-payment runs. */
+  agentAddress?: string
   flowJson: { nodes: unknown[]; edges: unknown[] }
 }): Promise<string | null> {
   if (!isSupabaseConfigured()) return null
@@ -61,6 +64,7 @@ export async function saveSchedule(params: {
         next_run_at: nextRunAt,
         is_active: true,
         requires_signer: params.requiresSigner,
+        agent_address: params.agentAddress ?? null,
         schedule_type: 'interval',
         flow_json: params.flowJson,
       }, { onConflict: 'workflow_id,schedule_type' })
@@ -99,6 +103,7 @@ export async function scheduleWorkflowStart(params: {
   walletAddress: string
   runAtIso: string
   requiresSigner: boolean
+  agentAddress?: string
   flowJson: { nodes: unknown[]; edges: unknown[] }
 }): Promise<string | null> {
   if (!isSupabaseConfigured()) return null
@@ -115,6 +120,7 @@ export async function scheduleWorkflowStart(params: {
         next_run_at: params.runAtIso,
         is_active: true,
         requires_signer: params.requiresSigner,
+        agent_address: params.agentAddress ?? null,
         schedule_type: 'start_at',
         flow_json: params.flowJson,
       }, { onConflict: 'workflow_id,schedule_type' })
@@ -231,6 +237,7 @@ CREATE TABLE IF NOT EXISTS workflow_schedules (
   next_run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   is_active BOOLEAN NOT NULL DEFAULT true,
   requires_signer BOOLEAN NOT NULL DEFAULT true,
+  agent_address TEXT,
   schedule_type TEXT NOT NULL DEFAULT 'interval',
   flow_json JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

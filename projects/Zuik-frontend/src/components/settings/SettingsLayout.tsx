@@ -28,7 +28,7 @@ export function SettingsLayout({ activeSection, onSectionChange, children }: Set
         <aside className={`st-sidebar${mobileNavOpen ? ' st-sidebar--open' : ''}`}>
           <div className="st-sidebar-header">
             <h1 className="st-page-title">Settings</h1>
-            <p className="st-page-desc">Manage your wallet, automation, and alerts.</p>
+            <p className="st-page-desc">Wallet, agents, Guardian limits, risk, and alerts.</p>
           </div>
           <nav className="st-nav" aria-label="Settings sections">
             {SETTINGS_NAV.map((item) => (
@@ -38,6 +38,7 @@ export function SettingsLayout({ activeSection, onSectionChange, children }: Set
                 className={`st-nav-item${activeSection === item.id ? ' st-nav-item--active' : ''}`}
                 onClick={() => selectSection(item.id)}
                 aria-current={activeSection === item.id ? 'page' : undefined}
+                data-testid={`settings-nav-${item.id}`}
               >
                 <span className="st-nav-icon">{navIconFor(item.id)}</span>
                 <span className="st-nav-text">

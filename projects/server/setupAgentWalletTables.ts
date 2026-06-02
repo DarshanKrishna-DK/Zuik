@@ -1,71 +1,47 @@
 /**
- * Database setup script for Agent Wallet Management tables
- * Run this script to create the required tables for agent wallet functionality
+ * Database setup helper for the funded agent sub-account model.
+ * Prints the SQL to create the agent_wallets table (run it in the Supabase SQL editor).
+ * The agent SECRET is never stored here - only public metadata.
  */
 
 import 'dotenv/config'
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { AGENT_WALLET_TABLES_SQL } from './agentWalletRouter.js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
+export const AGENT_WALLETS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS agent_wallets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  workflow_id UUID,
+  wallet_address TEXT NOT NULL,
+  agent_address TEXT NOT NULL UNIQUE,
+  guardian_app_id BIGINT,
+  budget_microalgos BIGINT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('[Setup] Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in .env')
-  console.error('[Setup] Please add these environment variables and try again')
-  process.exit(1)
+ALTER TABLE agent_wallets ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users see own agent wallets"
+  ON agent_wallets FOR SELECT
+  USING (true);
+
+CREATE POLICY "Users manage own agent wallets"
+  ON agent_wallets FOR ALL
+  USING (true);
+
+CREATE INDEX IF NOT EXISTS idx_agent_wallets_wallet_address ON agent_wallets(wallet_address);
+CREATE INDEX IF NOT EXISTS idx_agent_wallets_workflow_id ON agent_wallets(workflow_id);
+
+-- Link a due schedule to its agent sub-account (used by the headless poller).
+ALTER TABLE workflow_schedules ADD COLUMN IF NOT EXISTS agent_address TEXT;
+`
+
+function main() {
+  console.log('Agent Wallet Database Setup (funded agent sub-account model)')
+  console.log('===========================================================\n')
+  console.log('Run the following SQL in your Supabase SQL editor:')
+  console.log('='.repeat(80))
+  console.log(AGENT_WALLETS_TABLE_SQL)
+  console.log('='.repeat(80))
 }
 
-const sb: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY)
-
-async function setupTables(): Promise<void> {
-  console.log('🔧 Setting up Agent Wallet Management tables...')
-  
-  // Since Supabase doesn't have exec_sql RPC by default, we'll show the SQL to run manually
-  console.log('📋 Please run the following SQL in your Supabase SQL editor:')
-  console.log('(Go to your Supabase dashboard → SQL Editor → New Query)')
-  console.log('=' .repeat(80))
-  console.log(AGENT_WALLET_TABLES_SQL)
-  console.log('=' .repeat(80))
-  
-  console.log('\n✅ After running the SQL above, your Agent Wallet Management will be ready!')
-  console.log('📝 You can then use the Agent Wallets section in Settings to manage your automated funds.')
-}
-
-// Alternative method using direct SQL execution if RPC doesn't work
-async function setupTablesDirectSQL(): Promise<void> {
-  console.log('🔧 Setting up Agent Wallet Management tables (direct SQL)...')
-  
-  try {
-    // Split the SQL into individual statements and execute them
-    const statements = AGENT_WALLET_TABLES_SQL
-      .split(';')
-      .map(stmt => stmt.trim())
-      .filter(stmt => stmt.length > 0)
-    
-    for (const statement of statements) {
-      if (statement.length > 0) {
-        console.log(`Executing: ${statement.substring(0, 50)}...`)
-        // Note: Supabase client doesn't support direct SQL execution
-        // This would need to be run manually in the Supabase SQL editor
-      }
-    }
-    
-    console.log('📋 SQL statements prepared. Please run the following in your Supabase SQL editor:')
-    console.log('=' .repeat(80))
-    console.log(AGENT_WALLET_TABLES_SQL)
-    console.log('=' .repeat(80))
-    
-  } catch (error) {
-    console.error('❌ Setup preparation failed:', error)
-  }
-}
-
-async function main() {
-  console.log('🚀 Agent Wallet Management Database Setup')
-  console.log('==========================================\n')
-  
-  await setupTables()
-}
-
-main().catch(console.error)
+main()

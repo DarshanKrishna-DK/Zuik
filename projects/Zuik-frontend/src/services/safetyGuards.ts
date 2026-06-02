@@ -1,5 +1,6 @@
 import algosdk from 'algosdk'
 import { getAlgodClient } from './algorand'
+import { checkBlocksTokenRisk, getMaxTokenRiskScore } from './tokenRiskPolicy'
 import type { SimulationWarning } from './transactionSimulator'
 
 export interface SafetyCheckResult {
@@ -24,6 +25,7 @@ export async function runSafetyChecks(
   actionBlocks: { nodeId: string; blockId: string; config: Record<string, string | number | undefined> }[],
   senderAddress: string,
   maxValueMicroAlgo?: number,
+  maxTokenRiskScore: number = getMaxTokenRiskScore(),
 ): Promise<SafetyCheckResult> {
   const warnings: SimulationWarning[] = []
   const errors: SimulationWarning[] = []
@@ -184,6 +186,17 @@ export async function runSafetyChecks(
     })
   }
 
+  try {
+    const tokenRisk = await checkBlocksTokenRisk(actionBlocks, maxTokenRiskScore)
+    errors.push(...tokenRisk.errors)
+    warnings.push(...tokenRisk.warnings)
+  } catch {
+    warnings.push({
+      severity: 'warning',
+      message: 'Token risk checks could not complete. Review ASA choices manually before executing.',
+    })
+  }
+
   return {
     passed: errors.length === 0,
     warnings,
@@ -233,6 +246,9 @@ export function suggestFix(errorMessage: string): string | null {
   }
   if (msg.includes('rejected') || msg.includes('cancelled')) {
     return 'The transaction was rejected in your wallet. Open your wallet app and try approving again.'
+  }
+  if (msg.includes('risk score') && msg.includes('exceeds')) {
+    return 'Open Settings > Guardian and raise the max token risk score, or pick a lower-risk ASA in the token picker.'
   }
 
   return null

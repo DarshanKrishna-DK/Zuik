@@ -1,24 +1,23 @@
 import { AlgoViteClientConfig, AlgoViteKMDConfig } from '../../interfaces/network'
 
+const ALGOD_FALLBACK_SERVER = 'https://testnet-api.algonode.cloud'
+const INDEXER_FALLBACK_SERVER = 'https://testnet-idx.algonode.cloud'
+
 export function getAlgodConfigFromViteEnvironment(): AlgoViteClientConfig {
-  // Temporarily hardcode working TestNet endpoint to fix LogicSig execution
-  console.log('[ALGOD CONFIG] Using hardcoded TestNet endpoint for debugging')
   return {
-    server: 'https://testnet-api.algonode.cloud',
-    port: '',
-    token: '',
-    network: 'testnet',
+    server: import.meta.env.VITE_ALGOD_SERVER || ALGOD_FALLBACK_SERVER,
+    port: import.meta.env.VITE_ALGOD_PORT || '',
+    token: import.meta.env.VITE_ALGOD_TOKEN || '',
+    network: import.meta.env.VITE_ALGOD_NETWORK || 'testnet',
   }
 }
 
 export function getIndexerConfigFromViteEnvironment(): AlgoViteClientConfig {
-  // Temporarily hardcode working TestNet endpoint to fix LogicSig execution
-  console.log('[INDEXER CONFIG] Using hardcoded TestNet endpoint for debugging')
   return {
-    server: 'https://testnet-idx.algonode.cloud',
-    port: '',
-    token: '',
-    network: 'testnet',
+    server: import.meta.env.VITE_INDEXER_SERVER || INDEXER_FALLBACK_SERVER,
+    port: import.meta.env.VITE_INDEXER_PORT || '',
+    token: import.meta.env.VITE_INDEXER_TOKEN || '',
+    network: import.meta.env.VITE_ALGOD_NETWORK || 'testnet',
   }
 }
 

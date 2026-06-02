@@ -352,8 +352,9 @@ curl https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getMe
 
 ## 📚 Additional Resources
 
-- **🔄 Development plan**: `../reference_docs/ZUIK_DEVELOPMENT_PLAN.md`
-- **🧪 Testing and demo**: `../reference_docs/TESTING_AND_DEMO_GUIDE.md`
+- **Development plan**: `../reference_docs/ZUIK_DEVELOPMENT_PLAN.md`
+- **Project documentation (stakeholders)**: `../reference_docs/Zuik_Project_Documentation.md`
+- **Testing and demo**: `../docs/testing/README.md`
 - **📝 Changelog**: `../reference_docs/CHANGELOG.md`
 
 ---
