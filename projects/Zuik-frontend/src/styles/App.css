@@ -2215,189 +2215,6 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 500;
 }
 
-.zuik-chat-voice-status {
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--z-border);
-}
-.zuik-voice-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  color: var(--z-text-dim);
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: var(--z-surface-2);
-}
-.zuik-voice-indicator.listening { color: var(--z-success); background: rgba(52, 211, 153, 0.08); }
-.zuik-voice-indicator.speaking { color: var(--z-accent); background: var(--z-accent-subtle); }
-
-.zuik-voice-pulse {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--z-success);
-  animation: voicePulse 1.2s ease-in-out infinite;
-}
-.zuik-voice-pulse.speaking { background: var(--z-accent); }
-
-@keyframes voicePulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.3); }
-}
-
-/* ── Voice Call Screen ────────────────────────────────── */
-
-.zuik-call-screen {
-  position: fixed;
-  top: var(--z-nav-h); right: 0; bottom: 0;
-  width: min(380px, 100vw);
-  z-index: 120;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid var(--z-border-2);
-  border-right: none;
-  border-radius: 12px 0 0 12px;
-  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 229, 255, 0.06);
-}
-
-.zuik-call-bg {
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, #0A0E13 0%, #0D1520 50%, #0A1018 100%);
-  z-index: 0;
-}
-.zuik-call-bg::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: radial-gradient(ellipse at 50% 30%, rgba(0, 229, 255, 0.06) 0%, transparent 60%);
-}
-
-.zuik-call-content {
-  position: relative; z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 0 24px;
-  text-align: center;
-}
-
-.zuik-call-avatar {
-  position: relative;
-  width: 88px; height: 88px;
-  border-radius: 50%;
-  background: var(--z-surface-2);
-  border: 2px solid var(--z-border-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--z-accent);
-  margin-bottom: 8px;
-}
-.zuik-call-avatar > svg:first-of-type {
-  width: 100%;
-  height: 100%;
-  display: block;
-  border-radius: 50%;
-}
-
-.zuik-call-ring {
-  position: absolute; inset: -6px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-}
-.zuik-call-ring.listening {
-  border-color: var(--z-success);
-  animation: callRing 1.5s ease-in-out infinite;
-}
-.zuik-call-ring.speaking {
-  border-color: var(--z-accent);
-  animation: callRing 1.2s ease-in-out infinite;
-}
-@keyframes callRing {
-  0%, 100% { transform: scale(1); opacity: 0.6; }
-  50% { transform: scale(1.1); opacity: 1; }
-}
-
-.zuik-call-name {
-  font-family: var(--z-display);
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--z-text);
-  letter-spacing: 0.04em;
-}
-
-.zuik-call-timer {
-  font-family: var(--z-mono);
-  font-size: 0.8125rem;
-  color: var(--z-text-muted);
-  letter-spacing: 0.08em;
-}
-
-.zuik-call-status {
-  height: 20px;
-  display: flex;
-  align-items: center;
-}
-.zuik-call-status-text {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--z-text-dim);
-  letter-spacing: 0.03em;
-}
-.zuik-call-status-text.listening { color: var(--z-success); }
-.zuik-call-status-text.speaking { color: var(--z-accent); }
-.zuik-call-status-text.thinking { color: var(--z-warning); }
-
-.zuik-call-transcript {
-  margin-top: 16px;
-  max-width: 280px;
-  font-size: 0.75rem;
-  color: var(--z-text-dim);
-  line-height: 1.5;
-  text-align: center;
-  opacity: 0.7;
-  font-style: italic;
-}
-
-.zuik-call-controls {
-  position: relative; z-index: 1;
-  display: flex;
-  gap: 32px;
-  margin-top: 48px;
-}
-
-.zuik-call-btn {
-  width: 56px; height: 56px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.25s var(--z-ease);
-  color: var(--z-text);
-}
-.zuik-call-btn.mic {
-  background: var(--z-surface-2);
-  border: 1px solid var(--z-border-2);
-}
-.zuik-call-btn.mic.active {
-  background: rgba(52, 211, 153, 0.15);
-  border-color: var(--z-success);
-  color: var(--z-success);
-  box-shadow: 0 0 20px rgba(52, 211, 153, 0.2);
-}
-.zuik-call-btn.mic:hover { border-color: var(--z-text-muted); }
-.zuik-call-btn.end {
-  background: #dc2626;
-  transform: rotate(135deg);
-}
-.zuik-call-btn.end:hover { background: #ef4444; box-shadow: 0 0 24px rgba(239, 68, 68, 0.3); }
-
 .zuik-chat-messages {
   flex: 1;
   overflow-y: auto;
@@ -2516,36 +2333,6 @@ h1, h2, h3, h4, h5, h6 {
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--z-border);
-}
-
-.zuik-chat-mic {
-  background: transparent;
-  border: 1px solid var(--z-border);
-  color: var(--z-text-dim);
-  padding: 6px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-  display: flex;
-  align-items: center;
-}
-.zuik-chat-mic {
-  position: relative;
-}
-.zuik-chat-mic:hover { background: var(--z-surface-2); color: var(--z-text); }
-.zuik-chat-mic.active {
-  background: rgba(52, 211, 153, 0.12);
-  color: var(--z-success);
-  border-color: var(--z-success);
-  animation: borderPulse 1.5s ease-in-out infinite;
-}
-.zuik-mic-live-dot {
-  position: absolute;
-  top: 2px; right: 2px;
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--z-success);
-  animation: voicePulse 1s ease-in-out infinite;
 }
 
 .zuik-chat-input {
@@ -3014,6 +2801,62 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.dash-agent-health-card {
+  display: block;
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  border-radius: var(--z-radius-lg);
+  background: linear-gradient(155deg, rgba(22, 30, 42, 0.96), rgba(10, 14, 20, 0.98));
+  border: 1px solid rgba(110, 231, 255, 0.2);
+  box-shadow: 0 12px 36px rgba(8, 12, 16, 0.45);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.dash-agent-health-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(110, 231, 255, 0.38);
+  box-shadow: 0 16px 44px rgba(8, 12, 16, 0.55), 0 0 20px rgba(110, 231, 255, 0.1);
+}
+
+.dash-agent-health-card__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--z-text-dim);
+  margin-bottom: 8px;
+}
+
+.dash-agent-health-card__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  font-size: 0.875rem;
+  color: var(--z-text-muted);
+  margin-bottom: 10px;
+}
+
+.dash-agent-health-card__health {
+  color: var(--z-accent);
+  font-weight: 600;
+}
+
+.dash-agent-health-card__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.dash-agent-health-card__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #34d399, #6ee7ff);
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .zuik-stats-grid {

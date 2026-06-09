@@ -6,6 +6,8 @@ import {
   type AgentWalletRow,
   type AgentWalletBalance,
 } from '../services/agentWallet'
+import { guardianContract } from '../services/guardianContract'
+import { getAlgorandClient } from '../services/algorand'
 import { estimateStepFee } from '../services/transactionSimulator'
 
 export type ExecutionMode = 'user' | 'agent'
@@ -70,21 +72,75 @@ export function estimateRequiredMicroAlgos(nodes: FlowNode[]): number {
   return spendMicro + fees + reserveMicro
 }
 
+export type PolicyReadinessStatus = 'active' | 'expired' | 'missing' | 'paused' | 'pending'
+
 export type AgentReadiness =
   | {
       ok: true
       wallet: AgentWalletRow
       balance: AgentWalletBalance
       requiredMicroAlgos: number
+      policyStatus: PolicyReadinessStatus
     }
   | {
       ok: false
-      code: 'no_workflow' | 'no_agent' | 'no_key' | 'low_balance' | 'incompatible'
+      code:
+        | 'no_workflow'
+        | 'no_agent'
+        | 'no_key'
+        | 'low_balance'
+        | 'incompatible'
+        | 'policy_blocked'
       message: string
       wallet?: AgentWalletRow
       balance?: AgentWalletBalance
       requiredMicroAlgos?: number
+      policyStatus?: PolicyReadinessStatus
     }
+
+async function getCurrentRound(): Promise<bigint> {
+  const status = await getAlgorandClient().client.algod.status().do()
+  const s = status as unknown as { lastRound?: number | bigint; ['last-round']?: number | bigint }
+  return BigInt(s.lastRound ?? s['last-round'] ?? 0)
+}
+
+async function evaluatePolicyStatus(
+  agentAddress: string,
+  ownerAddress: string,
+): Promise<{ status: PolicyReadinessStatus; message?: string }> {
+  const guardianAppId = parseInt(import.meta.env.VITE_GUARDIAN_APP_ID || '0', 10)
+  if (!guardianAppId) {
+    return { status: 'missing', message: 'Guardian is not configured for this deployment.' }
+  }
+
+  const paused = await guardianContract.isPaused(ownerAddress)
+  if (paused) {
+    return { status: 'paused', message: 'Guardian is paused. Resume in Agent Management before agent runs.' }
+  }
+
+  const policy = await guardianContract.getPolicy(agentAddress, ownerAddress)
+  if (!policy) {
+    return {
+      status: 'missing',
+      message: 'No Guardian policy for this agent. Register a policy in Agent Management.',
+    }
+  }
+
+  const round = await getCurrentRound()
+  if (round > 0n && round > policy.expiryRound) {
+    return {
+      status: 'expired',
+      message: 'Agent Guardian policy has expired. Renew the policy in Agent Management.',
+    }
+  }
+
+  const remainingExec = policy.dailyExecutionsCap - policy.dailyExecutionsSpent
+  if (remainingExec <= 0n) {
+    return { status: 'expired', message: 'Agent has no remaining executions on its Guardian policy today.' }
+  }
+
+  return { status: 'active' }
+}
 
 export async function checkAgentReadiness(
   workflowId: string | null,
@@ -152,7 +208,20 @@ export async function checkAgentReadiness(
     }
   }
 
-  return { ok: true, wallet, balance, requiredMicroAlgos }
+  const policyCheck = await evaluatePolicyStatus(wallet.agent_address, ownerAddress)
+  if (policyCheck.status !== 'active') {
+    return {
+      ok: false,
+      code: 'policy_blocked',
+      message: policyCheck.message ?? 'Agent policy is not ready for execution.',
+      wallet,
+      balance,
+      requiredMicroAlgos,
+      policyStatus: policyCheck.status,
+    }
+  }
+
+  return { ok: true, wallet, balance, requiredMicroAlgos, policyStatus: 'active' }
 }
 
 export async function ensureAgentWalletForWorkflow(

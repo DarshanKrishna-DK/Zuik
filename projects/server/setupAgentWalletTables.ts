@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS agent_wallets (
   agent_address TEXT NOT NULL UNIQUE,
   guardian_app_id BIGINT,
   budget_microalgos BIGINT,
+  display_name TEXT,
+  policy_binding_id UUID,
   status TEXT NOT NULL DEFAULT 'active',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

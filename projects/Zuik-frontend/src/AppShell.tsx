@@ -6,6 +6,7 @@ import ConnectWallet from './components/ConnectWallet'
 import ErrorBoundary from './components/ErrorBoundary'
 import LoadingFallback from './components/LoadingFallback'
 import DemoAutoConnect from './components/DemoAutoConnect'
+import { VoiceAssistant, VoicePlatformProvider } from './components/voice'
 
 const Builder = lazy(() => import('./pages/Builder'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -43,28 +44,31 @@ export default function AppShell() {
   const isLanding = location.pathname === '/'
 
   return (
-    <div className="zuik-app">
-      <div className="zuik-main">
-        {!isLanding && <Navbar onConnectWallet={openWalletModal} />}
-        <ErrorBoundary>
-          <Suspense fallback={<LoadingFallback />}>
-            <Routes>
-              <Route path="/" element={
-                <Landing
-                  onConnectWallet={openWalletModal}
-                  onStartBuilding={() => connectAndRedirect('/builder')}
-                />
-              } />
-              <Route path="/builder" element={<Builder />} />
-              <Route path="/market" element={<MarketExplorer />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </Suspense>
-        </ErrorBoundary>
+    <VoicePlatformProvider openWalletModal={openWalletModal}>
+      <div className="zuik-app">
+        <div className="zuik-main">
+          {!isLanding && <Navbar onConnectWallet={openWalletModal} />}
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
+                <Route path="/" element={
+                  <Landing
+                    onConnectWallet={openWalletModal}
+                    onStartBuilding={() => connectAndRedirect('/builder')}
+                  />
+                } />
+                <Route path="/builder" element={<Builder />} />
+                <Route path="/market" element={<MarketExplorer />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
+        </div>
+        <ConnectWallet openModal={walletModalOpen} closeModal={() => setWalletModalOpen(false)} />
+        <VoiceAssistant enabled />
+        <DemoAutoConnect />
       </div>
-      <ConnectWallet openModal={walletModalOpen} closeModal={() => setWalletModalOpen(false)} />
-      <DemoAutoConnect />
-    </div>
+    </VoicePlatformProvider>
   )
 }

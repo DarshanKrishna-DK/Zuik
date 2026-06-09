@@ -150,6 +150,11 @@ export function AgentWalletSettings() {
       })
       showMessage('success', `Funded with ${amount} ALGO. Tx: ${res.txId.slice(0, 12)}...`)
       setFundTarget(null)
+      
+      // 🔧 FIX: Refresh agent balances after successful funding
+      setTimeout(() => {
+        void loadAgents()
+      }, 3000) // Wait 3s for transaction to propagate on TestNet
       await loadAgents()
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Funding failed.')
@@ -378,7 +383,9 @@ export function AgentWalletSettings() {
                     id={`toggle-${row.id}`}
                     checked={row.status === 'active'}
                     onChange={(v) => void handleToggle(row, v)}
-                    label={row.status === 'active' ? 'On' : 'Off'}
+                    showLabels={true}
+                    onLabel="ACTIVE"
+                    offLabel="INACTIVE"
                     testId={`agent-toggle-${row.id}`}
                   />
                   <div className="agent-settings__card-buttons">

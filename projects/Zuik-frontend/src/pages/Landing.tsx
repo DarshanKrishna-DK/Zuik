@@ -1,7 +1,8 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import zuikLogo from '../assets/zuik-logo.png'
+import { useVoicePageContext } from '../components/voice'
 
 interface LandingProps {
   onConnectWallet: () => void
@@ -87,7 +88,7 @@ function TelegramIcon() {
 }
 
 const MARQUEE_ITEMS = [
-  'VOICE TO WORKFLOW',
+  'HEY ZUIK ASSISTANT',
   'ATOMIC TRANSACTIONS',
   'AI INTENT ENGINE',
   'DEX AGGREGATION',
@@ -157,6 +158,18 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
   const shortAddr = activeAddress
     ? `${activeAddress.slice(0, 4)}...${activeAddress.slice(-4)}`
     : null
+
+  const landingVoiceContext = useMemo(
+    () => ({
+      summary: activeAddress
+        ? `Landing page, wallet connected (${shortAddr})`
+        : 'Landing page, wallet not connected',
+      data: { walletConnected: Boolean(activeAddress) },
+    }),
+    [activeAddress, shortAddr],
+  )
+
+  useVoicePageContext('/', landingVoiceContext)
 
   useEffect(() => {
     const container = document.querySelector('.landing-scroll') as HTMLElement | null
@@ -238,8 +251,8 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
               <span className="landing-hero-line-1">YOUR <span className="landing-gradient-text">DeFi</span></span>
             </h1>
             <p className="landing-hero-subtitle">
-              Speak, type, or drag. Zuik translates your intent into
-              atomic transactions on Algorand - no code, no complexity.
+              Say &quot;Hey Zuik&quot; anywhere on the platform, type in chat, or drag blocks.
+              Zuik translates your intent into atomic transactions on Algorand - no code, no complexity.
             </p>
             <div className="landing-hero-ctas">
               <button
@@ -312,7 +325,7 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
           <h2 className="landing-section-title">Three steps. That's it.</h2>
           <div className="landing-steps-row">
             {[
-              { n: '01', Icon: MicIcon, title: 'Describe Your Intent', desc: 'Use voice, text, or drag blocks onto the canvas. Say "Swap 50 USDC to ALGO" and the AI builds it instantly.' },
+              { n: '01', Icon: MicIcon, title: 'Describe Your Intent', desc: 'Say "Hey Zuik" to control the platform hands-free, type in chat, or drag blocks onto the canvas. The AI builds workflows from plain language.' },
               { n: '02', Icon: BranchIcon, title: 'Review & Preview', desc: 'Visual cards show every step. Preview fees, routes, and safety checks before you sign once.' },
               { n: '03', Icon: ZapIcon, title: 'Execute Atomically', desc: 'One signature, multiple transactions. All-or-nothing execution on Algorand with sub-5-second finality.' },
             ].map((step, i) => (
@@ -376,7 +389,7 @@ export default function Landing({ onConnectWallet, onStartBuilding }: LandingPro
               <ul>
                 <li>Intent to execution in minutes, not hours</li>
                 <li>Atomic workflows with built-in safety checks</li>
-                <li>Telegram and voice alerts without extra tooling</li>
+                <li>Telegram alerts and a platform-wide voice assistant</li>
                 <li>Algorand speed with predictable fees</li>
               </ul>
             </div>

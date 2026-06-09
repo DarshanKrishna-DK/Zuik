@@ -45,7 +45,7 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
 
   router.post('/register', async (req, res) => {
     try {
-      const { workflowId, ownerAddress, agentAddress, mnemonic, guardianAppId, budgetMicroAlgos } = req.body ?? {}
+      const { workflowId, ownerAddress, agentAddress, mnemonic, guardianAppId, budgetMicroAlgos, displayName } = req.body ?? {}
 
       if (!ownerAddress || !agentAddress || !mnemonic) {
         return res.status(400).json({ error: 'ownerAddress, agentAddress and mnemonic are required' })
@@ -67,6 +67,7 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
             agent_address: agentAddress,
             guardian_app_id: guardianAppId ? Number(guardianAppId) : null,
             budget_microalgos: budgetMicroAlgos ? Number(budgetMicroAlgos) : null,
+            display_name: displayName || null,
             status: 'active',
           },
           { onConflict: 'agent_address' },
@@ -102,7 +103,7 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
       const { ownerAddress } = req.params
       const { data, error } = await sb
         .from('agent_wallets')
-        .select('id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, created_at')
+        .select('id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, display_name, policy_binding_id, created_at')
         .eq('wallet_address', ownerAddress)
         .order('created_at', { ascending: false })
 
@@ -145,7 +146,7 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
         .update(patch)
         .eq('agent_address', agentAddress)
         .eq('wallet_address', ownerAddress)
-        .select('id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, created_at')
+        .select('id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, display_name, policy_binding_id, created_at')
         .maybeSingle()
 
       if (error) {

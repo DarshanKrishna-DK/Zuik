@@ -136,6 +136,7 @@ export async function getAgentExecutionContext(
 
 /**
  * Resolve the agent execution context for a workflow by reading agent_wallets metadata.
+ * First tries workflow-specific agent, then falls back to shared agent for the owner.
  * Returns null when no active agent wallet exists or the server lacks the key.
  */
 export async function getAgentExecutionContextForWorkflow(
@@ -143,20 +144,50 @@ export async function getAgentExecutionContextForWorkflow(
   workflowId: string,
 ): Promise<AgentExecutionContext | null> {
   try {
-    const { data, error } = await sb
+    // First, try workflow-specific agent
+    const { data: workflowAgent, error: workflowError } = await sb
       .from('agent_wallets')
-      .select('agent_address, guardian_app_id, status')
+      .select('agent_address, guardian_app_id, status, wallet_address')
       .eq('workflow_id', workflowId)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (error || !data?.agent_address) return null
-    return getAgentExecutionContext(
-      data.agent_address as string,
-      data.guardian_app_id ? Number(data.guardian_app_id) : GUARDIAN_APP_ID || undefined,
-    )
+    if (workflowAgent?.agent_address) {
+      return getAgentExecutionContext(
+        workflowAgent.agent_address as string,
+        workflowAgent.guardian_app_id ? Number(workflowAgent.guardian_app_id) : GUARDIAN_APP_ID || undefined,
+      )
+    }
+
+    // Fallback: find any active agent for this owner (agent sharing)
+    const { data: workflow } = await sb
+      .from('workflows')
+      .select('wallet_address')
+      .eq('id', workflowId)
+      .single()
+
+    if (workflow?.wallet_address) {
+      const { data: sharedAgent } = await sb
+        .from('agent_wallets')
+        .select('agent_address, guardian_app_id, status')
+        .eq('wallet_address', workflow.wallet_address)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (sharedAgent?.agent_address) {
+        console.log(`[AgentSigner] Using shared agent ${sharedAgent.agent_address.slice(0, 8)}... for workflow ${workflowId}`)
+        return getAgentExecutionContext(
+          sharedAgent.agent_address as string,
+          sharedAgent.guardian_app_id ? Number(sharedAgent.guardian_app_id) : GUARDIAN_APP_ID || undefined,
+        )
+      }
+    }
+
+    return null
   } catch {
     return null
   }

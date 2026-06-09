@@ -9,10 +9,13 @@ import { createValidatedSupabaseClient } from './supabaseClient.js'
 import { createVoiceRouter, startVoiceServer } from './voiceServer.js'
 import { createAiChatRouter } from './aiChatRouter.js'
 import { createMarketProxyRouter } from './marketProxyRouter.js'
+import { createX402PremiumRouter } from './x402PremiumRouter.js'
+import { createX402FacilitatorRouter } from './x402Facilitator.js'
 import { createAgentWalletRouter } from './agentWalletRouter.js'
+import { createAgentManagementRouter } from './agentManagementRouter.js'
 import { getAgentExecutionContext, getAgentExecutionContextForWorkflow } from './agentSigner.js'
 
-const PORT = parseInt(process.env.PORT || '3001', 10)
+const PORT = parseInt(process.env.PORT || '4021', 10)
 const VOICE_SERVER_PORT = parseInt(process.env.VOICE_SERVER_PORT || '3002', 10)
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
@@ -69,6 +72,8 @@ if (INLINE_VOICE) {
 }
 app.use('/api/ai', createAiChatRouter())
 app.use('/api/market', createMarketProxyRouter())
+app.use('/api/x402', createX402PremiumRouter())
+app.use('/api/x402/facilitator', createX402FacilitatorRouter())
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -203,6 +208,7 @@ async function startServer() {
 
   sb = await createValidatedSupabaseClient()
   app.use('/api/agent-wallets', await createAgentWalletRouter())
+  app.use('/api/agent-management', await createAgentManagementRouter())
 
   app.post('/api/workflows/execute', async (req, res) => {
     try {

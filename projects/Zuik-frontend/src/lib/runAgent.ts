@@ -451,6 +451,14 @@ export function subscribeAgent(
   const bgIntervals: { clear: () => void }[] = []
   let paused = false
   const abortController = new AbortController()
+  
+  // Prevent EventEmitter memory leak warnings by increasing listener limit
+  try {
+    if (typeof (abortController.signal as any).setMaxListeners === 'function') {
+      (abortController.signal as any).setMaxListeners(20)
+    }
+  } catch { /* ignore for older browsers */ }
+  
   const ctxWithSignal: AgentContext = {
     ...context,
     abortSignal: abortController.signal,

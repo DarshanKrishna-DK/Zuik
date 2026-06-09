@@ -4,7 +4,7 @@ import { microAlgo } from '@algorandfoundation/algokit-utils'
 import { getAlgorandClient } from './algorand'
 import { getSupabase, isSupabaseConfigured } from './supabase'
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:4021'
 
 export interface AgentWalletRow {
   id: string
@@ -14,6 +14,8 @@ export interface AgentWalletRow {
   guardian_app_id: number | null
   budget_microalgos: number | null
   status: string
+  display_name: string | null
+  policy_binding_id: string | null
   created_at: string
 }
 
@@ -34,7 +36,7 @@ export interface CreatedAgentWallet {
 export async function createAgentWallet(
   workflowId: string,
   ownerAddress: string,
-  options?: { guardianAppId?: number; budgetMicroAlgos?: number | bigint },
+  options?: { guardianAppId?: number; budgetMicroAlgos?: number | bigint; displayName?: string },
 ): Promise<CreatedAgentWallet> {
   const account = algosdk.generateAccount()
   const agentAddress = account.addr.toString()
@@ -54,6 +56,7 @@ export async function createAgentWallet(
       guardianAppId,
       budgetMicroAlgos:
         options?.budgetMicroAlgos != null ? Number(options.budgetMicroAlgos) : undefined,
+      displayName: options?.displayName,
     }),
   })
 
@@ -72,17 +75,43 @@ export async function getAgentWallet(workflowId: string): Promise<AgentWalletRow
   if (!isSupabaseConfigured()) return null
   try {
     const sb = getSupabase()
-    const { data, error } = await sb
+    
+    // First, try to find a workflow-specific agent
+    const { data: workflowAgent, error: workflowError } = await sb
       .from('agent_wallets')
-      .select('id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, created_at')
+      .select('id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, display_name, policy_binding_id, created_at')
       .eq('workflow_id', workflowId)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (error) return null
-    return (data as AgentWalletRow | null) ?? null
+    if (!workflowError && workflowAgent) {
+      return workflowAgent as AgentWalletRow
+    }
+
+    // Fallback: find any active agent for the same owner (agent sharing)
+    const { data: workflow, error: wfError } = await sb
+      .from('workflows')
+      .select('wallet_address')
+      .eq('id', workflowId)
+      .single()
+
+    if (wfError || !workflow?.wallet_address) {
+      return null
+    }
+
+    const { data: sharedAgent, error: sharedError } = await sb
+      .from('agent_wallets')
+      .select('id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, display_name, policy_binding_id, created_at')
+      .eq('wallet_address', workflow.wallet_address)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (sharedError) return null
+    return (sharedAgent as AgentWalletRow | null) ?? null
   } catch {
     return null
   }

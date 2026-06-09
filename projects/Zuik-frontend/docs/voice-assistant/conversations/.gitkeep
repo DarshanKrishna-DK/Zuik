@@ -1,0 +1,5 @@
+# Conversation history storage
+
+Runtime conversation MD files for the voice assistant are written here by `conversationManager.ts` (Phase 2).
+
+Files are created per session and are safe to delete locally.

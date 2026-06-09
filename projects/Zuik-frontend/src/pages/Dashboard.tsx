@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -10,6 +10,8 @@ import {
   updateWorkflow, getDashboardStats,
   type WorkflowRow, type ExecutionRow,
 } from '../services/supabase'
+import { fetchAgentOverview } from '../services/agentManagement'
+import { useVoicePageContext } from '../components/voice'
 
 const PIE_COLORS = ['#34D399', '#F87171', '#FBBF24', '#38BDF8']
 
@@ -63,18 +65,29 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Awaited<ReturnType<typeof getDashboardStats>> | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [agentHealth, setAgentHealth] = useState<{ count: number; activePolicies: number; avgHealth: number } | null>(null)
   const configured = isSupabaseConfigured()
 
   const load = useCallback(async () => {
     if (!activeAddress || !configured) { setLoading(false); return }
     setLoading(true)
     try {
-      const [wf, st] = await Promise.all([
+      const [wf, st, agents] = await Promise.all([
         listWorkflows(activeAddress),
         getDashboardStats(activeAddress),
+        fetchAgentOverview(activeAddress).catch(() => []),
       ])
       setWorkflows(wf)
       setStats(st)
+      if (agents.length > 0) {
+        const activePolicies = agents.filter((a) => a.policyStatus === 'active').length
+        const avgHealth = Math.round(
+          agents.reduce((s, a) => s + a.healthScore, 0) / agents.length,
+        )
+        setAgentHealth({ count: agents.length, activePolicies, avgHealth })
+      } else {
+        setAgentHealth(null)
+      }
     } catch (err) {
       console.error('Dashboard load failed:', err)
     } finally {
@@ -115,6 +128,33 @@ export default function Dashboard() {
 
   const filtered = workflows.filter((w) => w.name.toLowerCase().includes(search.toLowerCase()))
 
+  const voicePageContext = useMemo(() => {
+    if (!activeAddress) {
+      return { summary: 'Dashboard, wallet not connected', data: { configured } }
+    }
+    if (!configured) {
+      return { summary: 'Dashboard, cloud sync not configured', data: {} }
+    }
+    const parts = [`${workflows.length} saved workflow${workflows.length === 1 ? '' : 's'}`]
+    if (stats?.totalExecutions != null) {
+      parts.push(`${stats.totalExecutions} total executions`)
+    }
+    if (agentHealth) {
+      parts.push(`${agentHealth.count} agent${agentHealth.count === 1 ? '' : 's'}`)
+    }
+    return {
+      summary: parts.join(', '),
+      data: {
+        workflowCount: workflows.length,
+        loading,
+        agentCount: agentHealth?.count ?? 0,
+        totalExecutions: stats?.totalExecutions ?? 0,
+      },
+    }
+  }, [activeAddress, configured, workflows.length, stats, agentHealth, loading])
+
+  useVoicePageContext('/dashboard', voicePageContext)
+
   if (!activeAddress) {
     return (
       <div className="zuik-connect-prompt">
@@ -148,6 +188,20 @@ export default function Dashboard() {
         <div className="zuik-dashboard-title">
           <DashboardIcon /> Dashboard
         </div>
+
+        {agentHealth && (
+          <Link to="/settings?section=agents" className="dash-agent-health-card" data-testid="dash-agent-health">
+            <div className="dash-agent-health-card__label">Agent fleet</div>
+            <div className="dash-agent-health-card__row">
+              <span>{agentHealth.count} agents</span>
+              <span>{agentHealth.activePolicies} active policies</span>
+              <span className="dash-agent-health-card__health">{agentHealth.avgHealth}% health</span>
+            </div>
+            <div className="dash-agent-health-card__bar">
+              <div className="dash-agent-health-card__fill" style={{ width: `${agentHealth.avgHealth}%` }} />
+            </div>
+          </Link>
+        )}
 
         {stats && (
           <div className="zuik-stats-grid">

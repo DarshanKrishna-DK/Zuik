@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 // https://vitejs.dev/config/
-const serverUrl = process.env.VITE_SERVER_URL || 'http://localhost:4030'
+const serverUrl = process.env.VITE_SERVER_URL || 'http://localhost:4021'
 const voiceUrl = process.env.VITE_VOICE_SERVER_URL || 'http://localhost:3002'
 
 export default defineConfig({

@@ -169,7 +169,7 @@ export function GuardianSettings() {
         maxPerTradeMicroAlgos: algoToMicroAlgos(maxPerTrade),
         dailyCapMicroAlgos: algoToMicroAlgos(dailyCap),
         expiryRound: currentRound + EXPIRY_ROUND_HORIZON,
-        executionsRemaining: BigInt(executions),
+        dailyExecutionsCap: BigInt(executions),
         allowedAssetId: BigInt(allowedAssetId),
         allowedDexAppId: 0n,
       })
@@ -344,7 +344,7 @@ export function GuardianSettings() {
             <SettingsCard className="guardian-step-card">
               <h3 className="st-card-title">Register agent policy</h3>
               <p className="guardian-settings__hint">
-                Set per-trade and daily ALGO limits plus how many executions this agent may perform.
+                Set per-trade and daily ALGO limits plus daily execution count for this agent.
               </p>
               <form onSubmit={handleBootstrap} className="guardian-form guardian-form--grid">
                 <SettingsField label="Agent wallet address" htmlFor="agentAddress">
@@ -391,7 +391,7 @@ export function GuardianSettings() {
                   />
                 </SettingsField>
 
-                <SettingsField label="Executions allowed" htmlFor="executions">
+                <SettingsField label="Daily executions allowed" htmlFor="executions">
                   <SettingsInput
                     id="executions"
                     type="number"
@@ -401,6 +401,10 @@ export function GuardianSettings() {
                     onChange={(e) => setBootstrapForm((p) => ({ ...p, executions: e.target.value }))}
                     required
                   />
+                  <span className="guardian-settings__hint">
+                    📅 Maximum number of transactions this agent can execute per day. 
+                    The limit resets every 24 hours automatically.
+                  </span>
                 </SettingsField>
 
                 <SettingsField label="Allowed ASA (0 = ALGO only)" htmlFor="allowedAssetId">
@@ -503,8 +507,12 @@ export function GuardianSettings() {
                     <span className="guardian-status-value">{microToAlgo(policy.dailySpentMicroAlgos)} ALGO</span>
                   </div>
                   <div className="guardian-status-item">
-                    <span className="guardian-status-label">Executions left</span>
-                    <span className="guardian-status-value">{policy.executionsRemaining.toString()}</span>
+                    <span className="guardian-status-label">Executions remaining today</span>
+                    <span className="guardian-status-value">
+                      {(policy.dailyExecutionsCap - policy.dailyExecutionsSpent).toString()}
+                      {(policy.dailyExecutionsCap - policy.dailyExecutionsSpent) === 0n && " ⚠️ Daily limit reached"}
+                      {(policy.dailyExecutionsCap - policy.dailyExecutionsSpent) <= 2n && (policy.dailyExecutionsCap - policy.dailyExecutionsSpent) > 0n && " ⚠️ Low"}
+                    </span>
                   </div>
                   <div className="guardian-status-item">
                     <span className="guardian-status-label">Expiry round</span>

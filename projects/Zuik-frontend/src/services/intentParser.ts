@@ -59,6 +59,10 @@ export interface ParsedIntent {
 export interface UserContext {
   walletAddress?: string
   telegramChatId?: string
+  /** Current page label and registered summary for AI context. */
+  currentPage?: string
+  /** Short wallet balance summary from navbar shell state. */
+  walletBalanceSummary?: string
 }
 
 export interface CanvasBlock {

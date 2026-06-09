@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import zuikLogo from '../../assets/zuik-logo.png'
 import { getAlgodClient } from '../../services/algorand'
+import { useVoiceComponentRef, useVoiceShellState } from '../voice'
 
 interface NavbarProps {
   onConnectWallet: () => void
@@ -180,6 +181,24 @@ export default function Navbar({ onConnectWallet }: NavbarProps) {
   const formatAmount = (value: number) => new Intl.NumberFormat('en-US', {
     maximumFractionDigits: value < 1 ? 6 : 3,
   }).format(value)
+
+  const voiceShellState = useMemo(
+    () => ({
+      walletConnected: Boolean(activeAddress),
+      walletAddress: activeAddress ?? null,
+      walletSummary: selectedBalance
+        ? `${selectedBalance.label} ${formatAmount(selectedBalance.amount)}`
+        : null,
+      balances: balances.map((b) => ({ label: b.label, amount: b.amount })),
+    }),
+    [activeAddress, selectedBalance, balances],
+  )
+
+  useVoiceShellState(voiceShellState)
+
+  useVoiceComponentRef('nav-connect-wallet', {
+    click: onConnectWallet,
+  })
 
   return (
     <nav className="zuik-navbar">

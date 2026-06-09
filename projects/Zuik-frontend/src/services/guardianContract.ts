@@ -17,7 +17,8 @@ export interface GuardianAgentPolicy {
   dailySpentMicroAlgos: bigint
   dayResetRound: bigint
   expiryRound: bigint
-  executionsRemaining: bigint
+  dailyExecutionsCap: bigint
+  dailyExecutionsSpent: bigint
   allowedDexAppId: bigint
   allowedAssetId: bigint
 }
@@ -86,7 +87,7 @@ export class GuardianContractService {
       maxPerTradeMicroAlgos: bigint
       dailyCapMicroAlgos: bigint
       expiryRound: bigint
-      executionsRemaining: bigint
+      dailyExecutionsCap: bigint
       allowedAssetId: bigint
       allowedDexAppId: bigint
     },
@@ -100,7 +101,7 @@ export class GuardianContractService {
         maxPerTradeMicroAlgos: args.maxPerTradeMicroAlgos,
         dailyCapMicroAlgos: args.dailyCapMicroAlgos,
         expiryRound: args.expiryRound,
-        executionsRemaining: args.executionsRemaining,
+        dailyExecutionsCap: args.dailyExecutionsCap,
         allowedAssetId: args.allowedAssetId,
         allowedDexAppId: args.allowedDexAppId,
       },
@@ -154,7 +155,8 @@ export class GuardianContractService {
         dailySpentMicroAlgos: BigInt(p.dailySpentMicroAlgos),
         dayResetRound: BigInt(p.dayResetRound),
         expiryRound: BigInt(p.expiryRound),
-        executionsRemaining: BigInt(p.executionsRemaining),
+        dailyExecutionsCap: BigInt(p.dailyExecutionsCap),
+        dailyExecutionsSpent: BigInt(p.dailyExecutionsSpent),
         allowedDexAppId: BigInt(p.allowedDexAppId),
         allowedAssetId: BigInt(p.allowedAssetId),
       }

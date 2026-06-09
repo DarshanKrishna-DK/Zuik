@@ -25,7 +25,8 @@ type AgentPolicy = {
   dailySpentMicroAlgos: uint64
   dayResetRound: uint64
   expiryRound: uint64
-  executionsRemaining: uint64
+  dailyExecutionsCap: uint64
+  dailyExecutionsSpent: uint64
   allowedDexAppId: uint64 // 0 = none
   allowedAssetId: uint64 // 0 = ALGO only
 }
@@ -66,7 +67,7 @@ export class ZuikGuardian extends Contract {
     maxPerTradeMicroAlgos: uint64,
     dailyCapMicroAlgos: uint64,
     expiryRound: uint64,
-    executionsRemaining: uint64,
+    dailyExecutionsCap: uint64,
     allowedAssetId: Asset,
     allowedDexAppId: Application,
   ): void {
@@ -82,7 +83,8 @@ export class ZuikGuardian extends Contract {
       dailySpentMicroAlgos: Uint64(0),
       dayResetRound: Global.round + ROUNDS_PER_DAY,
       expiryRound,
-      executionsRemaining,
+      dailyExecutionsCap,
+      dailyExecutionsSpent: Uint64(0),
       allowedDexAppId: allowedDexAppId.id,
       allowedAssetId: allowedAssetId.id,
     }
@@ -107,7 +109,6 @@ export class ZuikGuardian extends Contract {
     const policy = clone(this.policies(agentKey).value)
 
     assert(Global.round <= policy.expiryRound)
-    assert(policy.executionsRemaining > Uint64(0))
     assert(this.allowedRecipients(pay.receiver.bytes).value)
 
     assertMatch(pay, {
@@ -120,12 +121,14 @@ export class ZuikGuardian extends Contract {
 
     if (Global.round >= policy.dayResetRound) {
       policy.dailySpentMicroAlgos = Uint64(0)
+      policy.dailyExecutionsSpent = Uint64(0)
       policy.dayResetRound = Global.round + ROUNDS_PER_DAY
     }
     assert(policy.dailySpentMicroAlgos + pay.amount <= policy.dailyCapMicroAlgos)
+    assert(policy.dailyExecutionsSpent < policy.dailyExecutionsCap)
 
     policy.dailySpentMicroAlgos = policy.dailySpentMicroAlgos + pay.amount
-    policy.executionsRemaining = policy.executionsRemaining - Uint64(1)
+    policy.dailyExecutionsSpent = policy.dailyExecutionsSpent + Uint64(1)
     this.policies(agentKey).value = clone(policy)
   }
 
@@ -140,7 +143,6 @@ export class ZuikGuardian extends Contract {
     const policy = clone(this.policies(agentKey).value)
 
     assert(Global.round <= policy.expiryRound)
-    assert(policy.executionsRemaining > Uint64(0))
     assert(this.allowedRecipients(spend.assetReceiver.bytes).value)
     assert(spend.xferAsset.id === policy.allowedAssetId)
 
@@ -153,12 +155,14 @@ export class ZuikGuardian extends Contract {
 
     if (Global.round >= policy.dayResetRound) {
       policy.dailySpentMicroAlgos = Uint64(0)
+      policy.dailyExecutionsSpent = Uint64(0)
       policy.dayResetRound = Global.round + ROUNDS_PER_DAY
     }
     assert(policy.dailySpentMicroAlgos + spend.assetAmount <= policy.dailyCapMicroAlgos)
+    assert(policy.dailyExecutionsSpent < policy.dailyExecutionsCap)
 
     policy.dailySpentMicroAlgos = policy.dailySpentMicroAlgos + spend.assetAmount
-    policy.executionsRemaining = policy.executionsRemaining - Uint64(1)
+    policy.dailyExecutionsSpent = policy.dailyExecutionsSpent + Uint64(1)
     this.policies(agentKey).value = clone(policy)
   }
 

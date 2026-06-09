@@ -72,6 +72,7 @@ import {
 import { WorkflowSelectOptionsProvider } from '../context/WorkflowSelectOptionsContext'
 import { fetchAlgoUsdPrice, estimateStepFee } from '../services/transactionSimulator'
 import { scheduleWorkflowStart, deactivateSchedule } from '../services/workflowScheduler'
+import { executeWorkflowHeadless } from '../services/agentPayment'
 import {
   type ExecutionMode,
   type AgentReadiness,
@@ -79,6 +80,12 @@ import {
   setStoredExecutionMode,
   checkAgentReadiness,
 } from '../lib/executionMode'
+import {
+  registerCanvasProvider,
+  unregisterCanvasProvider,
+  subscribeVoiceIntent,
+} from '../services/voiceAssistant/voiceBridge'
+import { useVoicePageContext } from '../components/voice'
 
 /* ── Inline SVG Icons ─────────────────────────────────── */
 
@@ -538,6 +545,69 @@ export default function Builder() {
         return
       }
       agentAddressRef.current = readiness.wallet.agent_address
+      
+      // For Agent wallet mode, execute on server instead of browser
+      if (workflowIdRef.current) {
+        addLog({
+          nodeId: '',
+          blockId: 'agent-execution',
+          blockName: 'Agent',
+          type: 'info',
+          message: `Starting autonomous execution with agent ${readiness.wallet.agent_address.slice(0, 8)}...`,
+        })
+        
+        try {
+          const flowNodes: FlowNode[] = nodes.map((n) => ({
+            id: n.id,
+            data: n.data as FlowNode['data'],
+          }))
+          const flowEdges: FlowEdge[] = edges.map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            sourceHandle: e.sourceHandle,
+            targetHandle: e.targetHandle,
+          }))
+          
+          setAgentStatus('running')
+          const result = await executeWorkflowHeadless({
+            workflowId: workflowIdRef.current,
+            ownerAddress: activeAddress,
+            flowJson: { nodes: flowNodes, edges: flowEdges },
+          })
+          
+          if (result.success) {
+            addLog({
+              nodeId: '',
+              blockId: 'agent-execution',
+              blockName: 'Agent',
+              type: 'success',
+              message: `Autonomous execution completed successfully! ${result.txIds?.length || 0} transactions.`,
+              data: { txIds: result.txIds },
+            })
+            setAgentStatus('idle')
+          } else {
+            addLog({
+              nodeId: '',
+              blockId: 'agent-execution',
+              blockName: 'Agent',
+              type: 'error',
+              message: `Autonomous execution failed: ${result.error || 'Unknown error'}`,
+            })
+            setAgentStatus('idle')
+          }
+        } catch (error) {
+          addLog({
+            nodeId: '',
+            blockId: 'agent-execution',
+            blockName: 'Agent',
+            type: 'error',
+            message: `Server execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          })
+          setAgentStatus('idle')
+        }
+        return
+      }
     }
 
     setLogOpen(true)
@@ -1054,6 +1124,45 @@ export default function Builder() {
       }
     }).filter((b) => b.blockId)
   }, [nodes])
+
+  const canvasBlocksRef = useRef(canvasBlocks)
+  canvasBlocksRef.current = canvasBlocks
+
+  useEffect(() => {
+    const provider = () => canvasBlocksRef.current
+    registerCanvasProvider(provider)
+    const unsubscribe = subscribeVoiceIntent(handleIntentParsed)
+    return () => {
+      unsubscribe()
+      unregisterCanvasProvider(provider)
+    }
+  }, [handleIntentParsed])
+
+  const voicePageContext = useMemo(() => {
+    const blockCount = canvasBlocks.length
+    const parts = [
+      `Workflow "${workflowName}"`,
+      `${blockCount} block${blockCount === 1 ? '' : 's'}`,
+    ]
+    if (executionMode === 'agent') {
+      parts.push('agent execution mode')
+    }
+    if (chatOpen) {
+      parts.push('AI chat open')
+    }
+    return {
+      summary: parts.join(', '),
+      data: {
+        workflowName,
+        blockCount,
+        executionMode,
+        agentControlsVisible: executionMode === 'agent' && Boolean(agentReadiness?.ok),
+        chatOpen,
+      },
+    }
+  }, [canvasBlocks.length, workflowName, executionMode, agentReadiness?.ok, chatOpen])
+
+  useVoicePageContext('/builder', voicePageContext)
 
   const minimapNodeColor = useMemo(() => {
     return (node: Node) => {

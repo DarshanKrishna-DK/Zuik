@@ -16,7 +16,8 @@ export interface GuardianPolicy {
   dailySpentMicroAlgos: bigint
   dayResetRound: bigint
   expiryRound: bigint
-  executionsRemaining: bigint
+  dailyExecutionsCap: bigint
+  dailyExecutionsSpent: bigint
   allowedDexAppId: bigint
   allowedAssetId: bigint
 }
@@ -43,6 +44,7 @@ function policyBoxName(agentAddress: string): Uint8Array {
  * Returns null when the box does not exist (agent not bootstrapped).
  */
 function decodePolicy(value: Uint8Array): GuardianPolicy | null {
+  // AgentPolicy: 8 x uint64 on deployed TestNet app (64 bytes); newer builds may use 72 bytes.
   if (value.length < 64) return null
   const dv = new DataView(value.buffer, value.byteOffset, value.byteLength)
   return {
@@ -51,9 +53,10 @@ function decodePolicy(value: Uint8Array): GuardianPolicy | null {
     dailySpentMicroAlgos: dv.getBigUint64(16),
     dayResetRound: dv.getBigUint64(24),
     expiryRound: dv.getBigUint64(32),
-    executionsRemaining: dv.getBigUint64(40),
-    allowedDexAppId: dv.getBigUint64(48),
-    allowedAssetId: dv.getBigUint64(56),
+    dailyExecutionsCap: dv.getBigUint64(40),
+    dailyExecutionsSpent: dv.getBigUint64(48),
+    allowedDexAppId: dv.getBigUint64(56),
+    allowedAssetId: value.length >= 72 ? dv.getBigUint64(64) : 0n,
   }
 }
 
@@ -148,7 +151,7 @@ export async function readGuardianContext(
   } else if (round > 0n && round > policy.expiryRound) {
     blocked = true
     blockReason = 'Agent policy has expired'
-  } else if (policy.executionsRemaining <= 0n) {
+  } else if (policy.dailyExecutionsCap - policy.dailyExecutionsSpent <= 0n) {
     blocked = true
     blockReason = 'No executions remaining on the agent policy'
   } else if (remainingDaily <= 0n) {

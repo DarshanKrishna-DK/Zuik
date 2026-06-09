@@ -11,8 +11,8 @@ test.describe('Guardian wallet flows @wallet', () => {
   test.skip(!walletConnected, 'Set E2E_WALLET_CONNECTED=1 and connect wallet manually')
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/settings?section=guardian')
-    await expect(page.getByTestId('guardian-settings')).toBeVisible()
+    await page.goto('/settings?section=agents')
+    await expect(page.getByTestId('agent-management')).toBeVisible()
   })
 
   test('bootstrap form accepts minimal policy values', async ({ page }) => {

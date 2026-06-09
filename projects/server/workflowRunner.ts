@@ -5,7 +5,7 @@ import type { AgentExecutionContext } from './agentSigner.js'
 import { getAlgodClient, getAssetDecimals } from './algorand.js'
 import { readGuardianContext } from './guardianPolicy.js'
 import { checkWorkflowBlockRisk } from './tokenRiskPolicy.js'
-import { getMarketSnapshot } from './marketSnapshot.js'
+import { fetchPremiumAlgoQuoteViaX402, getMarketSnapshot } from './marketSnapshot.js'
 import { makeAgentDecision } from './aiAgent.js'
 import { ExecutionRecorder } from './executionRecorder.js'
 import { runMultiAgentHeadless, flowHasMultiAgentBlocks } from './multiAgentRunner.js'
@@ -184,7 +184,7 @@ async function executeAiAgentBlock(
   }
 
   const guardian = await readGuardianContext(agent.guardianAppId, agent.agentAddress)
-  const market = await getMarketSnapshot(0)
+  const market = await getMarketSnapshot(0, agent)
   const agentBalanceMicroAlgos = await getAgentBalanceMicroAlgos(agent.agentAddress)
 
   const decision = await makeAgentDecision({
@@ -302,10 +302,38 @@ export async function executeBlock(
       return 'continue'
 
     case 'get-quote': {
+      const agent = ctx.agentContext
+      if (agent && process.env.X402_DISABLE !== '1') {
+        try {
+          const paid = await fetchPremiumAlgoQuoteViaX402(agent)
+          if (paid?.quote.priceUsd != null) {
+            context.currentPrice = paid.quote.priceUsd
+            context.quoteAmount = paid.quote.priceUsd
+            context.premiumQuote = paid.quote
+            if (paid.paymentTxId) {
+              context.x402PaymentTxId = paid.paymentTxId
+            }
+            ctx.recorder.log({
+              nodeId: node.id,
+              blockId: 'get-quote',
+              type: 'info',
+              message: `Premium x402 quote $${paid.quote.priceUsd} (tx: ${paid.paymentTxId ?? 'pending'})`,
+            })
+            console.log(
+              `  [get-quote] Premium x402 ALGO = $${paid.quote.priceUsd}` +
+                (paid.paymentTxId ? ` (tx ${paid.paymentTxId.slice(0, 12)}...)` : ''),
+            )
+            return 'continue'
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          console.warn(`  [get-quote] x402 premium failed, falling back to free API: ${msg}`)
+        }
+      }
       const price = await fetchPrice('algorand')
       context.currentPrice = price
       context.quoteAmount = price
-      console.log(`  [get-quote] ALGO = $${price}`)
+      console.log(`  [get-quote] ALGO = $${price} (free)`)
       return 'continue'
     }
 

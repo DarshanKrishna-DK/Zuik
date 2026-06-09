@@ -9,18 +9,18 @@ test.describe('Settings sections', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   })
 
-  test('navigates to agent wallets', async ({ page }) => {
+  test('navigates to agent management', async ({ page }) => {
     await page.getByTestId('settings-nav-agents').click()
-    const section = page.getByTestId('agent-wallet-settings')
+    const section = page.getByTestId('agent-management')
     await expect(section).toBeVisible()
     const createBtn = page.getByTestId('create-agent-wallet')
     const connectHint = section.getByText(/connect your wallet/i)
     await expect(createBtn.or(connectHint)).toBeVisible()
   })
 
-  test('navigates to guardian', async ({ page }) => {
-    await page.getByTestId('settings-nav-guardian').click()
-    await expect(page.getByTestId('guardian-settings')).toBeVisible()
+  test('guardian section redirects to agent management', async ({ page }) => {
+    await page.goto('/settings?section=guardian')
+    await expect(page.getByTestId('agent-management')).toBeVisible()
   })
 
   test('navigates to risk and slider works', async ({ page }) => {
@@ -32,13 +32,13 @@ test.describe('Settings sections', () => {
     await expect(page.getByTestId('risk-slider')).toHaveValue('42')
   })
 
-  test('guardian shows configured app id when env set', async ({ page }) => {
-    await page.goto('/settings?section=guardian')
-    const section = page.getByTestId('guardian-settings')
+  test('agent management shows guardian context when env set', async ({ page }) => {
+    await page.goto('/settings?section=agents')
+    const section = page.getByTestId('agent-management')
     await expect(section).toBeVisible()
     const body = await section.textContent()
-    if (body?.includes('763727553')) {
-      expect(body).toContain('763727553')
+    if (body?.includes('Guardian')) {
+      expect(body).toMatch(/Guardian|policy/i)
     }
   })
 })

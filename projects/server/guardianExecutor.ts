@@ -1,11 +1,6 @@
 import algosdk, { type TransactionSigner } from 'algosdk'
 import { getAlgodClient } from './algorand.js'
-
-/**
- * ABI method for Guardian atomic enforcement.
- * authorize_trade asserts the immediately-preceding PaymentTxn against the agent policy.
- */
-const AUTHORIZE_TRADE_METHOD = algosdk.ABIMethod.fromSignature('authorize_trade(pay)void')
+import { buildSignedGuardianAlgoPaymentGroup } from './guardianPaymentGroup.js'
 
 export interface AuthorizedPaymentParams {
   agentAddress: string
@@ -24,11 +19,7 @@ export interface AuthorizedPaymentResult {
 /**
  * Build and submit the atomic group [pay(agent -> recipient), authorize_trade(pay)] on Guardian.
  *
- * - index0: PaymentTxn from the agent sub-account (signed by the agent key).
- * - index1: Guardian authorize_trade app call referencing the payment (keeper == agent for MVP).
- *
- * All-or-nothing: if Guardian asserts fail, the payment reverts. Fee pooling sets the app call
- * fee to cover both transactions. Throws on Guardian rejection (caller logs, does NOT retry).
+ * All-or-nothing: if Guardian asserts fail, the payment reverts.
  */
 export async function sendAuthorizedPayment(
   params: AuthorizedPaymentParams,
@@ -39,15 +30,13 @@ export async function sendAuthorizedPayment(
     throw new Error('Guardian app id is not configured for the agent execution context')
   }
 
-  const algod = getAlgodClient()
-  const suggestedParams = await algod.getTransactionParams().do()
-
   const amount = typeof amountMicroAlgos === 'bigint' ? amountMicroAlgos : BigInt(Math.round(Number(amountMicroAlgos)))
   if (amount <= 0n) {
     throw new Error('Payment amount must be a positive number of microAlgos')
   }
 
-  // Preflight: ensure the agent balance covers the spend plus group fees before submitting.
+  const algod = getAlgodClient()
+  const suggestedParams = await algod.getTransactionParams().do()
   const minFee = BigInt(suggestedParams.minFee ?? 1000)
   const acct = await algod.accountInformation(agentAddress).do()
   const balance = BigInt(acct.amount ?? 0)
@@ -60,45 +49,27 @@ export async function sendAuthorizedPayment(
     )
   }
 
-  const paymentTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-    sender: agentAddress,
-    receiver: recipient,
-    amount,
-    note: note ? new TextEncoder().encode(note) : undefined,
-    suggestedParams: { ...suggestedParams, fee: 0, flatFee: true },
-  })
-
-  // App call carries the pooled fee for both transactions in the group.
-  const appCallParams: algosdk.SuggestedParams = { ...suggestedParams, fee: minFee * 2n, flatFee: true }
-
-  // Guardian stores per-agent policy in BoxMap(keyPrefix 'pol') and the recipient allowlist in
-  // BoxMap(keyPrefix 'rcv'). Box keys are prefix bytes + the 32-byte public key. Both boxes the
-  // contract reads MUST be declared as box references on the app call, or the AVM box_get fails.
-  const enc = new TextEncoder()
-  const policyBoxName = new Uint8Array([...enc.encode('pol'), ...algosdk.decodeAddress(agentAddress).publicKey])
-  const recipientBoxName = new Uint8Array([...enc.encode('rcv'), ...algosdk.decodeAddress(recipient).publicKey])
-
-  const composer = new algosdk.AtomicTransactionComposer()
-  composer.addMethodCall({
-    appID: guardianAppId,
-    method: AUTHORIZE_TRADE_METHOD,
-    sender: agentAddress,
+  const { paymentGroup } = await buildSignedGuardianAlgoPaymentGroup({
+    agentAddress,
+    recipient,
+    amountMicroAlgos: amount,
+    guardianAppId,
     signer,
-    suggestedParams: appCallParams,
-    methodArgs: [{ txn: paymentTxn, signer }],
-    appAccounts: [
-      algosdk.decodeAddress(agentAddress),
-      algosdk.decodeAddress(recipient),
-    ],
-    boxes: [
-      { appIndex: 0, name: policyBoxName },
-      { appIndex: 0, name: recipientBoxName },
-    ],
+    note,
   })
 
-  const result = await composer.execute(algod, 4)
+  const signedTxns = paymentGroup.map((g) => new Uint8Array(Buffer.from(g, 'base64')))
+  const combined = Buffer.concat(signedTxns.map((t) => Buffer.from(t)))
+  const { txId } = await algod.sendRawTransaction(combined).do()
+  const confirmation = await algosdk.waitForConfirmation(algod, txId, 4)
+
+  const txIds = signedTxns.map((bytes) => {
+    const stxn = algosdk.decodeSignedTransaction(bytes)
+    return stxn.txn.txID()
+  })
+
   return {
-    txIds: result.txIDs,
-    confirmedRound: Number(result.confirmedRound ?? 0),
+    txIds,
+    confirmedRound: Number(confirmation.confirmedRound ?? 0),
   }
 }

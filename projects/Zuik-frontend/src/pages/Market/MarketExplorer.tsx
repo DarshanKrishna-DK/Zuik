@@ -12,6 +12,7 @@ import QuickSwapButton from './components/QuickSwapButton'
 import { fetchAlgoUsdPrice } from '../../services/transactionSimulator'
 import { getTopMovers, getTokenDetails, type MarketToken, type MarketTokenId } from '../../services/vestigeApi'
 import { getAlgoMarketSummary, getFxRates } from '../../services/marketDataService'
+import { useVoicePageContext } from '../../components/voice'
 
 export default function MarketExplorer() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -129,6 +130,25 @@ export default function MarketExplorer() {
       setFiat('USD')
     }
   }, [fiat, fiatOptions])
+
+  const voicePageContext = useMemo(() => {
+    const name = displayToken.unitName || displayToken.name
+    const price =
+      displayToken.priceUsd != null
+        ? `$${displayToken.priceUsd.toFixed(displayToken.priceUsd < 1 ? 4 : 2)}`
+        : 'price unavailable'
+    return {
+      summary: `Market, viewing ${name} at ${price}`,
+      data: {
+        assetId: displayToken.id,
+        tokenName: name,
+        priceUsd: displayToken.priceUsd,
+        fiat,
+      },
+    }
+  }, [displayToken, fiat])
+
+  useVoicePageContext('/market', voicePageContext)
 
   return (
     <div className="zuik-market">

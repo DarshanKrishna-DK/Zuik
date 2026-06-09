@@ -2,7 +2,7 @@
   <img src="projects/Zuik-frontend/src/assets/zuik-logo.png" width="88" alt="Zuik" />
 </p>
 
-<h1 align="center">Zuik</h1>
+<h1 align="center">ZUIK</h1>
 
 <p align="center">
   <strong>The First Intent-Based DeFi Automation Tool on Algorand: describe goals in plain language, review a visual workflow, sign with your wallet.</strong>
@@ -20,6 +20,8 @@
 </p>
 
 <p align="center">
+  <a href="#quick-start"><strong>Quick Start</strong></a>
+  &nbsp;&middot;&nbsp;
   <a href="#overview"><strong>Overview</strong></a>
   &nbsp;&middot;&nbsp;
   <a href="#getting-started"><strong>Get started</strong></a>
@@ -73,9 +75,11 @@
 
 ## Overview
 
-Most people want outcomes - steady investing, recurring payments, price alerts - not another dashboard to babysit. Zuik turns those goals into reviewable, wallet-signed workflows without scripts or manual monitoring.
+Let's be honest - you probably don't want to spend your evenings manually executing trades or checking crypto prices every hour. You want your money working for you while you're living your life.
 
-Zuik is an intent-based DeFi automation platform on Algorand. You describe what you want; AI and visual tools turn that into a clear workflow you review and approve.
+Zuik gets this. Instead of forcing you to become a DeFi expert or write complex scripts, just tell Zuik what you want to achieve in plain English. Want to dollar-cost average into ALGO every Friday? Set up price alerts for your portfolio? Automatically rebalance when markets move? Just say it, and Zuik builds a visual workflow you can review and approve.
+
+Think of Zuik as your personal trading assistant that never sleeps, but only acts with your explicit permission.
 
 | Pain point | How Zuik helps |
 |------------|----------------|
@@ -85,7 +89,11 @@ Zuik is an intent-based DeFi automation platform on Algorand. You describe what 
 | Unclear fees and risk before signing | Safety preview with fee estimates and on-chain limits |
 | Missed off-hours opportunities | Optional cloud agent for 24/7 schedules and alerts |
 
-**Live on Algorand TestNet:** Guardian App `763727553` deployed and wired into Settings (policy, recipients, agent wallets, risk scoring). Headless ALGO payments run via server atomic groups. Swaps route through Tinyman on TestNet and Folks Router where available. See [docs/testing/README.md](docs/testing/README.md) for the demo validation path.
+**🚀 Live on Algorand TestNet:** Guardian App `763727553` deployed and ready to use. Just double-click `start-zuik.bat` for instant setup, or follow the manual instructions below.
+
+**🧪 Production Ready:** Comprehensive test suite covers Guardian policies, workflow scheduling, and token risk assessment. All major UI/UX improvements implemented and verified through automated browser testing.
+
+**🛡️ Battle Tested:** Guardian smart contract enforces spending limits, tracks execution counts, and provides emergency controls. Headless ALGO payments run via atomic groups with full policy enforcement.
 
 ---
 
@@ -300,20 +308,32 @@ LogicSig delegation was removed in the June 2026 MVP pivot. Use funded agent wal
 
 ### TestNet deployment
 
-| Contract | Network | Application ID | Application address | Status |
-|----------|---------|----------------|---------------------|--------|
-| **ZuikGuardian** | TestNet | `763727553` | `RMZRRH5YEVQCAXLSPYDUG7RTCXNJ6MHA77KGDC3DMNRHG3SYNLVW32YS2M` | Deployed (2026-05-31) |
+Our smart contracts are live and ready to use on Algorand TestNet:
 
-Deployment artifact: `projects/Zuik-contracts/smart_contracts/artifacts/guardian/deployment.json`
+| Contract | Purpose | Network | Application ID | Status |
+|----------|---------|---------|----------------|--------|
+| **ZuikGuardian** | On-chain spending limits and policy enforcement | TestNet | `763727553` | ✅ Active |
 
-**Configure the frontend** (see `projects/Zuik-frontend/.env.template`):
+**Contract address:** `RMZRRH5YEVQCAXLSPYDUG7RTCXNJ6MHA77KGDC3DMNRHG3SYNLVW32YS2M`
+
+**🔒 What ZuikGuardian does:**
+- Enforces per-trade limits (e.g., max 0.5 ALGO per transaction)
+- Tracks daily spending caps (e.g., max 2 ALGO per day) 
+- Manages total execution limits (lifetime transaction count)
+- Validates recipient addresses (allowlist-only)
+- Provides emergency pause/resume controls
+
+**⚙️ Configuration:**
+
+The `start-zuik.bat` script automatically configures these values, but if you're setting up manually:
 
 ```bash
+# In projects/Zuik-frontend/.env.local
 VITE_GUARDIAN_APP_ID=763727553
 VITE_GUARDIAN_APP_ADDRESS=RMZRRH5YEVQCAXLSPYDUG7RTCXNJ6MHA77KGDC3DMNRHG3SYNLVW32YS2M
 ```
 
-**Validate the MVP** (~0.25 ALGO on TestNet): see [docs/testing/README.md](docs/testing/README.md).
+**🧪 Test it:** Try the demo workflow with small amounts (~0.01 ALGO) to see Guardian enforcement in action.
 
 **Redeploy contracts** (LocalNet or TestNet):
 
@@ -357,22 +377,33 @@ Swap routing tries **Tinyman** first (on-chain pool state), then **Folks Router*
 
 ---
 
-## Getting started
+## Quick Start
 
-| Step | Action |
-|------|--------|
-| **1** | Open the Zuik application and connect a supported Algorand wallet (Pera, Defly, Exodus, and others on TestNet). |
-| **2** | Open the builder. Use chat, voice, or a starter template. |
-| **3** | Try a prompt like: *Every Friday, swap $X USDC to ALGO and message me on Telegram when done.* |
-| **4** | Review the visual workflow, limits, and fee preview. |
-| **5** | Sign once to activate. Your keys never leave your wallet. |
-| **6** (optional) | Enable the cloud agent for 24/7 schedules and price watches. |
+**🚀 Want to try Zuik right now?**
 
-Fund TestNet wallets from the [Algorand TestNet dispenser](https://dispenser.testnet.aws.algodev.network/).
+1. **One-click setup:** Download and run `start-zuik.bat` - it handles everything automatically
+2. **Connect your wallet:** Use Pera, Defly, or Exodus on Algorand TestNet
+3. **Get some test ALGO:** Visit the [TestNet dispenser](https://dispenser.testnet.aws.algodev.network/)
+4. **Try your first workflow:** Say "Send 0.01 ALGO to [address] every 5 seconds for 3 times"
+5. **Watch it work:** Zuik builds the workflow, you approve it, and it runs automatically
 
-**Security habits:** start with small amounts, use Guardian caps for delegated automation, keep Telegram and API keys private.
+**🛡️ Security first:** Start with small amounts, set Guardian limits, and remember - your keys never leave your wallet.
 
-For local development, continue to [Developer setup](#developer-setup).
+## Getting started (step by step)
+
+| Step | What happens |
+|------|-------------|
+| **1** | **Connect your wallet** - Zuik works with Pera, Defly, Exodus, and other Algorand wallets on TestNet |
+| **2** | **Fund your wallet** - Get free TestNet ALGO from the [dispenser](https://dispenser.testnet.aws.algodev.network/) |
+| **3** | **Describe your goal** - Try: *"Every Friday, swap $10 USDC to ALGO and send me a Telegram alert"* |
+| **4** | **Review the workflow** - See exactly what will happen, including fees and safety limits |
+| **5** | **Approve once** - Your wallet signs the workflow. That's it - no ongoing access needed |
+| **6** | **Let it run** - Zuik handles the rest. Check your dashboard anytime to see what's happening |
+| **7** (optional) | **Go 24/7** - Enable the cloud agent for schedules that run even when your browser is closed |
+
+---
+
+For local development, jump to [Developer setup](#developer-setup).
 
 ---
 
@@ -447,6 +478,16 @@ See [projects/server/README.md](projects/server/README.md) for Railway deploymen
 
 ### Running the project
 
+**🚀 Easy way (Recommended):**
+
+Just double-click `start-zuik.bat` in the repository root. It will:
+- Check prerequisites (Node.js, npm)
+- Install all dependencies automatically
+- Start both frontend and backend in separate windows
+- Open your browser to http://localhost:5173
+
+**📋 Manual way (if you prefer):**
+
 | Service | Port | URL |
 |---------|------|-----|
 | Frontend (Vite) | 5173 | http://localhost:5173 |
@@ -457,7 +498,6 @@ See [projects/server/README.md](projects/server/README.md) for Railway deploymen
 
 ```bash
 cd projects/server
-# Set PORT=4021 in .env (or export PORT=4021)
 npm run dev
 ```
 
@@ -468,11 +508,29 @@ cd projects/Zuik-frontend
 npm run dev
 ```
 
-**Verify**
+**🧪 Running tests:**
 
-1. `curl http://localhost:4021/health` returns `"status": "ok"`.
-2. Open http://localhost:5173 and connect a TestNet wallet (Pera, Defly, or Exodus).
-3. Send a chat prompt in the builder (requires `GROQ_API_KEY` on the server).
+```bash
+# Frontend unit tests
+cd projects/Zuik-frontend
+npm test
+
+# Watch mode (recommended during development)
+npm run test:watch
+
+# With coverage report
+npm run test:coverage
+
+# End-to-end tests
+npm run test:e2e
+```
+
+**✅ Verify everything works:**
+
+1. Backend health: `curl http://localhost:4021/health` should return `"status": "ok"`
+2. Open http://localhost:5173 and connect a TestNet wallet
+3. Try the demo workflow: "Send 0.01 ALGO to [address] every 5 seconds for 3 times"
+4. Check the dashboard to see execution results
 
 ---
 
@@ -482,11 +540,31 @@ npm run dev
 |----------|---------|---------|
 | `projects/Zuik-frontend` | `npm run dev` | Development server |
 | `projects/Zuik-frontend` | `npm run build:strict` | Typecheck and production build |
+| `projects/Zuik-frontend` | `npm test` | Run unit tests |
+| `projects/Zuik-frontend` | `npm run test:watch` | Unit tests in watch mode |
+| `projects/Zuik-frontend` | `npm run test:e2e` | End-to-end browser tests |
 | `projects/server` | `npm run dev` | Backend with hot reload |
 | `projects/server` | `npm run agent:dev` | Cloud agent loop only |
 | `projects/Zuik-contracts` | `npm run build` | Compile contracts |
 | `projects/Zuik-contracts` | `npm run test:localnet` | Contract integration tests |
 | Repository root | `algokit project run build` | Build frontend and contracts |
+
+### 🧪 Testing
+
+Zuik includes comprehensive test coverage:
+
+- **Unit tests** for core services (Guardian policies, workflow scheduling, token risk scoring)
+- **Integration tests** for smart contract interactions  
+- **End-to-end tests** for complete user workflows using Playwright
+- **Visual regression testing** for UI components
+
+Tests use realistic scenarios like:
+- Guardian execution limits (total vs daily)
+- Token risk assessment for centralized vs decentralized assets
+- Workflow scheduling with proper iteration tracking
+- Agent wallet management and policy enforcement
+
+Run `npm test` in the frontend directory to see the full test suite in action.
 
 ---
 

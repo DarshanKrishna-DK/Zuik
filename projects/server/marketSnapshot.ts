@@ -1,21 +1,24 @@
 /**
- * Lightweight market snapshot for the AI decision layer.
+ * Market snapshot for the AI decision layer.
  *
- * Reuses the same free upstreams the repo already proxies (Vestige free API for Algorand asset
- * data, CoinGecko for the ALGO/USD spot). One snapshot is taken per decision, never per price
- * tick, to stay inside the free tier. All fields are best effort: a missing source yields null
- * and the AI is told the data is partial rather than fabricating a number.
+ * Free tier: Vestige + CoinGecko simple price.
+ * Premium tier: x402-gated CoinGecko full market data (when agent context is available).
  */
+
+import type { AgentExecutionContext } from './agentSigner.js'
+import { fetchWithGuardianX402 } from './x402AgentClient.js'
+import type { PremiumAlgoQuote } from './premiumMarketData.js'
 
 const VESTIGE_BASE = 'https://free-api.vestige.fi'
 const COINGECKO_BASE = 'https://api.coingecko.com/api/v3'
 
+const SERVER_BASE = process.env.X402_SERVER_BASE
+  ?? process.env.SERVER_URL
+  ?? `http://localhost:${process.env.PORT ?? '4021'}`
+
 export interface MarketSnapshot {
-  /** ALGO spot price in USD, or null when unavailable. */
   algoUsd: number | null
-  /** 24h percent change for ALGO, or null. */
   algoChange24h: number | null
-  /** Vestige data for the configured asset (when assetId provided and found). */
   asset?: {
     assetId: number
     priceUsd: number | null
@@ -24,8 +27,13 @@ export interface MarketSnapshot {
     change24h: number | null
   }
   takenAt: string
-  /** Human note describing which sources answered (for the AI prompt + logs). */
   sources: string[]
+  /** Set when premium x402 data was used. */
+  premium?: {
+    marketCapUsd: number | null
+    volume24hUsd: number | null
+    paymentTxId?: string
+  }
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -40,25 +48,79 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
-/**
- * Build a market snapshot. assetId 0 (ALGO) only fetches the spot price; a non-zero ASA id also
- * pulls Vestige liquidity/volume so the AI can reason about thin markets.
- */
-export async function getMarketSnapshot(assetId = 0): Promise<MarketSnapshot> {
-  const sources: string[] = []
-
+async function fetchFreeAlgoSpot(): Promise<{ algoUsd: number | null; algoChange24h: number | null }> {
   const cg = await fetchJson<Record<string, { usd?: number; usd_24h_change?: number }>>(
     `${COINGECKO_BASE}/simple/price?ids=algorand&vs_currencies=usd&include_24hr_change=true`,
   )
-  const algoUsd = typeof cg?.algorand?.usd === 'number' ? cg.algorand.usd : null
-  const algoChange24h = typeof cg?.algorand?.usd_24h_change === 'number' ? cg.algorand.usd_24h_change : null
-  if (algoUsd !== null) sources.push('coingecko')
+  return {
+    algoUsd: typeof cg?.algorand?.usd === 'number' ? cg.algorand.usd : null,
+    algoChange24h: typeof cg?.algorand?.usd_24h_change === 'number' ? cg.algorand.usd_24h_change : null,
+  }
+}
+
+/**
+ * Fetch premium ALGO quote via x402 with Guardian-enforced agent payment.
+ */
+export async function fetchPremiumAlgoQuoteViaX402(
+  agent: AgentExecutionContext,
+  coinId = 'algorand',
+): Promise<{ quote: PremiumAlgoQuote; paymentTxId?: string } | null> {
+  const url = `${SERVER_BASE.replace(/\/$/, '')}/api/x402/premium/algo-quote?coin=${encodeURIComponent(coinId)}`
+  try {
+    const result = await fetchWithGuardianX402<PremiumAlgoQuote>(agent, url)
+    return { quote: result.data, paymentTxId: result.paymentTxId }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.warn(`[marketSnapshot] x402 premium fetch failed: ${msg}`)
+    return null
+  }
+}
+
+/**
+ * Build a market snapshot. When agentContext is provided and X402 is not disabled,
+ * uses the x402 premium endpoint instead of the free CoinGecko spot call.
+ */
+export async function getMarketSnapshot(
+  assetId = 0,
+  agentContext?: AgentExecutionContext | null,
+): Promise<MarketSnapshot> {
+  const sources: string[] = []
+  const useX402 = agentContext && process.env.X402_DISABLE !== '1'
+
+  let algoUsd: number | null = null
+  let algoChange24h: number | null = null
+  let premium: MarketSnapshot['premium']
+
+  if (useX402 && agentContext) {
+    const paid = await fetchPremiumAlgoQuoteViaX402(agentContext)
+    if (paid) {
+      sources.push('x402-premium')
+      algoUsd = paid.quote.priceUsd
+      algoChange24h = paid.quote.change24hPct
+      premium = {
+        marketCapUsd: paid.quote.marketCapUsd,
+        volume24hUsd: paid.quote.volume24hUsd,
+        paymentTxId: paid.paymentTxId,
+      }
+      if (paid.paymentTxId) {
+        console.log(`[marketSnapshot] x402 premium payment confirmed: ${paid.paymentTxId}`)
+      }
+    }
+  }
+
+  if (algoUsd === null) {
+    const free = await fetchFreeAlgoSpot()
+    algoUsd = free.algoUsd
+    algoChange24h = free.algoChange24h
+    if (algoUsd !== null) sources.push('coingecko')
+  }
 
   const snapshot: MarketSnapshot = {
     algoUsd,
     algoChange24h,
     takenAt: new Date().toISOString(),
     sources,
+    premium,
   }
 
   if (assetId && assetId > 0) {

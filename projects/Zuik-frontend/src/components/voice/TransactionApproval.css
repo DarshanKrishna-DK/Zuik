@@ -1,0 +1,233 @@
+.va-tx-panel {
+  width: min(340px, calc(100vw - 32px));
+  background: linear-gradient(165deg, rgba(18, 24, 34, 0.99), rgba(12, 17, 26, 0.97));
+  border: 1px solid rgba(110, 231, 255, 0.22);
+  border-radius: var(--z-radius-xl);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(110, 231, 255, 0.08) inset;
+  padding: 14px;
+  animation: vaPanelIn 0.28s var(--z-ease);
+  backdrop-filter: blur(12px);
+}
+
+.va-tx-panel--confirmed {
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+.va-tx-panel--failed {
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.va-tx-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.va-tx-eyebrow {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--z-accent);
+  margin-bottom: 2px;
+}
+
+.va-tx-title {
+  font-family: var(--z-display);
+  font-size: 1rem;
+  color: var(--z-text);
+}
+
+.va-tx-close {
+  border: none;
+  background: transparent;
+  color: var(--z-text-dim);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--z-radius-sm);
+}
+
+.va-tx-close:hover {
+  color: var(--z-text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.va-tx-summary {
+  font-size: 0.84rem;
+  color: var(--z-text-muted);
+  margin-bottom: 10px;
+  line-height: 1.45;
+}
+
+.va-tx-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border-radius: var(--z-radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--z-border);
+}
+
+.va-tx-details dt {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--z-text-dim);
+}
+
+.va-tx-details dd {
+  font-size: 0.82rem;
+  color: var(--z-text);
+  font-family: var(--z-mono, ui-monospace, monospace);
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+.va-tx-section-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--z-text-dim);
+  margin-bottom: 6px;
+}
+
+.va-tx-compliance ul {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.va-tx-check {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--z-radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--z-border);
+}
+
+.va-tx-check--pass {
+  border-color: rgba(74, 222, 128, 0.2);
+}
+
+.va-tx-check--error {
+  border-color: rgba(248, 113, 113, 0.25);
+}
+
+.va-tx-check--warning {
+  border-color: rgba(251, 191, 36, 0.25);
+}
+
+.va-tx-check-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.va-tx-check-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--z-text);
+}
+
+.va-tx-check-msg {
+  font-size: 0.76rem;
+  color: var(--z-text-muted);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.va-tx-steps ol {
+  margin: 0 0 12px;
+  padding-left: 1.1rem;
+  font-size: 0.8rem;
+  color: var(--z-text-muted);
+  line-height: 1.45;
+}
+
+.va-tx-status-msg {
+  font-size: 0.82rem;
+  color: var(--z-text-muted);
+  margin-bottom: 10px;
+}
+
+.va-tx-status-msg--success {
+  color: #4ade80;
+}
+
+.va-tx-status-msg--error {
+  color: #f87171;
+}
+
+.va-tx-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.va-tx-btn {
+  font-size: 0.82rem;
+  padding: 8px 14px;
+  border-radius: var(--z-radius-md);
+  border: 1px solid var(--z-border);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.va-tx-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.va-tx-btn--ghost {
+  background: transparent;
+  color: var(--z-text-muted);
+}
+
+.va-tx-btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--z-text);
+}
+
+.va-tx-btn--primary {
+  background: linear-gradient(135deg, rgba(110, 231, 255, 0.2), rgba(56, 189, 248, 0.15));
+  border-color: rgba(110, 231, 255, 0.35);
+  color: var(--z-text);
+}
+
+.va-tx-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(110, 231, 255, 0.28), rgba(56, 189, 248, 0.22));
+}
+
+.va-tx-hint {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--z-text-dim);
+}
+
+.va-tx-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--z-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+}
