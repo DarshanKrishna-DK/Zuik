@@ -72,7 +72,8 @@ function writeScoreCache(assetId: number, result: TokenRiskResult) {
 async function resolveAsset(assetId: number): Promise<ResolvedAsset> {
   const algod = getAlgodClient()
   const info = await algod.getAssetByID(BigInt(assetId)).do()
-  const params = (info as Record<string, unknown>).params as Record<string, unknown> | undefined ?? info as Record<string, unknown>
+  const infoRecord = info as unknown as Record<string, unknown>
+  const params = (infoRecord.params as Record<string, unknown> | undefined) ?? infoRecord
   let createdAtRound: number | undefined
   try {
     const indexer = new algosdk.Indexer(
@@ -81,7 +82,7 @@ async function resolveAsset(assetId: number): Promise<ResolvedAsset> {
       process.env.INDEXER_PORT ? Number(process.env.INDEXER_PORT) : '',
     )
     const idxAsset = await indexer.lookupAssetByID(assetId).do()
-    const asset = idxAsset.asset as Record<string, unknown> | undefined
+    const asset = idxAsset.asset as unknown as Record<string, unknown> | undefined
     const round = asset?.['created-at-round'] ?? asset?.createdAtRound
     if (typeof round === 'bigint') createdAtRound = Number(round)
     else if (typeof round === 'number') createdAtRound = round

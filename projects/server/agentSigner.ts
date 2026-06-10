@@ -144,7 +144,30 @@ export async function getAgentExecutionContextForWorkflow(
   workflowId: string,
 ): Promise<AgentExecutionContext | null> {
   try {
-    // First, try workflow-specific agent
+    const { data: bindingPref } = await sb
+      .from('agent_preferences')
+      .select('agent_address')
+      .eq('workflow_id', workflowId)
+      .eq('preference_key', 'workflow_binding')
+      .maybeSingle()
+
+    if (bindingPref?.agent_address) {
+      const { data: boundAgent } = await sb
+        .from('agent_wallets')
+        .select('agent_address, guardian_app_id, status')
+        .eq('agent_address', bindingPref.agent_address)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      if (boundAgent?.agent_address) {
+        return getAgentExecutionContext(
+          boundAgent.agent_address as string,
+          boundAgent.guardian_app_id ? Number(boundAgent.guardian_app_id) : GUARDIAN_APP_ID || undefined,
+        )
+      }
+    }
+
+    // Workflow-specific dedicated agent on agent_wallets row
     const { data: workflowAgent, error: workflowError } = await sb
       .from('agent_wallets')
       .select('agent_address, guardian_app_id, status, wallet_address')

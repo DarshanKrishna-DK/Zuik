@@ -11,6 +11,7 @@ import {
   type WorkflowRow, type ExecutionRow,
 } from '../services/supabase'
 import { fetchAgentOverview } from '../services/agentManagement'
+import { fetchWorkflowAgentBindings, type WorkflowAgentBinding } from '../services/agentWallet'
 import { useVoicePageContext } from '../components/voice'
 
 const PIE_COLORS = ['#34D399', '#F87171', '#FBBF24', '#38BDF8']
@@ -40,6 +41,20 @@ function CheckCircleIcon() { return <svg width="12" height="12" viewBox="0 0 24 
 function XCircleIcon() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="m15 9-6 6" /><path d="m9 9 6 6" /></svg> }
 function DashboardIcon() { return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></svg> }
 function WalletIcon() { return <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" /><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" /></svg> }
+function BotIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" />
+    </svg>
+  )
+}
+
+function agentBindingLabel(binding: WorkflowAgentBinding | undefined): string | null {
+  if (!binding?.agentAddress) return null
+  const name = binding.agentDisplayName?.trim() || `${binding.agentAddress.slice(0, 6)}...`
+  const type = binding.bindingType === 'dedicated' ? 'dedicated' : binding.bindingType === 'shared' ? 'shared' : 'agent'
+  return `${name} (${type})`
+}
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { color: string; Icon: () => JSX.Element; label: string }> = {
@@ -66,19 +81,30 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [agentHealth, setAgentHealth] = useState<{ count: number; activePolicies: number; avgHealth: number } | null>(null)
+  const [workflowBindings, setWorkflowBindings] = useState<WorkflowAgentBinding[]>([])
   const configured = isSupabaseConfigured()
+
+  const bindingByWorkflow = useMemo(() => {
+    const map = new Map<string, WorkflowAgentBinding>()
+    for (const b of workflowBindings) {
+      map.set(b.workflowId, b)
+    }
+    return map
+  }, [workflowBindings])
 
   const load = useCallback(async () => {
     if (!activeAddress || !configured) { setLoading(false); return }
     setLoading(true)
     try {
-      const [wf, st, agents] = await Promise.all([
+      const [wf, st, agents, bindings] = await Promise.all([
         listWorkflows(activeAddress),
         getDashboardStats(activeAddress),
         fetchAgentOverview(activeAddress).catch(() => []),
+        fetchWorkflowAgentBindings(activeAddress).catch(() => []),
       ])
       setWorkflows(wf)
       setStats(st)
+      setWorkflowBindings(bindings)
       if (agents.length > 0) {
         const activePolicies = agents.filter((a) => a.policyStatus === 'active').length
         const avgHealth = Math.round(
@@ -295,6 +321,8 @@ export default function Dashboard() {
           <div className="zuik-workflow-list">
             {filtered.map((wf) => {
               const nodeCount = Array.isArray(wf.flow_json?.nodes) ? wf.flow_json.nodes.length : 0
+              const binding = bindingByWorkflow.get(wf.id)
+              const agentLabel = agentBindingLabel(binding)
               return (
                 <div key={wf.id} className="zuik-workflow-row" onClick={() => navigate(`/builder?wf=${wf.id}`)}>
                   <div style={{ flex: 1 }}>
@@ -302,6 +330,17 @@ export default function Dashboard() {
                     <div className="zuik-workflow-meta">
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><WorkflowIcon size={12} /> {nodeCount} block{nodeCount !== 1 ? 's' : ''}</span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ClockIcon /> {timeAgo(wf.updated_at)}</span>
+                      {agentLabel && (
+                        <Link
+                          to="/settings?section=agents"
+                          className="dash-workflow-agent-link"
+                          onClick={(e) => e.stopPropagation()}
+                          title={`Agent: ${binding?.agentAddress ?? ''}`}
+                          data-testid={`workflow-agent-${wf.id}`}
+                        >
+                          <BotIcon size={11} /> {agentLabel}
+                        </Link>
+                      )}
                     </div>
                   </div>
                   <div className={`zuik-agent-dot${wf.is_active ? ' running' : ''}`} title={wf.is_active ? 'Active' : 'Inactive'} />

@@ -5,7 +5,7 @@
 <h1 align="center">ZUIK</h1>
 
 <p align="center">
-  <strong>The First Intent-Based DeFi Automation Tool on Algorand: describe goals in plain language, review a visual workflow, sign with your wallet.</strong>
+  <strong>The First Intent-Based DeFi Automation Tool. Describe what you want in plain English, review the workflow, sign with your wallet.</strong>
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  Set up <strong>$X weekly dollar-cost averaging into ALGO</strong>, alert yourself when prices move, or rebalance - by voice, chat, or drag-and-drop.
+  Set up <strong>weekly dollar-cost averaging</strong>, get price alerts, or rebalance portfolios using voice commands, chat, or drag-and-drop.
 </p>
 
 <p align="center">
@@ -75,11 +75,11 @@
 
 ## Overview
 
-Let's be honest - you probably don't want to spend your evenings manually executing trades or checking crypto prices every hour. You want your money working for you while you're living your life.
+Nobody wants to spend their evenings manually executing trades or refreshing price charts. You want your money working while you actually live your life.
 
-Zuik gets this. Instead of forcing you to become a DeFi expert or write complex scripts, just tell Zuik what you want to achieve in plain English. Want to dollar-cost average into ALGO every Friday? Set up price alerts for your portfolio? Automatically rebalance when markets move? Just say it, and Zuik builds a visual workflow you can review and approve.
+Zuik handles this. Tell it what you want in plain English instead of learning complex DeFi protocols or writing scripts. Want to dollar-cost average into ALGO every Friday? Set price alerts? Auto-rebalance when markets swing? Just say it. Zuik builds a visual workflow you can review and approve.
 
-Think of Zuik as your personal trading assistant that never sleeps, but only acts with your explicit permission.
+Think of it as a trading assistant that never sleeps but only moves when you say so.
 
 | Pain point | How Zuik helps |
 |------------|----------------|
@@ -89,11 +89,11 @@ Think of Zuik as your personal trading assistant that never sleeps, but only act
 | Unclear fees and risk before signing | Safety preview with fee estimates and on-chain limits |
 | Missed off-hours opportunities | Optional cloud agent for 24/7 schedules and alerts |
 
-**🚀 Live on Algorand TestNet:** Guardian App `763727553` deployed and ready to use. Just double-click `start-zuik.bat` for instant setup, or follow the manual instructions below.
+**🚀 Live on TestNet:** Guardian contract `763727553` is deployed. Double-click `start-zuik.bat` for setup, or follow the manual instructions below.
 
-**🧪 Production Ready:** Comprehensive test suite covers Guardian policies, workflow scheduling, and token risk assessment. All major UI/UX improvements implemented and verified through automated browser testing.
+**🧪 Tested:** Test suite covers Guardian policies, workflow scheduling, and token risk assessment. UI improvements are implemented and verified with automated browser tests.
 
-**🛡️ Battle Tested:** Guardian smart contract enforces spending limits, tracks execution counts, and provides emergency controls. Headless ALGO payments run via atomic groups with full policy enforcement.
+**🛡️ Smart Contract Security:** Guardian enforces spending limits, tracks execution counts, and provides emergency controls. ALGO payments run as atomic groups with full policy enforcement.
 
 ---
 
@@ -133,7 +133,7 @@ flowchart LR
     style EXECUTE fill:#0a2018,stroke:#34d399,color:#f8fafc
 ```
 
-You stay non-custodial throughout: Zuik orchestrates, your wallet signs, and multi-step flows run as atomic transaction groups on Algorand.
+You stay non-custodial: Zuik coordinates, your wallet signs, and multi-step flows run as atomic transaction groups on Algorand.
 
 ---
 
@@ -232,7 +232,7 @@ Monorepo managed with [AlgoKit](https://github.com/algorandfoundation/algokit-cl
 
 ## Workflow creation
 
-From natural language to on-chain execution, Zuik materializes intent into a reviewable flow before anything is signed.
+Zuik converts natural language into executable workflows. You review everything before signing.
 
 ```mermaid
 flowchart TD
@@ -255,7 +255,7 @@ flowchart TD
     style RUN fill:#2a1020,stroke:#ec4899,color:#f8fafc
 ```
 
-Refine through chat, voice, or drag-and-drop until the canvas matches your intent. The safety preview surfaces fees and slippage before you sign.
+Adjust using chat, voice, or drag-and-drop until the workflow looks right. The safety preview shows fees and slippage before you sign.
 
 ---
 
@@ -291,7 +291,7 @@ sequenceDiagram
 
 ### ZuikGuardian
 
-On-chain **policy store** for funded agent sub-accounts. The owner registers each agent with max per trade, daily cap, expiry, execution count, and allowed assets/DEX apps. Autonomous spends use an atomic group: payment from the agent, then `authorize_trade(pay)` (or `authorize_asset_trade` for ASAs). If any assert fails, the whole group reverts.
+**Policy store** for funded agent sub-accounts. The owner registers each agent with trade limits, daily caps, expiry, execution counts, and allowed assets/DEX apps. Agent transactions use atomic groups: payment from the agent, then `authorize_trade(pay)` (or `authorize_asset_trade` for ASAs). If any check fails, the entire group reverts.
 
 | Method | Caller | Purpose |
 |--------|--------|---------|
@@ -316,12 +316,12 @@ Our smart contracts are live and ready to use on Algorand TestNet:
 
 **Contract address:** `RMZRRH5YEVQCAXLSPYDUG7RTCXNJ6MHA77KGDC3DMNRHG3SYNLVW32YS2M`
 
-**🔒 What ZuikGuardian does:**
-- Enforces per-trade limits (e.g., max 0.5 ALGO per transaction)
-- Tracks daily spending caps (e.g., max 2 ALGO per day) 
-- Manages total execution limits (lifetime transaction count)
-- Validates recipient addresses (allowlist-only)
-- Provides emergency pause/resume controls
+**🔒 ZuikGuardian features:**
+- Per-trade limits (e.g., max 0.5 ALGO per transaction)
+- Daily spending caps (e.g., max 2 ALGO per day) 
+- Total execution limits (lifetime transaction count)
+- Recipient address validation (allowlist-only)
+- Emergency pause/resume controls
 
 **⚙️ Configuration:**
 
@@ -373,33 +373,33 @@ Integration tests: `npm run test:localnet` and `npm run test:testnet` in `projec
 | **[Groq](https://groq.com/)** | Server-side LLM for intent parsing (key never exposed to browser) |
 | **[Telegram](https://telegram.org/)** | Bot notifications, workflow control, voice conversations via `@ZuikDeFiBot` |
 
-Swap routing tries **Tinyman** first (on-chain pool state), then **Folks Router** when a competitive quote is available (`projects/Zuik-frontend/src/services/swapToken.ts`).
+Swap routing checks **Tinyman** first (on-chain pool state), then **Folks Router** for better quotes (`projects/Zuik-frontend/src/services/swapToken.ts`).
 
 ---
 
 ## Quick Start
 
-**🚀 Want to try Zuik right now?**
+**🚀 Try Zuik now:**
 
-1. **One-click setup:** Download and run `start-zuik.bat` - it handles everything automatically
-2. **Connect your wallet:** Use Pera, Defly, or Exodus on Algorand TestNet
-3. **Get some test ALGO:** Visit the [TestNet dispenser](https://dispenser.testnet.aws.algodev.network/)
-4. **Try your first workflow:** Say "Send 0.01 ALGO to [address] every 5 seconds for 3 times"
-5. **Watch it work:** Zuik builds the workflow, you approve it, and it runs automatically
+1. **Setup:** Download and run `start-zuik.bat` (handles everything automatically)
+2. **Connect wallet:** Use Pera, Defly, or Exodus on Algorand TestNet
+3. **Get test ALGO:** Visit the [TestNet dispenser](https://dispenser.testnet.aws.algodev.network/)
+4. **First workflow:** Say "Send 0.01 ALGO to [address] every 5 seconds for 3 times"
+5. **Watch it work:** Zuik builds the workflow, you approve it, it runs
 
-**🛡️ Security first:** Start with small amounts, set Guardian limits, and remember - your keys never leave your wallet.
+**🛡️ Start safe:** Use small amounts, set Guardian limits. Your keys never leave your wallet.
 
 ## Getting started (step by step)
 
 | Step | What happens |
 |------|-------------|
-| **1** | **Connect your wallet** - Zuik works with Pera, Defly, Exodus, and other Algorand wallets on TestNet |
-| **2** | **Fund your wallet** - Get free TestNet ALGO from the [dispenser](https://dispenser.testnet.aws.algodev.network/) |
-| **3** | **Describe your goal** - Try: *"Every Friday, swap $10 USDC to ALGO and send me a Telegram alert"* |
-| **4** | **Review the workflow** - See exactly what will happen, including fees and safety limits |
-| **5** | **Approve once** - Your wallet signs the workflow. That's it - no ongoing access needed |
-| **6** | **Let it run** - Zuik handles the rest. Check your dashboard anytime to see what's happening |
-| **7** (optional) | **Go 24/7** - Enable the cloud agent for schedules that run even when your browser is closed |
+| **1** | **Connect wallet** - Works with Pera, Defly, Exodus, and other Algorand wallets on TestNet |
+| **2** | **Fund wallet** - Get free TestNet ALGO from the [dispenser](https://dispenser.testnet.aws.algodev.network/) |
+| **3** | **Describe goal** - Try: *"Every Friday, swap $10 USDC to ALGO and send me a Telegram alert"* |
+| **4** | **Review workflow** - See exactly what happens, including fees and safety limits |
+| **5** | **Approve once** - Your wallet signs the workflow. No ongoing access needed |
+| **6** | **Let it run** - Zuik handles execution. Check your dashboard to see progress |
+| **7** (optional) | **Enable cloud agent** - For schedules that run when your browser is closed |
 
 ---
 
@@ -478,15 +478,15 @@ See [projects/server/README.md](projects/server/README.md) for Railway deploymen
 
 ### Running the project
 
-**🚀 Easy way (Recommended):**
+**🚀 Easy way (recommended):**
 
-Just double-click `start-zuik.bat` in the repository root. It will:
-- Check prerequisites (Node.js, npm)
-- Install all dependencies automatically
-- Start both frontend and backend in separate windows
-- Open your browser to http://localhost:5173
+Double-click `start-zuik.bat` in the repository root. It handles:
+- Prerequisites check (Node.js, npm)
+- Dependency installation
+- Starting frontend and backend in separate windows
+- Opening your browser to http://localhost:5173
 
-**📋 Manual way (if you prefer):**
+**📋 Manual way:**
 
 | Service | Port | URL |
 |---------|------|-----|
@@ -525,12 +525,12 @@ npm run test:coverage
 npm run test:e2e
 ```
 
-**✅ Verify everything works:**
+**✅ Test the setup:**
 
 1. Backend health: `curl http://localhost:4021/health` should return `"status": "ok"`
 2. Open http://localhost:5173 and connect a TestNet wallet
-3. Try the demo workflow: "Send 0.01 ALGO to [address] every 5 seconds for 3 times"
-4. Check the dashboard to see execution results
+3. Try the demo: "Send 0.01 ALGO to [address] every 5 seconds for 3 times"
+4. Check the dashboard for results
 
 ---
 
@@ -551,34 +551,34 @@ npm run test:e2e
 
 ### 🧪 Testing
 
-Zuik includes comprehensive test coverage:
+Zuik has solid test coverage:
 
 - **Unit tests** for core services (Guardian policies, workflow scheduling, token risk scoring)
 - **Integration tests** for smart contract interactions  
-- **End-to-end tests** for complete user workflows using Playwright
+- **End-to-end tests** for user workflows using Playwright
 - **Visual regression testing** for UI components
 
-Tests use realistic scenarios like:
+Tests cover real scenarios:
 - Guardian execution limits (total vs daily)
 - Token risk assessment for centralized vs decentralized assets
-- Workflow scheduling with proper iteration tracking
+- Workflow scheduling with iteration tracking
 - Agent wallet management and policy enforcement
 
-Run `npm test` in the frontend directory to see the full test suite in action.
+Run `npm test` in the frontend directory to see the test suite.
 
 ---
 
 ## Security and trust
 
-| Principle | Commitment |
-|-----------|------------|
+| Principle | How it works |
+|-----------|-------------|
 | **Non-custodial** | Zuik cannot move funds without your wallet signature |
-| **Transparent workflows** | Every step visible before approval |
-| **On-chain limits** | Guardian `authorize_trade` caps automated agent spending |
-| **Atomic safety** | Multi-step actions avoid partial execution |
-| **You own your keys** | Export, rotate, and disconnect wallets at any time |
+| **Transparent workflows** | Every step is visible before approval |
+| **On-chain limits** | Guardian `authorize_trade` caps agent spending |
+| **Atomic safety** | Multi-step actions succeed together or fail together |
+| **You own your keys** | Export, rotate, and disconnect wallets anytime |
 
-Zuik provides tooling, not investment advice. Only automate amounts you can afford to risk.
+Zuik is tooling, not investment advice. Only automate amounts you can afford to lose.
 
 ---
 
@@ -589,5 +589,5 @@ Zuik is open source under the [MIT License](LICENSE).
 ---
 
 <p align="center">
-  <strong>DeFi automation on Algorand - describe it, review it, sign it, forget the busywork.</strong>
+  <strong>The First Intent-Based DeFi Automation Tool. Describe what you want, review the plan, sign it, let it run.</strong>
 </p>

@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { createWriteStream, unlinkSync, readFileSync } from 'fs'
+import { createReadStream, createWriteStream, unlinkSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import Groq from 'groq-sdk'
@@ -63,17 +63,19 @@ export async function transcribeAudio(
 
     // Transcribe using Groq Whisper
     const transcription = await groqClient.audio.transcriptions.create({
-      file: readFileSync(tempFilePath),
+      file: createReadStream(tempFilePath),
       model: 'whisper-large-v3-turbo',
       language: language || undefined,
       response_format: 'verbose_json',
       temperature: 0.1, // Low temperature for more consistent results
     })
 
+    const verbose = transcription as { text: string; language?: string; duration?: number }
+
     return {
-      text: transcription.text,
-      language: transcription.language || 'unknown',
-      duration: transcription.duration,
+      text: verbose.text,
+      language: verbose.language || 'unknown',
+      duration: verbose.duration,
       confidence: 0.9, // Groq Whisper typically has high accuracy
     }
   } catch (error) {
@@ -183,7 +185,7 @@ export async function getAvailableVoices(): Promise<Array<{ id: string; name: st
   try {
     const voicesResponse = await elevenLabsClient.voices.getAll()
     return voicesResponse.voices?.map((voice) => ({
-      id: voice.voice_id || '',
+      id: voice.voiceId || '',
       name: voice.name || 'Unknown',
       language: voice.labels?.language || 'en',
     })) || []

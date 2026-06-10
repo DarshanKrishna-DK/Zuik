@@ -17,7 +17,7 @@ const upload = multer({
     if (file.mimetype.startsWith('audio/') || file.mimetype === 'video/webm') {
       cb(null, true)
     } else {
-      cb(new Error('Only audio files are allowed'), false)
+      cb(null, false)
     }
   },
 })

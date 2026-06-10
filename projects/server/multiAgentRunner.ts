@@ -1,25 +1,24 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FlowNode, FlowEdge, RunContext } from './workflowRunner.js'
 import { executeBlock } from './workflowRunner.js'
+import { MultiAgentCoordinator } from './agent/MultiAgentCoordinator.js'
 
 /**
- * Minimal DETERMINISTIC server-side multi-agent orchestrator.
+ * Server-side multi-agent orchestrator.
  *
- * Mirrors the frontend multiAgentExecutor for the blocks that make sense headless:
- *   fork          -> run downstream branches in parallel, converge at the matching join
- *   join          -> wait for branches (all | any | n_of_m)
- *   merge_gate    -> fire downstream when ALL/ANY upstream inputs have arrived
- *   event_emit    -> publish a named event to the agent_events Supabase table (the event bus)
- *   event_trigger -> proceed when a matching event exists in agent_events (already-occurred)
- *   spawn_agent   -> load a saved child workflow and run it as a sub-agent
+ * When an agent wallet context is available, fork/join/merge_gate/event/spawn_agent blocks run
+ * through MultiAgentCoordinator: independent AgentLoop branch agents, message-bus negotiation,
+ * consensus at join, and x402-capable tool use.
  *
- * The AI is ONLY ever a decision node (the 'ai-agent' block executed via executeBlock); the
- * orchestration itself is deterministic. All standard blocks delegate to executeBlock so the
- * Guardian-bounded payment path is identical to the linear runner.
+ * Without agent context, falls back to deterministic parallel branch execution (legacy mode).
  *
- * This is a single-pass orchestrator: event_trigger checks events that already exist (emitted by
- * an earlier branch in this run or a prior run), it does not block forever waiting for the future.
- * That keeps each headless poll bounded and side-effect-safe.
+ * Blocks:
+ *   fork          -> spawn reasoning branch agents (or parallel scripts in legacy mode)
+ *   join          -> consensus and result aggregation
+ *   merge_gate    -> negotiation-based conflict resolution
+ *   event_emit    -> agent message bus + agent_events table
+ *   event_trigger -> bus history or agent_events
+ *   spawn_agent   -> hierarchical multi-agent child workflow
  */
 
 const MULTI_AGENT_BLOCKS = new Set([
@@ -393,13 +392,20 @@ async function orchestrate(state: OrchestratorState): Promise<void> {
 
 /**
  * Entry point used by executeWorkflowHeadless when a flow contains multi-agent blocks.
- * Deterministic single-pass orchestration over the saved flow.
+ * Uses true multi-agent coordination when agentContext is set; otherwise legacy orchestration.
  */
 export async function runMultiAgentHeadless(
   nodes: FlowNode[],
   edges: FlowEdge[],
   ctx: RunContext,
 ): Promise<void> {
+  if (ctx.agentContext) {
+    console.log('[MultiAgent] Coordinating with AgentLoop branch agents and message bus')
+    const coordinator = new MultiAgentCoordinator(nodes, edges, ctx, ctx.agentContext)
+    await coordinator.coordinate()
+    return
+  }
+
   const state: OrchestratorState = {
     nodes,
     edges,

@@ -40,6 +40,7 @@ export interface AgentWalletExtended {
   status: string
   display_name: string | null
   policy_binding_id: string | null
+  binding_type?: string | null
   created_at: string
 }
 

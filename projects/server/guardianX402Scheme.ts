@@ -34,18 +34,24 @@ function payAmountMicroAlgos(txn: algosdk.Transaction): bigint {
   return BigInt(value)
 }
 
+type PaymentTxnFields = algosdk.Transaction & {
+  payment?: { receiver?: string | Uint8Array | { publicKey: Uint8Array } }
+  sender?: { publicKey: Uint8Array }
+  from?: { publicKey: Uint8Array }
+}
+
 /** Read payment receiver across algosdk transaction shapes. */
 function payReceiverAddress(txn: algosdk.Transaction): string {
-  const raw = txn as algosdk.Transaction & {
-    payment?: { receiver?: string | Uint8Array | { publicKey: Uint8Array } }
-  }
+  const raw = txn as PaymentTxnFields
   const receiver = raw.payment?.receiver
   if (typeof receiver === 'string') return receiver
+  const receiverValue = receiver as unknown
+  if (receiverValue instanceof Uint8Array) {
+    return algosdk.encodeAddress(receiverValue)
+  }
   if (receiver && typeof receiver === 'object' && 'publicKey' in receiver) {
     return algosdk.encodeAddress(receiver.publicKey)
   }
-  if (receiver instanceof Uint8Array) return algosdk.encodeAddress(receiver)
-  if (txn.to) return algosdk.encodeAddress(txn.to.publicKey)
   return ''
 }
 
@@ -95,7 +101,7 @@ export class GuardianExactAvmClientScheme implements SchemeNetworkClient {
       amountMicroAlgos,
       guardianAppId: this.guardianAppId,
       signer: this.signer,
-      note: `x402:${paymentRequirements.resource ?? 'premium'}`,
+      note: 'x402:premium',
     })
 
     return {
@@ -177,9 +183,8 @@ export class GuardianExactAvmFacilitatorScheme implements SchemeNetworkFacilitat
       }
     }
 
-    const senderKey =
-      (payTxn as algosdk.Transaction & { sender?: { publicKey: Uint8Array } }).sender?.publicKey
-      ?? payTxn.from?.publicKey
+    const payTxnFields = payTxn as PaymentTxnFields
+    const senderKey = payTxnFields.sender?.publicKey ?? payTxnFields.from?.publicKey
     if (!senderKey) {
       return { isValid: false, invalidReason: 'Could not read payment sender address' }
     }
@@ -194,7 +199,9 @@ export class GuardianExactAvmFacilitatorScheme implements SchemeNetworkFacilitat
 
     const signedTxns = paymentGroup.map((g) => decodeTxnB64(g))
     try {
-      const simResult = await this.signer.simulateTransactions(signedTxns, requirements.network)
+      const simResult = await this.signer.simulateTransactions(signedTxns, requirements.network) as {
+        txnGroups?: Array<{ failureMessage?: string }>
+      }
       if (simResult.txnGroups?.[0]?.failureMessage) {
         return {
           isValid: false,
@@ -282,8 +289,8 @@ export function createZuikFacilitatorSigner(): FacilitatorAvmSigner {
     },
     sendTransactions: async (signedTxns: Uint8Array[]) => {
       const combined = Buffer.concat(signedTxns.map((t) => Buffer.from(t)))
-      const { txId } = await algod.sendRawTransaction(combined).do()
-      return txId
+      const postResult = await algod.sendRawTransaction(combined).do()
+      return postResult.txid
     },
     waitForConfirmation: async (txId: string, _network: string, waitRounds = 4) => {
       return algosdk.waitForConfirmation(algod, txId, waitRounds)

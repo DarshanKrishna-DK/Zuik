@@ -35,6 +35,21 @@ CREATE INDEX IF NOT EXISTS idx_agent_wallets_workflow_id ON agent_wallets(workfl
 
 -- Link a due schedule to its agent sub-account (used by the headless poller).
 ALTER TABLE workflow_schedules ADD COLUMN IF NOT EXISTS agent_address TEXT;
+
+-- Agent memory for reasoning loops (Phase 3)
+CREATE TABLE IF NOT EXISTS agent_memories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_address TEXT NOT NULL,
+  workflow_id UUID,
+  memory_type VARCHAR(50) NOT NULL,
+  content JSONB NOT NULL DEFAULT '{}'::jsonb,
+  importance_score FLOAT NOT NULL DEFAULT 0.0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_memories_agent_type ON agent_memories(agent_address, memory_type);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_importance ON agent_memories(importance_score DESC);
 `
 
 function main() {

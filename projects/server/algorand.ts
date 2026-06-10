@@ -18,7 +18,8 @@ export async function getAssetDecimals(assetId: number): Promise<number> {
   try {
     const client = getAlgodClient()
     const info = await client.getAssetByID(BigInt(assetId)).do()
-    const params = (info as Record<string, unknown>).params ?? info
+    const infoRecord = info as unknown as Record<string, unknown>
+    const params = infoRecord.params ?? info
     return Number((params as Record<string, unknown>).decimals ?? 6)
   } catch {
     return 6

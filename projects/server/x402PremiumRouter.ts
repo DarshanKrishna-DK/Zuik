@@ -1,6 +1,6 @@
 import { Router } from 'express'
-import { paymentMiddlewareFromConfig } from '@x402-avm/express'
-import { x402ResourceServer } from '@x402-avm/core/server'
+import { paymentMiddleware } from '@x402-avm/express'
+import { x402ResourceServer, type RoutesConfig } from '@x402-avm/core/server'
 import { registerExactAvmScheme } from '@x402-avm/avm/exact/server'
 import { ALGORAND_TESTNET_CAIP2 } from '@x402-avm/avm'
 import { fetchPremiumAlgoQuote } from './premiumMarketData.js'
@@ -20,7 +20,7 @@ const facilitatorClient = new LocalGuardianFacilitatorClient()
 const resourceServer = new x402ResourceServer(facilitatorClient)
 registerExactAvmScheme(resourceServer)
 
-const premiumRoutes = {
+const premiumRoutes: RoutesConfig = {
   'GET /premium/algo-quote': {
     accepts: {
       scheme: 'exact',
@@ -50,10 +50,9 @@ export function createX402PremiumRouter(): Router {
   const router = Router()
 
   router.use(
-    paymentMiddlewareFromConfig(
+    paymentMiddleware(
       premiumRoutes,
-      facilitatorClient,
-      [{ network: 'algorand:*', server: resourceServer }],
+      resourceServer,
       undefined,
       undefined,
       false,

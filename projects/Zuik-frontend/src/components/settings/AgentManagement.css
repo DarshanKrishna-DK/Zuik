@@ -424,3 +424,28 @@
   padding: 28px;
   text-align: left;
 }
+
+.agent-mgmt__global-guardian {
+  position: relative;
+  z-index: 12;
+  isolation: isolate;
+}
+
+.agent-mgmt__emergency-btn {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  flex-shrink: 0;
+}
+
+.agent-mgmt__emergency-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.agent-mgmt__wallet-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--z-warning);
+  font-size: 0.75rem;
+}

@@ -63,12 +63,14 @@ import {
   runMultiAgentWorkflow,
 } from '../lib/runAgent'
 import { getAlgorandClient } from '../services/algorand'
-import { materializeIntent, addNodesToCanvas } from '../lib/intentMaterializer'
+import { materializeIntent, addNodesToCanvas, applyIntentToCanvas, inferCanvasUpdateMode } from '../lib/intentMaterializer'
 import type { ParsedIntent, CanvasBlock, UserContext } from '../services/intentParser'
 import {
   isSupabaseConfigured, getWorkflow, createWorkflow, updateWorkflow,
   recordExecution, completeExecution, listWorkflows,
+  validateWorkflowName, checkWorkflowNameExists, WORKFLOW_NAME_MAX_LENGTH,
 } from '../services/supabase'
+import { AlertCircle } from 'lucide-react'
 import { WorkflowSelectOptionsProvider } from '../context/WorkflowSelectOptionsContext'
 import { fetchAlgoUsdPrice, estimateStepFee } from '../services/transactionSimulator'
 import { scheduleWorkflowStart, deactivateSchedule } from '../services/workflowScheduler'
@@ -180,6 +182,8 @@ export default function Builder() {
   const [workflowId, setWorkflowId] = useState<string | null>(null)
   const workflowIdRef = useRef<string | null>(null)
   const [workflowName, setWorkflowName] = useState('Untitled Workflow')
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [isValidatingName, setIsValidatingName] = useState(false)
   const [workflowSpawnSelectOptions, setWorkflowSpawnSelectOptions] = useState<{ value: string; label: string }[]>([])
   const [saveIndicator, setSaveIndicator] = useState<'idle' | 'saving' | 'saved'>('idle')
   const savingRef = useRef(false)
@@ -220,6 +224,35 @@ export default function Builder() {
   useEffect(() => {
     void refreshSpawnWorkflowOptions()
   }, [refreshSpawnWorkflowOptions])
+
+  useEffect(() => {
+    if (!activeAddress || !isSupabaseConfigured()) {
+      setNameError(null)
+      setIsValidatingName(false)
+      return
+    }
+
+    const localError = validateWorkflowName(workflowName)
+    if (localError) {
+      setNameError(localError)
+      setIsValidatingName(false)
+      return
+    }
+
+    setIsValidatingName(true)
+    const timer = window.setTimeout(() => {
+      void checkWorkflowNameExists(activeAddress, workflowName, workflowIdRef.current)
+        .then((exists) => {
+          setNameError(exists ? 'A workflow with this name already exists' : null)
+        })
+        .catch(() => {
+          setNameError(null)
+        })
+        .finally(() => setIsValidatingName(false))
+    }, 400)
+
+    return () => window.clearTimeout(timer)
+  }, [workflowName, activeAddress])
 
   useEffect(() => {
     setExecutionMode(getStoredExecutionMode(workflowId))
@@ -421,15 +454,25 @@ export default function Builder() {
   const saveToSupabase = useCallback(async () => {
     if (!activeAddress || !isSupabaseConfigured() || nodes.length === 0) return
     if (savingRef.current) return
+
+    const localError = validateWorkflowName(workflowName)
+    if (localError || nameError) {
+      setNameError(localError ?? nameError)
+      return
+    }
+    if (isValidatingName) return
+
+    const trimmedName = workflowName.trim()
     savingRef.current = true
     setSaveIndicator('saving')
     try {
       const flowJson = { nodes, edges }
       const existingId = workflowIdRef.current
       if (existingId) {
-        await updateWorkflow(existingId, { name: workflowName, flow_json: flowJson })
+        await updateWorkflow(existingId, { name: trimmedName, flow_json: flowJson })
+        setWorkflowName(trimmedName)
       } else {
-        const created = await createWorkflow(activeAddress, workflowName, flowJson)
+        const created = await createWorkflow(activeAddress, trimmedName, flowJson)
         workflowIdRef.current = created.id
         setWorkflowId(created.id)
         window.history.replaceState(null, '', `/builder?wf=${created.id}`)
@@ -444,7 +487,7 @@ export default function Builder() {
     } finally {
       savingRef.current = false
     }
-  }, [activeAddress, nodes, edges, workflowName, refreshSpawnWorkflowOptions])
+  }, [activeAddress, nodes, edges, workflowName, nameError, isValidatingName, refreshSpawnWorkflowOptions])
 
   useEffect(() => {
     if (nodes.length === 0) return
@@ -831,13 +874,13 @@ export default function Builder() {
       return
     }
 
-    // Handle block modifications (update existing block config)
+    // Handle block modifications using functional updates to avoid stale closures
     if (intent.intent === 'modify_block' && intent.modifications) {
       setNodes((nds) => nds.map((n) => {
         const data = n.data as Record<string, unknown>
         const blockId = data.blockId as string
         const mod = intent.modifications?.find((m) =>
-          m.blockId === blockId || m.nodeId === n.id
+          m.nodeId === n.id || (m.blockId === blockId && !m.nodeId)
         )
         if (mod && mod.configChanges) {
           const existingConfig = (data.config as Record<string, string | number | undefined>) ?? {}
@@ -854,36 +897,42 @@ export default function Builder() {
       return
     }
 
-    // Handle clear_and_rebuild: replace the entire canvas
-    if (intent.intent === 'clear_and_rebuild' || (nodes.length > 0 && intent.replaceCanvas)) {
-      const materialized = materializeIntent(intent)
-      setNodes(materialized.nodes)
-      setEdges(materialized.edges)
-      setTimeout(() => {
-        const inst = rfInstance.current
-        inst?.fitView({ padding: 0.2, duration: 500 })
-        setTimeout(() => persistViewportFrom(rfInstance.current), 560)
-      }, 100)
-      return
-    }
-
-    // Default: add new blocks to canvas
-    const materialized = materializeIntent(intent)
-    const merged = addNodesToCanvas(nodes, edges, materialized.nodes, materialized.edges)
-    setNodes(merged.nodes)
-    setEdges(merged.edges)
+    // Use unified canvas application logic for workflow operations
+    const mode = inferCanvasUpdateMode(intent, canvasBlocks, intent.userMessage || '')
+    const result = applyIntentToCanvas(intent, nodes, edges, mode)
+    
+    // Apply result with functional updates to avoid stale closures
+    setNodes(() => result.nodes)
+    setEdges(() => result.edges)
 
     setTimeout(() => {
       const inst = rfInstance.current
       inst?.fitView({ padding: 0.2, duration: 500 })
       setTimeout(() => persistViewportFrom(rfInstance.current), 560)
     }, 100)
-  }, [nodes, edges, setNodes, setEdges, pushHistory])
+  }, [nodes, edges, canvasBlocks, setNodes, setEdges, pushHistory])
 
   const handleSave = () => {
+    const localError = validateWorkflowName(workflowName)
+    if (localError || nameError || isValidatingName) {
+      setNameError(localError ?? nameError ?? 'Checking name availability...')
+      return
+    }
     saveFlowToLocal(nodes, edges)
     saveToSupabase()
     setMenuOpen(false)
+  }
+
+  const handleWorkflowNameBlur = () => {
+    const trimmed = workflowName.trim()
+    if (trimmed !== workflowName) setWorkflowName(trimmed)
+    if (workflowIdRef.current && !nameError && !isValidatingName && validateWorkflowName(trimmed) === null) {
+      void saveToSupabase()
+    }
+  }
+
+  const handleWorkflowNameChange = (value: string) => {
+    if (value.length <= WORKFLOW_NAME_MAX_LENGTH) setWorkflowName(value)
   }
 
   const handleExport = () => {
@@ -1184,13 +1233,33 @@ export default function Builder() {
         <div className="zuik-dashboard-mesh" aria-hidden />
         {/* Toolbar */}
         <div className="zuik-canvas-toolbar">
-          <input
-            className="zuik-wf-name-input"
-            value={workflowName}
-            onChange={(e) => setWorkflowName(e.target.value)}
-            onBlur={() => { if (workflowIdRef.current) saveToSupabase() }}
-            placeholder="Workflow name"
-          />
+          <div className={`zuik-wf-name-wrap${nameError ? ' zuik-wf-name-wrap--error' : ''}`}>
+            <input
+              className="zuik-wf-name-input"
+              value={workflowName}
+              onChange={(e) => handleWorkflowNameChange(e.target.value)}
+              onBlur={handleWorkflowNameBlur}
+              placeholder="Workflow name"
+              maxLength={WORKFLOW_NAME_MAX_LENGTH}
+              aria-invalid={nameError ? true : undefined}
+              aria-describedby={nameError ? 'zuik-wf-name-error' : undefined}
+              data-testid="workflow-name-input"
+            />
+            {(nameError || isValidatingName) && (
+              <span
+                className="zuik-wf-name-status"
+                id="zuik-wf-name-error"
+                title={nameError ?? 'Checking name...'}
+                aria-label={nameError ?? 'Checking name availability'}
+              >
+                {isValidatingName && !nameError ? (
+                  <LoaderIcon />
+                ) : (
+                  <AlertCircle size={14} aria-hidden />
+                )}
+              </span>
+            )}
+          </div>
           <div className="zuik-agent-separator" />
 
           <ExecutionModeSelector

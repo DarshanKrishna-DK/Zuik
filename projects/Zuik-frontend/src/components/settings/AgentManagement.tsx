@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import { Plus, RefreshCw, Shield, ShieldOff, Sparkles } from 'lucide-react'
 import {
   createAgentWallet,
   fundAgentWallet,
   deleteAgentWallet,
+  fetchWorkflowAgentBindings,
+  type WorkflowAgentBinding,
 } from '../../services/agentWallet'
 import { guardianContract, algoToMicroAlgos } from '../../services/guardianContract'
 import { getAlgorandClient } from '../../services/algorand'
@@ -70,6 +73,7 @@ export function AgentManagement() {
   const guardianReady = guardianAppId > 0
 
   const [agents, setAgents] = useState<AgentOverviewEntry[]>([])
+  const [workflowBindings, setWorkflowBindings] = useState<WorkflowAgentBinding[]>([])
   const [templates, setTemplates] = useState<PolicyTemplate[]>([])
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
@@ -107,6 +111,7 @@ export function AgentManagement() {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const [recipientInput, setRecipientInput] = useState('')
   const [globalPaused, setGlobalPaused] = useState(false)
+  const [emergencyStopBusy, setEmergencyStopBusy] = useState(false)
 
   const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
     setFeedback({ type, text })
@@ -116,12 +121,14 @@ export function AgentManagement() {
     if (!activeAddress) return
     setLoading(true)
     try {
-      const [overview, tpls] = await Promise.all([
+      const [overview, tpls, bindings] = await Promise.all([
         fetchAgentOverview(activeAddress),
-        fetchPolicyTemplates(activeAddress), // Include user's custom templates
+        fetchPolicyTemplates(activeAddress),
+        fetchWorkflowAgentBindings(activeAddress).catch(() => []),
       ])
       setAgents(overview)
       setTemplates(tpls)
+      setWorkflowBindings(bindings)
       if (guardianReady) {
         const paused = await guardianContract.isPaused(activeAddress)
         setGlobalPaused(paused)
@@ -136,6 +143,17 @@ export function AgentManagement() {
   useEffect(() => {
     void loadAll()
   }, [loadAll])
+
+  const bindingsByAgent = useMemo(() => {
+    const map = new Map<string, WorkflowAgentBinding[]>()
+    for (const b of workflowBindings) {
+      if (!b.agentAddress) continue
+      const list = map.get(b.agentAddress) ?? []
+      list.push(b)
+      map.set(b.agentAddress, list)
+    }
+    return map
+  }, [workflowBindings])
 
   const totalBalance = agents.reduce((sum, a) => sum + a.balance.balance, 0)
   const activePolicies = agents.filter((a) => a.policyStatus === 'active').length
@@ -444,16 +462,43 @@ export function AgentManagement() {
   }
 
   const handleEmergencyToggle = async () => {
-    if (!activeAddress || !transactionSigner) return
+    if (!activeAddress) {
+      showMessage('error', 'Connect your wallet to control Guardian emergency stop.')
+      return
+    }
+    if (!transactionSigner) {
+      showMessage(
+        'error',
+        'Wallet signing is required. Reconnect your wallet and approve the connection request, then try again.',
+      )
+      return
+    }
+
+    setEmergencyStopBusy(true)
+    setFeedback(null)
     try {
       const txId = globalPaused
         ? await guardianContract.resume(activeAddress, transactionSigner)
         : await guardianContract.emergencyStop(activeAddress, transactionSigner)
       setGlobalPaused(!globalPaused)
-      showMessage('success', `Guardian ${globalPaused ? 'resumed' : 'paused'}. Tx: ${txId.slice(0, 12)}...`)
+      showMessage(
+        'success',
+        globalPaused
+          ? `Guardian resumed. All agent payments are allowed again. Tx: ${txId.slice(0, 12)}...`
+          : `Emergency stop activated. All agent payments are blocked. Tx: ${txId.slice(0, 12)}...`,
+      )
       await loadAll()
     } catch (error) {
-      showMessage('error', error instanceof Error ? error.message : 'Guardian toggle failed.')
+      const msg = error instanceof Error ? error.message : 'Guardian toggle failed.'
+      if (/reject|cancel/i.test(msg)) {
+        showMessage('error', 'Transaction was rejected in your wallet.')
+      } else if (/owner|unauthorized|logic eval/i.test(msg)) {
+        showMessage('error', 'Only the Guardian contract owner can pause or resume. Connect the owner wallet.')
+      } else {
+        showMessage('error', msg)
+      }
+    } finally {
+      setEmergencyStopBusy(false)
     }
   }
 
@@ -620,6 +665,27 @@ export function AgentManagement() {
                 </div>
               </div>
 
+              {(bindingsByAgent.get(entry.wallet.agent_address)?.length ?? 0) > 0 && (
+                <div className="agent-mgmt__workflows" data-testid={`agent-workflows-${entry.wallet.id}`}>
+                  <div className="agent-mgmt__workflows-title">Linked workflows</div>
+                  {bindingsByAgent.get(entry.wallet.agent_address)?.map((b) => (
+                    <Link
+                      key={b.workflowId}
+                      to={`/builder?wf=${b.workflowId}`}
+                      className="agent-mgmt__workflow-chip"
+                      title={b.bindingType ? `${b.bindingType} binding` : 'Workflow'}
+                    >
+                      {b.workflowName}
+                      {b.bindingType && (
+                        <span className="st-muted" style={{ fontSize: '0.65rem' }}>
+                          {b.bindingType}
+                        </span>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              )}
+
               <div className="agent-mgmt__policy-row">
                 <Shield size={16} aria-hidden style={{ color: 'var(--z-accent)' }} />
                 <span className="agent-mgmt__policy-name">{policyName}</span>
@@ -758,28 +824,54 @@ export function AgentManagement() {
         })}
       </div>
 
+      {feedback && <FeedbackMessage variant={feedback.type}>{feedback.text}</FeedbackMessage>}
+
       {guardianReady && (
-        <SettingsCard style={{ marginTop: 20 }}>
+        <SettingsCard className="agent-mgmt__global-guardian" style={{ marginTop: 20 }}>
           <div className="agent-mgmt__card-actions">
             <div>
               <strong>Global Guardian control</strong>
               <p className="st-muted" style={{ fontSize: '0.8125rem', margin: '4px 0 0' }}>
                 Emergency stop blocks all agent payments until resumed.
+                {!transactionSigner && activeAddress && (
+                  <span className="agent-mgmt__wallet-hint"> Connect wallet with signing enabled to use this control.</span>
+                )}
               </p>
             </div>
             <button
               type="button"
-              className={`z-btn ${globalPaused ? 'z-btn-primary' : 'z-btn-ghost'}`}
+              className={`z-btn agent-mgmt__emergency-btn ${globalPaused ? 'z-btn-primary' : 'z-btn-ghost'}`}
               onClick={() => void handleEmergencyToggle()}
+              disabled={emergencyStopBusy || !activeAddress}
+              data-testid="emergency-stop-btn"
+              title={
+                !activeAddress
+                  ? 'Connect your wallet first'
+                  : !transactionSigner
+                    ? 'Wallet signing required - reconnect your wallet'
+                    : globalPaused
+                      ? 'Resume Guardian and allow agent payments'
+                      : 'Emergency stop - block all agent payments'
+              }
             >
-              {globalPaused ? <Shield size={16} /> : <ShieldOff size={16} />}
-              {globalPaused ? 'Resume Guardian' : 'Emergency stop'}
+              {emergencyStopBusy ? (
+                <RefreshCw size={16} className="agent-mgmt__spin" aria-hidden />
+              ) : globalPaused ? (
+                <Shield size={16} aria-hidden />
+              ) : (
+                <ShieldOff size={16} aria-hidden />
+              )}
+              {emergencyStopBusy
+                ? globalPaused
+                  ? 'Resuming...'
+                  : 'Stopping...'
+                : globalPaused
+                  ? 'Resume Guardian'
+                  : 'Emergency stop'}
             </button>
           </div>
         </SettingsCard>
       )}
-
-      {feedback && <FeedbackMessage variant={feedback.type}>{feedback.text}</FeedbackMessage>}
 
       {wizardOpen && (
         <div className="agent-mgmt__wizard-backdrop" role="dialog" aria-modal="true" aria-label="Agent setup wizard">

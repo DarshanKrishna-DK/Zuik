@@ -1,5 +1,6 @@
 import { x402Facilitator } from '@x402-avm/core/facilitator'
-import type { FacilitatorClient, PaymentPayload, PaymentRequirements, SettleResponse, SupportedResponse, VerifyResponse } from '@x402-avm/core/types'
+import type { PaymentPayload, PaymentRequirements, SettleResponse, SupportedResponse, VerifyResponse } from '@x402-avm/core/types'
+import type { FacilitatorClient } from '@x402-avm/core/server'
 import { ALGORAND_TESTNET_CAIP2 } from '@x402-avm/avm'
 import { Router } from 'express'
 import {
@@ -50,6 +51,7 @@ export class LocalGuardianFacilitatorClient implements FacilitatorClient {
         },
       ],
       extensions: [],
+      signers: {},
     }
   }
 }

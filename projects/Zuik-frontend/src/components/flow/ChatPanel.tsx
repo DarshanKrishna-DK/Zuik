@@ -117,11 +117,16 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
 
       const hasWorkflow = intent.steps.length > 0
       const hasModification = intent.intent === 'modify_block' && intent.modifications && intent.modifications.length > 0
+      const hasDeletion = intent.intent === 'delete_block' && intent.deleteNodeIds && intent.deleteNodeIds.length > 0
+      const hasReplaceCanvas = intent.replaceCanvas === true && intent.steps?.length === 0
+      
+      const shouldApplyIntent = hasWorkflow || hasModification || hasDeletion || hasReplaceCanvas
+      
       const assistantMsg: ChatMessage = {
         id: `msg_${Date.now()}_resp`,
         role: 'assistant',
         content: displayText,
-        intent: (hasWorkflow || hasModification) ? intent : undefined,
+        intent: shouldApplyIntent ? intent : undefined,
       }
       setMessages((prev) => {
         const next = [...prev, assistantMsg]
@@ -130,7 +135,7 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
         return next
       })
 
-      if (hasWorkflow || hasModification) onIntentParsed(intent)
+      if (shouldApplyIntent) onIntentParsed(intent)
     } catch (err) {
       const errMsg: ChatMessage = { id: `msg_${Date.now()}_err`, role: 'assistant', content: err instanceof Error ? err.message : 'Something went wrong. Please try again.', isError: true }
       setMessages((prev) => {
@@ -182,6 +187,12 @@ export default function ChatPanel({ isOpen, onClose, onIntentParsed, canvasBlock
                     <div className="zuik-chat-intent-badge" style={{ borderColor: 'var(--z-warning)' }}>
                       <WrenchIcon />
                       <span>{msg.intent.modifications.length} block{msg.intent.modifications.length !== 1 ? 's' : ''} updated</span>
+                    </div>
+                  )}
+                  {msg.intent && msg.intent.intent === 'delete_block' && msg.intent.deleteNodeIds && (
+                    <div className="zuik-chat-intent-badge" style={{ borderColor: 'var(--z-error)' }}>
+                      <XIcon />
+                      <span>{msg.intent.deleteNodeIds.length} block{msg.intent.deleteNodeIds.length !== 1 ? 's' : ''} deleted</span>
                     </div>
                   )}
                   {msg.intent && msg.intent.steps.length > 0 && (

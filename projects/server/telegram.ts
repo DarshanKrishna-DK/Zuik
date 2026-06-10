@@ -674,12 +674,7 @@ async function answerCallbackQuery(callbackQueryId: string) {
   }).catch(() => {})
 }
 
-async function pollTelegram() {
-  const updates = await getUpdates()
-
-  for (const update of updates) {
-    lastUpdateId = Math.max(lastUpdateId, update.update_id)
-
+async function handleUpdate(update: TelegramUpdate) {
     // Handle inline button callbacks
     if (update.callback_query) {
       const cb = update.callback_query
@@ -689,7 +684,7 @@ async function pollTelegram() {
       if (cb.data?.startsWith('runwf:')) {
         const wid = cb.data.slice('runwf:'.length)
         await handleRunWorkflowExecute(chatId, wid)
-        continue
+        return
       }
 
       switch (cb.data) {
@@ -715,11 +710,11 @@ async function pollTelegram() {
           await handleStatus(chatId)
           break
       }
-      continue
+      return
     }
 
     const msg = update.message
-    if (!msg?.text) continue
+    if (!msg?.text) return
 
     const chatId = msg.chat.id
     const text = msg.text.trim()
@@ -757,6 +752,14 @@ async function pollTelegram() {
     } else {
       await handleFreeText(chatId, text)
     }
+}
+
+async function pollTelegram() {
+  const updates = await getUpdates()
+
+  for (const update of updates) {
+    lastUpdateId = Math.max(lastUpdateId, update.update_id)
+    await handleUpdate(update)
   }
 }
 

@@ -133,7 +133,7 @@ export async function createAgentManagementRouter(): Promise<express.Router> {
       const { data: wallets, error: walletError } = await sb
         .from('agent_wallets')
         .select(
-          'id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, display_name, policy_binding_id, created_at',
+          'id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, display_name, policy_binding_id, binding_type, created_at',
         )
         .eq('wallet_address', ownerAddress)
         .neq('status', 'archived')
@@ -392,7 +392,7 @@ export async function createAgentManagementRouter(): Promise<express.Router> {
         .eq('agent_address', agentAddress)
         .eq('wallet_address', ownerAddress)
         .select(
-          'id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, display_name, policy_binding_id, created_at',
+          'id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, display_name, policy_binding_id, binding_type, created_at',
         )
         .maybeSingle()
 

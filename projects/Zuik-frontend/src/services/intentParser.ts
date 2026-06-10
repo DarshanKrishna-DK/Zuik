@@ -509,6 +509,7 @@ export async function parseIntent(
     if (canvasBlocks && canvasBlocks.length > 0 && localDemo.steps.length > 0) {
       localDemo.replaceCanvas = inferCanvasUpdateMode(localDemo, canvasBlocks, userMessage) === 'replace'
     }
+    localDemo.userMessage = userMessage
     return localDemo
   }
 
@@ -567,12 +568,32 @@ export async function parseIntent(
   }
 
   // Forward-resolve modifications: if AI returns modifications without nodeId,
-  // try to match by blockId from canvasBlocks
+  // try to match by blockId from canvasBlocks with precision for multiple blocks
   if (parsed.intent === 'modify_block' && parsed.modifications && canvasBlocks) {
     for (const mod of parsed.modifications) {
       if (!mod.nodeId) {
-        const match = canvasBlocks.find((b) => b.blockId === mod.blockId)
-        if (match) mod.nodeId = match.nodeId
+        const matches = canvasBlocks.filter((b) => b.blockId === mod.blockId)
+        if (matches.length === 1) {
+          // Only one block of this type, safe to resolve
+          mod.nodeId = matches[0].nodeId
+        } else if (matches.length > 1) {
+          // Multiple blocks of same type - try to resolve by config similarity
+          const bestMatch = matches.find((block) => {
+            // If the modification changes a config value, try to find a block that has the old value
+            return Object.entries(mod.configChanges).some(([key, newValue]) => {
+              const currentValue = block.config[key]
+              // This heuristic tries to match blocks that would be meaningfully changed
+              return currentValue !== undefined && currentValue !== newValue
+            })
+          })
+          if (bestMatch) {
+            mod.nodeId = bestMatch.nodeId
+          } else {
+            // Fallback to first match but this is imprecise
+            mod.nodeId = matches[0].nodeId
+            console.warn(`Multiple ${mod.blockId} blocks found, using first match. Consider specifying nodeId for precision.`)
+          }
+        }
       }
     }
   }
@@ -582,9 +603,19 @@ export async function parseIntent(
     parsed.deleteNodeIds = parsed.deleteNodeIds.map((id) => {
       const existsOnCanvas = canvasBlocks.some((b) => b.nodeId === id)
       if (existsOnCanvas) return id
-      // Try to match by blockId
-      const match = canvasBlocks.find((b) => b.blockId === id || b.blockName.toLowerCase().includes(id.toLowerCase()))
-      return match ? match.nodeId : id
+      
+      // Try to match by blockId or blockName
+      const matches = canvasBlocks.filter((b) => 
+        b.blockId === id || b.blockName.toLowerCase().includes(id.toLowerCase()))
+      
+      if (matches.length === 1) {
+        return matches[0].nodeId
+      } else if (matches.length > 1) {
+        console.warn(`Multiple blocks match "${id}" for deletion, using first match. Consider being more specific.`)
+        return matches[0].nodeId
+      }
+      
+      return id // Return as-is, will be filtered later if invalid
     }).filter(Boolean)
   }
 
@@ -598,6 +629,9 @@ export async function parseIntent(
       }
     }
   }
+
+  // Add userMessage to the parsed intent for mode inference
+  parsed.userMessage = userMessage
 
   return parsed
 }

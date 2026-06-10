@@ -60,13 +60,13 @@ export async function sendAuthorizedPayment(
 
   const signedTxns = paymentGroup.map((g) => new Uint8Array(Buffer.from(g, 'base64')))
   const combined = Buffer.concat(signedTxns.map((t) => Buffer.from(t)))
-  const { txId } = await algod.sendRawTransaction(combined).do()
-  const confirmation = await algosdk.waitForConfirmation(algod, txId, 4)
-
   const txIds = signedTxns.map((bytes) => {
     const stxn = algosdk.decodeSignedTransaction(bytes)
     return stxn.txn.txID()
   })
+  await algod.sendRawTransaction(combined).do()
+  const txId = txIds[0] ?? ''
+  const confirmation = await algosdk.waitForConfirmation(algod, txId, 4)
 
   return {
     txIds,

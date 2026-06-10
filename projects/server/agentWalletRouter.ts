@@ -58,6 +58,8 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       const safeWorkflowId = typeof workflowId === 'string' && UUID_RE.test(workflowId) ? workflowId : null
 
+      const bindingType = safeWorkflowId ? 'dedicated' : 'shared'
+
       const { error } = await sb
         .from('agent_wallets')
         .upsert(
@@ -69,6 +71,7 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
             budget_microalgos: budgetMicroAlgos ? Number(budgetMicroAlgos) : null,
             display_name: displayName || null,
             status: 'active',
+            binding_type: bindingType,
           },
           { onConflict: 'agent_address' },
         )
@@ -76,6 +79,21 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
       if (error) {
         console.error('[AgentWallet] Failed to persist metadata:', error.message)
         return res.status(500).json({ error: 'Failed to persist agent wallet metadata' })
+      }
+
+      if (safeWorkflowId) {
+        const { error: prefError } = await sb.from('agent_preferences').upsert(
+          {
+            agent_address: agentAddress,
+            workflow_id: safeWorkflowId,
+            preference_key: 'workflow_binding',
+            preference_value: { binding_type: 'dedicated' },
+          },
+          { onConflict: 'workflow_id,preference_key' },
+        )
+        if (prefError) {
+          console.warn('[AgentWallet] Failed to persist workflow binding preference:', prefError.message)
+        }
       }
 
       // Do not echo the mnemonic back.
@@ -113,6 +131,152 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
       res.json({ wallets: data ?? [] })
     } catch (error) {
       console.error('[AgentWallet] by-wallet error:', error)
+      res.status(500).json({ error: 'Internal server error' })
+    }
+  })
+
+  router.post('/bind-workflow', async (req, res) => {
+    try {
+      const { workflowId, agentAddress, ownerAddress, bindingType } = req.body ?? {}
+
+      if (!workflowId || !agentAddress || !ownerAddress) {
+        return res.status(400).json({ error: 'workflowId, agentAddress, and ownerAddress are required' })
+      }
+
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (!UUID_RE.test(workflowId)) {
+        return res.status(400).json({ error: 'workflowId must be a valid UUID' })
+      }
+
+      const bindType =
+        bindingType === 'dedicated' || bindingType === 'shared' || bindingType === 'temporary'
+          ? bindingType
+          : 'shared'
+
+      const { data: workflow, error: wfError } = await sb
+        .from('workflows')
+        .select('id, wallet_address')
+        .eq('id', workflowId)
+        .maybeSingle()
+
+      if (wfError || !workflow || workflow.wallet_address !== ownerAddress) {
+        return res.status(404).json({ error: 'Workflow not found for this owner' })
+      }
+
+      const { data: agentRow, error: agentError } = await sb
+        .from('agent_wallets')
+        .select('id, workflow_id, agent_address, status')
+        .eq('agent_address', agentAddress)
+        .eq('wallet_address', ownerAddress)
+        .neq('status', 'archived')
+        .maybeSingle()
+
+      if (agentError || !agentRow) {
+        return res.status(404).json({ error: 'Agent wallet not found for this owner' })
+      }
+
+      if (bindType === 'dedicated') {
+        if (agentRow.workflow_id && agentRow.workflow_id !== workflowId) {
+          return res.status(409).json({
+            error: 'This agent is dedicated to another workflow. Use shared binding or pick a different agent.',
+          })
+        }
+
+        const { error: dedicatedError } = await sb
+          .from('agent_wallets')
+          .update({ workflow_id: workflowId, binding_type: 'dedicated' })
+          .eq('id', agentRow.id)
+
+        if (dedicatedError) {
+          return res.status(500).json({ error: 'Failed to set dedicated agent binding' })
+        }
+      }
+
+      const { error: prefError } = await sb.from('agent_preferences').upsert(
+        {
+          agent_address: agentAddress,
+          workflow_id: workflowId,
+          preference_key: 'workflow_binding',
+          preference_value: { binding_type: bindType },
+        },
+        { onConflict: 'workflow_id,preference_key' },
+      )
+
+      if (prefError) {
+        console.error('[AgentWallet] bind-workflow preference error:', prefError.message)
+        return res.status(500).json({ error: 'Failed to persist workflow binding preference' })
+      }
+
+      res.json({ success: true, bindingType: bindType, agentAddress, workflowId })
+    } catch (error) {
+      console.error('[AgentWallet] bind-workflow error:', error)
+      res.status(500).json({ error: 'Internal server error' })
+    }
+  })
+
+  router.get('/workflow-bindings/:ownerAddress', async (req, res) => {
+    try {
+      const { ownerAddress } = req.params
+
+      const { data: workflows, error: wfError } = await sb
+        .from('workflows')
+        .select('id, name')
+        .eq('wallet_address', ownerAddress)
+
+      if (wfError) {
+        return res.status(500).json({ error: 'Failed to load workflows' })
+      }
+
+      const workflowIds = (workflows ?? []).map((w) => w.id)
+      if (workflowIds.length === 0) {
+        return res.json({ bindings: [] })
+      }
+
+      const { data: prefs, error: prefError } = await sb
+        .from('agent_preferences')
+        .select('agent_address, workflow_id, preference_value')
+        .eq('preference_key', 'workflow_binding')
+        .in('workflow_id', workflowIds)
+
+      if (prefError) {
+        return res.status(500).json({ error: 'Failed to load workflow bindings' })
+      }
+
+      const { data: agents, error: agentError } = await sb
+        .from('agent_wallets')
+        .select('agent_address, workflow_id, display_name, binding_type, status')
+        .eq('wallet_address', ownerAddress)
+        .neq('status', 'archived')
+
+      if (agentError) {
+        return res.status(500).json({ error: 'Failed to load agent wallets' })
+      }
+
+      const nameById = new Map((workflows ?? []).map((w) => [w.id, w.name]))
+      const agentByAddress = new Map((agents ?? []).map((a) => [a.agent_address, a]))
+      const prefByWorkflow = new Map((prefs ?? []).map((p) => [p.workflow_id, p]))
+
+      const bindings = workflowIds.map((workflowId) => {
+        const pref = prefByWorkflow.get(workflowId)
+        const dedicatedAgent = (agents ?? []).find((a) => a.workflow_id === workflowId)
+        const agentAddress = pref?.agent_address ?? dedicatedAgent?.agent_address ?? null
+        const agentMeta = agentAddress ? agentByAddress.get(agentAddress) : null
+        const bindingType =
+          (pref?.preference_value as { binding_type?: string } | null)?.binding_type ??
+          (dedicatedAgent ? 'dedicated' : null)
+
+        return {
+          workflowId,
+          workflowName: nameById.get(workflowId) ?? 'Untitled',
+          agentAddress,
+          agentDisplayName: agentMeta?.display_name ?? null,
+          bindingType,
+        }
+      })
+
+      res.json({ bindings })
+    } catch (error) {
+      console.error('[AgentWallet] workflow-bindings error:', error)
       res.status(500).json({ error: 'Internal server error' })
     }
   })

@@ -187,14 +187,20 @@ async function executeAiAgentBlock(
   const market = await getMarketSnapshot(0, agent)
   const agentBalanceMicroAlgos = await getAgentBalanceMicroAlgos(agent.agentAddress)
 
-  const decision = await makeAgentDecision({
-    userStrategy: strategy,
-    agentBalanceMicroAlgos,
-    market,
-    guardian,
-    recipient: configuredRecipient,
-    maxAmountAlgo,
-  })
+  const decision = await makeAgentDecision(
+    {
+      userStrategy: strategy,
+      agentBalanceMicroAlgos,
+      market,
+      guardian,
+      recipient: configuredRecipient,
+      maxAmountAlgo,
+      agentAddress: agent.agentAddress,
+      workflowId: ctx.workflowId ?? null,
+      supabase: ctx.sb ?? null,
+    },
+    { agent, workflowId: ctx.workflowId ?? null },
+  )
 
   recorder.log({
     nodeId,
@@ -209,6 +215,7 @@ async function executeAiAgentBlock(
       confidence: decision.confidence,
       clamped: decision.clamped,
       source: decision.source,
+      loopIterations: decision.loopIterations ?? null,
       algoUsd: market.algoUsd,
       guardianBlocked: guardian.blocked,
       guardianBlockReason: guardian.blockReason ?? null,
@@ -216,7 +223,7 @@ async function executeAiAgentBlock(
   })
   console.log(
     `  [ai-agent] ${decision.action} ${decision.action === 'pay' ? `${decision.amountAlgo} ALGO ` : ''}` +
-      `(conf ${decision.confidence}, ${decision.source}) - ${decision.reason}`,
+      `(conf ${decision.confidence}, ${decision.source}, loops ${decision.loopIterations ?? 1}) - ${decision.reason}`,
   )
 
   ctx.vars.aiDecision = decision

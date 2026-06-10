@@ -19,6 +19,41 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 }
 
+export const WORKFLOW_NAME_MAX_LENGTH = 100
+
+export function validateWorkflowName(name: string): string | null {
+  const trimmed = name.trim()
+  if (!trimmed) return 'Name cannot be empty'
+  if (trimmed.length > WORKFLOW_NAME_MAX_LENGTH) {
+    return `Name must be ${WORKFLOW_NAME_MAX_LENGTH} characters or less`
+  }
+  return null
+}
+
+export async function checkWorkflowNameExists(
+  walletAddress: string,
+  name: string,
+  excludeWorkflowId?: string | null,
+): Promise<boolean> {
+  const trimmed = name.trim()
+  if (!trimmed) return false
+
+  const sb = getSupabase()
+  const { data, error } = await sb
+    .from('workflows')
+    .select('id, name')
+    .eq('wallet_address', walletAddress)
+
+  if (error) throw new Error(error.message)
+
+  const normalized = trimmed.toLowerCase()
+  return (data ?? []).some(
+    (row) =>
+      (row as { id: string; name: string }).name.trim().toLowerCase() === normalized &&
+      (row as { id: string }).id !== excludeWorkflowId,
+  )
+}
+
 export interface WorkflowRow {
   id: string
   wallet_address: string
@@ -74,12 +109,19 @@ export async function createWorkflow(
   name: string,
   flowJson: { nodes: unknown[]; edges: unknown[] },
 ): Promise<WorkflowRow> {
+  const validationError = validateWorkflowName(name)
+  if (validationError) throw new Error(validationError)
+
+  const trimmedName = name.trim()
+  const exists = await checkWorkflowNameExists(walletAddress, trimmedName)
+  if (exists) throw new Error('A workflow with this name already exists')
+
   const sb = getSupabase()
   const { data, error } = await sb
     .from('workflows')
     .insert({
       wallet_address: walletAddress,
-      name,
+      name: trimmedName,
       flow_json: flowJson,
     })
     .select()
@@ -93,10 +135,26 @@ export async function updateWorkflow(
   id: string,
   updates: Partial<Pick<WorkflowRow, 'name' | 'description' | 'flow_json' | 'is_active'>>,
 ): Promise<void> {
+  let payload = { ...updates }
+
+  if (payload.name !== undefined) {
+    const validationError = validateWorkflowName(payload.name)
+    if (validationError) throw new Error(validationError)
+
+    const trimmedName = payload.name.trim()
+    const existing = await getWorkflow(id)
+    if (!existing) throw new Error('Workflow not found')
+
+    const exists = await checkWorkflowNameExists(existing.wallet_address, trimmedName, id)
+    if (exists) throw new Error('A workflow with this name already exists')
+
+    payload = { ...payload, name: trimmedName }
+  }
+
   const sb = getSupabase()
   const { error } = await sb
     .from('workflows')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...payload, updated_at: new Date().toISOString() })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
