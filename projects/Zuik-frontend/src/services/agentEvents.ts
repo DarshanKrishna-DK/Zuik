@@ -11,10 +11,7 @@ export interface AgentEventRow {
   agent_id: string | null
 }
 
-/**
- * Persist an agent event for cross-session / multi-tab event bus.
- * No-op when Supabase is not configured.
- */
+/** Persist agent events for multi-tab / cross-session event bus. No-op without Supabase. */
 export async function insertAgentEvent(params: {
   workflowId: string
   eventName: string
@@ -52,9 +49,6 @@ export async function insertAgentEvent(params: {
   }
 }
 
-/**
- * Load recent persisted events for an event trigger (newest first).
- */
 export async function listRecentAgentEvents(
   workflowId: string,
   eventName: string,

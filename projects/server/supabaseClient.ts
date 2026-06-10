@@ -25,9 +25,7 @@ function isElevatedKey(key: string): boolean {
   return decodeJwtRole(key) === 'service_role'
 }
 
-/**
- * Resolve a working Supabase key. Prefers secret/service_role keys; falls back to anon key.
- */
+// Tries service_role keys first, then anon (with a warning if that's all we have).
 export async function createValidatedSupabaseClient(): Promise<SupabaseClient> {
   const candidates: { label: string; key: string }[] = [
     { label: 'SUPABASE_SECRET_KEY', key: process.env.SUPABASE_SECRET_KEY?.trim() ?? '' },

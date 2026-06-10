@@ -1,7 +1,4 @@
-/**
- * Tool registry for agent function calling.
- * Each tool exposes a Groq/OpenAI-compatible schema and a server-side handler.
- */
+// Groq function-calling tools the agent loop can invoke.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AgentExecutionContext } from '../agentSigner.js'

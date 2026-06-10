@@ -25,9 +25,8 @@ function toBaseUnits(amount: number, decimals: number): number {
 }
 
 /**
- * ALGO-in swaps cannot use the entire account balance: the same ALGO pays the swap amount
- * and transaction fees (Tinyman V2 uses a 2-txn group with a higher app-call fee).
- * Also avoids float drift (human ALGO -> microAlgos) exceeding on-chain balance.
+ * ALGO swaps need headroom for fees (Tinyman uses a 2-txn group).
+ * Also avoids float drift pushing microAlgos over the on-chain balance.
  */
 async function capAlgoSwapInputMicro(
   sender: string,
@@ -389,9 +388,6 @@ export const blockExecutors: Record<string, BlockExecutor> = {
 
 export const ACTION_BLOCK_IDS = Object.keys(blockExecutors)
 
-/**
- * Returns all blocks with a blockId in topological order, including triggers.
- */
 export function getExecutableBlocksInOrder(
   nodes: { id: string; data: Record<string, unknown> }[],
   edges: { source: string; target: string }[]
@@ -410,12 +406,4 @@ export function getExecutableBlocksInOrder(
       config: (node.data.config as BlockConfig) ?? {},
     }
   })
-}
-
-/** @deprecated Use getExecutableBlocksInOrder instead */
-export function getActionBlocksInOrder(
-  nodes: { id: string; data: Record<string, unknown> }[],
-  edges: { source: string; target: string }[]
-): { nodeId: string; blockId: string; config: BlockConfig }[] {
-  return getExecutableBlocksInOrder(nodes, edges)
 }

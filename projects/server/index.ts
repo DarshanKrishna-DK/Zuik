@@ -1,4 +1,4 @@
-// Zuik Cloud Server - deploy root: projects/server
+// Main Zuik server entry (projects/server)
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
@@ -53,7 +53,6 @@ interface ScheduleRow {
   flow_json: { nodes: any[]; edges: any[] }
 }
 
-// Main HTTP server for health checks and webhooks
 const app = express()
 const corsOrigins = CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
 app.use(cors({
@@ -75,7 +74,6 @@ app.use('/api/market', createMarketProxyRouter())
 app.use('/api/x402', createX402PremiumRouter())
 app.use('/api/x402/facilitator', createX402FacilitatorRouter())
 
-// Health check endpoint
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
@@ -88,7 +86,6 @@ app.get('/health', (_req, res) => {
   })
 })
 
-// Telegram webhook endpoint
 app.post('/telegram/webhook', (req, res) => {
   try {
     const update = req.body
@@ -100,12 +97,10 @@ app.post('/telegram/webhook', (req, res) => {
   }
 })
 
-// Webhook endpoint for external triggers
 app.post('/webhook/:workflowId', async (req, res) => {
   try {
     const { workflowId } = req.params
-    
-    // Fetch workflow from database
+
     const { data: workflow, error } = await sb
       .from('workflows')
       .select('*')
@@ -117,7 +112,6 @@ app.post('/webhook/:workflowId', async (req, res) => {
       return res.status(404).json({ error: 'Workflow not found or inactive' })
     }
 
-    // Execute workflow
     const agentContext = await getAgentExecutionContextForWorkflow(sb, workflowId)
     await executeWorkflowHeadless(
       workflow.flow_json,
@@ -136,7 +130,6 @@ app.post('/webhook/:workflowId', async (req, res) => {
   }
 })
 
-// Schedule polling function
 async function pollSchedules(): Promise<void> {
   const now = new Date().toISOString()
 
@@ -196,7 +189,6 @@ async function pollSchedules(): Promise<void> {
   }
 }
 
-// Start all services
 async function startServer() {
   console.log('╔══════════════════════════════════════╗')
   console.log('║        Zuik Cloud Server v1.0.0      ║')
@@ -243,7 +235,6 @@ async function startServer() {
     }
   })
 
-  // Start main HTTP server
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] 🌐 Main server running on port ${PORT}`)
   })
@@ -256,14 +247,12 @@ async function startServer() {
     }
   }
 
-  // Start Telegram bot
   try {
     startTelegramBot(sb)
   } catch (error) {
     console.warn('[Server] Telegram bot failed to start:', error)
   }
 
-  // Start polling loop
   console.log('[Server] 🔄 Starting schedule polling loop...')
   while (true) {
     try {
@@ -275,7 +264,6 @@ async function startServer() {
   }
 }
 
-// Handle graceful shutdown
 process.on('SIGINT', () => {
   console.log('[Server] 📴 Shutting down gracefully...')
   process.exit(0)
@@ -286,5 +274,4 @@ process.on('SIGTERM', () => {
   process.exit(0)
 })
 
-// Start the server
 startServer().catch(console.error)

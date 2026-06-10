@@ -1,13 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-/**
- * Records a headless workflow run into the existing `executions` table so the dashboard and
- * Telegram can show what the agent did and why (AI decisions, tx ids, fees). Mirrors the shape
- * the frontend writes (status / block_logs / tx_ids / total_fees_microalgo / duration_ms).
- *
- * Recording is best effort: a failed insert/update never breaks the run. When Supabase or the
- * workflow id is missing, the recorder is a no-op that still collects logs for console output.
- */
+// Writes headless runs to the executions table for the dashboard and Telegram.
+// Best effort: a failed insert never stops the workflow.
 
 export interface BlockLogEntry {
   nodeId?: string
@@ -15,7 +9,7 @@ export interface BlockLogEntry {
   blockName?: string
   type: 'start' | 'success' | 'error' | 'skip' | 'waiting' | 'info'
   message: string
-  /** Structured AI decision or other detail surfaced on the dashboard. */
+  /** AI decision payload for the dashboard. */
   detail?: Record<string, unknown>
   at: string
 }
@@ -43,7 +37,6 @@ export class ExecutionRecorder {
     this.blockCount = opts.blockCount
   }
 
-  /** Open an executions row (status running). No-op without Supabase + a real workflow id. */
   async start(): Promise<void> {
     if (!this.sb || !this.workflowId) return
     try {
@@ -73,7 +66,6 @@ export class ExecutionRecorder {
     this.feesMicroAlgos += feesMicroAlgos
   }
 
-  /** Finalize the executions row. status defaults to success when no error was logged. */
   async finish(status?: 'success' | 'failed' | 'cancelled', errorMessage?: string): Promise<void> {
     const hadError = this.logs.some((l) => l.type === 'error')
     const finalStatus = status ?? (hadError ? 'failed' : 'success')

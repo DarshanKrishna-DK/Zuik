@@ -1,7 +1,4 @@
-/**
- * Core agent loop: perceive -> reason -> act -> observe (reflect).
- * Replaces one-shot LLM calls with bounded iterative reasoning and tool use.
- */
+// Bounded perceive-reason-act loop with tool use (replaces one-shot Groq calls).
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AgentExecutionContext } from '../agentSigner.js'
@@ -25,9 +22,8 @@ export interface AgentLoopRunContext {
   agent?: AgentExecutionContext | null
   sb?: SupabaseClient | null
   workflowId?: string | null
-  /** Multi-agent session bus for branch agent communication. */
+  /** Set when running inside a multi-agent fork/join session. */
   messageBus?: AgentMessageBus | null
-  /** Unique id for this agent instance within a coordination session. */
   agentId?: string | null
 }
 

@@ -1,8 +1,6 @@
 /**
- * Tinyman V2 AMM integration using the official @tinymanorg/tinyman-js-sdk.
- *
- * Uses DIRECT pool swap (2 transactions) instead of the swap router (6 txns)
- * to avoid testnet issues with unfunded intermediary accounts.
+ * Tinyman V2 direct pool swaps (2 txns). We skip the router on testnet -
+ * its intermediary accounts often lack funding.
  */
 
 import {
@@ -114,10 +112,7 @@ export async function getTinymanQuote(params: TinymanQuoteParams): Promise<Tinym
   }
 }
 
-/**
- * Tinyman returns SignerTransaction[] { txn, signers }; use-wallet expects algosdk.Transaction[].
- * Bridge via bytes when needed (algosdk version / txn class mismatches).
- */
+/** Bridge Tinyman SignerTransaction to plain algosdk.Transaction for use-wallet. */
 function signerTransactionToAlgosdkTxn(st: SignerTransaction): algosdk.Transaction {
   const t = st.txn as algosdk.Transaction & { toByte?: () => Uint8Array }
   if (typeof t.toByte === 'function') {
@@ -129,11 +124,6 @@ function signerTransactionToAlgosdkTxn(st: SignerTransaction): algosdk.Transacti
   }
   return t
 }
-
-/**
- * Execute a Tinyman V2 swap directly via pool interaction (2 transactions).
- * Signs with the wallet using plain algosdk.Transaction[] (Pera-compatible).
- */
 
 export async function executeTinymanSwap(
   quote: TinymanQuote,
@@ -157,7 +147,7 @@ export async function executeTinymanSwap(
 
   console.log('[Tinyman] Generated', txGroup.length, 'transactions')
 
-  // Wait 2 seconds before requesting user signature to prevent Pera wallet conflicts
+  // Pera needs a beat between quote and sign prompt
   console.log('[Tinyman] Waiting 2s before requesting signature...')
   await new Promise(resolve => setTimeout(resolve, 2000))
 

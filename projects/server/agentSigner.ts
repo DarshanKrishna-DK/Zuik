@@ -4,13 +4,7 @@ import path from 'node:path'
 import algosdk, { type TransactionSigner } from 'algosdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-/**
- * Server-side keystore for funded agent sub-account secrets.
- *
- * Secrets live ONLY on the server: either in process.env.ZUIK_AGENT_KEYS (a JSON map of
- * agentAddress -> 25-word mnemonic) or in a gitignored .keystore.json next to the server.
- * The agent SECRET is never stored in Supabase, never logged, and never returned to the client.
- */
+// Agent mnemonics live here or in ZUIK_AGENT_KEYS - never in Supabase or client responses.
 
 const KEYSTORE_PATH = path.resolve(process.cwd(), process.env.ZUIK_KEYSTORE_FILE ?? '.keystore.json')
 const GUARDIAN_APP_ID = Number(process.env.GUARDIAN_APP_ID ?? process.env.VITE_GUARDIAN_APP_ID ?? 0)
@@ -57,10 +51,6 @@ function persistFileKeys(map: KeystoreMap): void {
   }
 }
 
-/**
- * Validate that a mnemonic derives the given agentAddress, then store it server-side.
- * NEVER logs the mnemonic.
- */
 export function storeAgentKey(agentAddress: string, mnemonic: string): void {
   let account: algosdk.Account
   try {
@@ -74,7 +64,7 @@ export function storeAgentKey(agentAddress: string, mnemonic: string): void {
 
   const keystore = getKeystore()
   keystore[agentAddress] = mnemonic
-  // Only the env-provided keys are read-only; everything registered at runtime is file-backed.
+  // Runtime registrations go to the gitignored file; env keys are read-only overlays.
   const fileKeys = loadFileKeys()
   fileKeys[agentAddress] = mnemonic
   persistFileKeys(fileKeys)
@@ -84,7 +74,6 @@ export function hasAgentKey(agentAddress: string): boolean {
   return Boolean(getKeystore()[agentAddress])
 }
 
-/** Remove an agent secret from the runtime keystore and gitignored file store. */
 export function removeAgentKey(agentAddress: string): void {
   const keystore = getKeystore()
   delete keystore[agentAddress]

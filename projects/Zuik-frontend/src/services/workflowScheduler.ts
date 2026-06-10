@@ -1,15 +1,6 @@
 /**
- * Persistent Workflow Scheduler
- *
- * Schedules are stored in Supabase so they survive browser close.
- * When the app reopens, missed executions are detected and queued.
- *
- * Architecture:
- * - On-chain transactions (swaps, payments) require the browser to be open
- *   because the wallet signer is needed (non-custodial model).
- * - Notification-only workflows (Telegram, Discord, browser alerts) can
- *   run server-side via Supabase Edge Functions + pg_cron.
- * - The scheduler persists state to Supabase and catches up on missed runs.
+ * Schedules live in Supabase so they survive browser restarts.
+ * On-chain steps still need the wallet open; notifications can run server-side.
  */
 
 import { isSupabaseConfigured, getSupabase } from './supabase'
@@ -33,10 +24,6 @@ export interface ScheduleEntry {
   updated_at: string
 }
 
-/**
- * Save a workflow schedule to Supabase.
- * Called when a user starts a workflow with timer triggers.
- */
 export async function saveSchedule(params: {
   workflowId: string
   walletAddress: string
@@ -82,9 +69,6 @@ export async function saveSchedule(params: {
   }
 }
 
-/**
- * Deactivate a schedule when the workflow is stopped.
- */
 export async function deactivateSchedule(workflowId: string, scheduleType?: ScheduleType): Promise<void> {
   if (!isSupabaseConfigured()) return
   try {
@@ -153,9 +137,6 @@ export async function completeSchedule(scheduleId: string): Promise<void> {
   } catch { /* non-blocking */ }
 }
 
-/**
- * Increment iteration count and set next run time.
- */
 export async function recordScheduleIteration(scheduleId: string, intervalSec: number): Promise<void> {
   if (!isSupabaseConfigured()) return
   try {
@@ -178,10 +159,7 @@ export async function recordScheduleIteration(scheduleId: string, intervalSec: n
   } catch { /* non-blocking */ }
 }
 
-/**
- * Get all active schedules for a wallet that have missed runs.
- * A "missed run" is a schedule whose next_run_at is in the past.
- */
+/** Schedules whose next_run_at is already in the past. */
 export async function getMissedSchedules(walletAddress: string): Promise<ScheduleEntry[]> {
   if (!isSupabaseConfigured()) return []
   try {
@@ -201,9 +179,6 @@ export async function getMissedSchedules(walletAddress: string): Promise<Schedul
   }
 }
 
-/**
- * Get all active schedules for a wallet.
- */
 export async function getActiveSchedules(walletAddress: string): Promise<ScheduleEntry[]> {
   if (!isSupabaseConfigured()) return []
   try {
@@ -222,10 +197,7 @@ export async function getActiveSchedules(walletAddress: string): Promise<Schedul
   }
 }
 
-/**
- * SQL migration for the workflow_schedules table.
- * Run this in your Supabase SQL editor.
- */
+/** Supabase migration for workflow_schedules (run in SQL editor). */
 export const SCHEDULE_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS workflow_schedules (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

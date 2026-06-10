@@ -1,362 +1,134 @@
-# Zuik Cloud Agent
+# Zuik Cloud Server
 
-**24/7 DeFi Automation Server** • **Production Voice Processing** • **Telegram Integration**
+Node server that runs scheduled workflows, agent decisions, voice APIs, and Telegram hooks against Supabase. Deploy to Railway for 24/7 execution, or run locally while building.
 
-Deploy the Zuik agent to Railway.app for continuous workflow execution, enhanced voice processing, and Telegram bot integration. No more keeping your computer running - let the cloud handle your DeFi automation.
+## What it does
 
----
+- Polls `workflow_schedules` and executes headless flows (DCA, alerts, AI agent blocks)
+- Routes agent spends through the Guardian contract (`sendAuthorizedPayment`)
+- Proxies Groq chat for the frontend (`/api/ai/chat`)
+- Voice STT/TTS when `GROQ_API_KEY` and/or `ELEVENLABS_API_KEY` are set
+- x402 premium market data and facilitator endpoints for agent-paid API calls
+- Telegram bot and webhook for notifications and voice workflows
 
-## 🚀 What This Does
+## Quick start (local)
 
-### **Persistent Workflow Execution**
-- Monitors your saved workflows 24/7
-- Executes scheduled automations (DCA, price alerts, rebalancing)
-- Handles complex multi-agent workflows with parallel execution
-- Sends notifications when actions complete
-
-### **Enhanced Voice Processing**  
-- **Groq Whisper**: Server-side audio transcription (faster, more accurate)
-- **ElevenLabs TTS**: High-quality voice responses with emotion control
-- **Multi-language Support**: English + Hindi with automatic detection
-- **Production API**: RESTful endpoints for voice processing
-
-### **Advanced Telegram Integration**
-- **Voice Conversations**: Send voice messages, get voice replies
-- **Workflow Management**: Create, monitor, and control workflows via chat
-- **Real-time Notifications**: Instant alerts when trades execute
-- **Webhook Mode**: Production-grade webhook processing for reliability
-
----
-
-## ⚡ Quick Deploy to Railway
-
-### **1. Prerequisites**
-- [Railway CLI](https://docs.railway.app/develop/cli) installed
-- API keys ready (see setup guide below)
-
-### **2. Deploy**
 ```bash
-# Navigate to server directory
 cd projects/server
+npm install
+cp .env.example .env
+# fill in SUPABASE_URL, SUPABASE_SERVICE_KEY, GROQ_API_KEY
+npm run dev
+```
 
-# Login to Railway
+Default port is **4021** (`PORT` in `.env`). Voice runs inline when `NODE_ENV=production`, or on port **3002** in dev (`npm run voice`).
+
+```bash
+curl http://localhost:4021/health
+```
+
+## Deploy (Railway)
+
+```bash
+cd projects/server
 railway login
-
-# Initialize project
 railway init
-# Choose: Empty Project
-# Name: zuik-agent-[yourname]
-
-# Deploy
 railway up
 ```
 
-### **3. Configure Environment**
+Set at least:
+
 ```bash
-# Set required environment variables
 railway variables set SUPABASE_URL="https://your-project.supabase.co"
 railway variables set SUPABASE_SERVICE_KEY="eyJ..."
 railway variables set GROQ_API_KEY="gsk_..."
 railway variables set NODE_ENV="production"
-
-# Optional: Enhanced features  
-railway variables set ELEVENLABS_API_KEY="sk_..."
-railway variables set TELEGRAM_BOT_TOKEN="123456789:ABC..."
-railway variables set TELEGRAM_WEBHOOK_URL="https://your-app.railway.app/telegram/webhook"
 ```
 
-### **4. Verify Deployment**
+Optional: `ELEVENLABS_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, `CORS_ORIGIN`, `GUARDIAN_APP_ID`.
+
+## Environment variables
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `SUPABASE_URL` | yes | Project URL |
+| `SUPABASE_SERVICE_KEY` or `SUPABASE_SECRET_KEY` | yes | Service role, not anon |
+| `GROQ_API_KEY` | yes for AI/voice STT | Free tier at console.groq.com |
+| `PORT` | no | Default 4021 |
+| `POLL_INTERVAL_MS` | no | Schedule poll interval (default 15000) |
+| `NODE_ENV` | no | `production` mounts voice on main app |
+| `VOICE_SERVER_PORT` | no | Standalone voice server in dev (3002) |
+| `ELEVENLABS_API_KEY` | no | TTS |
+| `TELEGRAM_BOT_TOKEN` | no | Bot mode |
+| `CORS_ORIGIN` | no | Comma-separated origins for API |
+| `GUARDIAN_APP_ID` | no | Guardian app on Algorand |
+| `ZUIK_AGENT_KEYS` or `.keystore.json` | no | Agent mnemonics (server only) |
+
+See `.env.example` for the full list.
+
+## API routes
+
+### Core
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Liveness check |
+| POST | `/webhook/:workflowId` | Trigger a saved workflow |
+| POST | `/api/workflows/execute` | Run a flow JSON with agent context |
+| POST | `/telegram/webhook` | Telegram update handler |
+
+### Mounted routers
+
+| Prefix | Purpose |
+|--------|---------|
+| `/api/voice` | Transcribe, synthesize, voices, detect-language |
+| `/api/ai` | Groq chat proxy |
+| `/api/market` | Market data proxy |
+| `/api/x402` | Premium paid endpoints |
+| `/api/x402/facilitator` | x402 facilitator |
+| `/api/agent-wallets` | Register agent keys, balances |
+| `/api/agent-management` | Policy templates, agent lifecycle |
+
+Voice paths (when mounted): `POST /api/voice/transcribe`, `POST /api/voice/synthesize`, `GET /api/voice/voices`, `POST /api/voice/detect-language`.
+
+## npm scripts
+
 ```bash
-# Check health endpoint
-curl https://your-app.railway.app/health
-
-# Expected response:
-# {
-#   "status": "healthy",
-#   "services": {
-#     "supabase": "connected",
-#     "voice": "ready"
-#   }
-# }
+npm start              # Main server
+npm run dev            # Main server with watch
+npm run agent          # Legacy agent-only entry (agent.ts)
+npm run voice          # Standalone voice server (dev)
+npm run setup:agent-wallets   # Supabase table setup
+npm run renew:guardian        # Renew Guardian policy on-chain
+npm run check:guardian        # Inspect Guardian box state
+npm run test:x402             # x402 premium integration test
+npm run test:x402:unit        # x402 unit checks
 ```
 
-**🎉 Your agent is now running 24/7 in the cloud!**
-
----
-
-## 🔧 Local Development
-
-### **Setup**
-```bash
-# Install dependencies
-npm install
-
-# Copy environment template
-cp .env.example .env
-
-# Edit .env with your API keys (see below)
-```
-
-### **Development Commands**
-```bash
-npm run dev        # Start with hot reload
-npm start          # Production mode
-npm run agent      # Agent only (no voice server)
-npm run voice      # Voice server only
-```
-
-### **Test Endpoints**
-```bash
-# Health check
-curl http://localhost:3001/health
-
-# Voice transcription
-curl -X POST http://localhost:3002/api/voice/transcribe \
-  -F "audio=@test-audio.webm"
-
-# Voice synthesis
-curl -X POST http://localhost:3002/api/voice/synthesize \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello from Zuik!"}'
-```
-
----
-
-## 🔑 Environment Variables
-
-### **Required (Core Functionality)**
-```bash
-# Database
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=eyJ...  # Service role key (not anon key)
-
-# AI Processing
-GROQ_API_KEY=gsk_...         # Free at console.groq.com
-
-# Server Config
-NODE_ENV=production          # Set automatically by Railway
-PORT=3001                   # Set automatically by Railway
-```
-
-### **Optional (Enhanced Features)**
-```bash
-# High-Quality Voice
-ELEVENLABS_API_KEY=sk_...           # Free 10K chars/month
-ELEVENLABS_VOICE_ID=JBFqnCBsd6RMkjVDRZzb  # Default: Rachel
-
-# Telegram Bot
-TELEGRAM_BOT_TOKEN=123456789:ABC...  # From @BotFather
-TELEGRAM_WEBHOOK_URL=https://your-app.railway.app/telegram/webhook
-
-# Voice Server
-VOICE_SERVER_PORT=3002              # Internal port for voice processing
-FRONTEND_URL=https://your-vercel-app.vercel.app  # Required for Vercel frontend
-CORS_ORIGIN=https://your-vercel-app.vercel.app,http://localhost:5173
-```
-
----
-
-## 🏗️ Architecture
+## Layout
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   Railway.app Cloud                     │
-│                                                         │
-│  ┌─────────────────┐    ┌─────────────────────────────┐ │
-│  │  Agent Server   │    │     Voice Server            │ │
-│  │  (Port 3001)    │    │     (Port 3002)             │ │
-│  │                 │    │                             │ │
-│  │ • Schedule Poll │    │ • Groq Whisper (STT)       │ │
-│  │ • Workflow Exec │    │ • ElevenLabs TTS            │ │  
-│  │ • Telegram Bot  │    │ • Multi-language Support   │ │
-│  │ • Health Check  │    │ • Audio Format Conversion  │ │
-│  └─────────────────┘    └─────────────────────────────┘ │
-│           │                           │                 │
-└───────────┼───────────────────────────┼─────────────────┘
-            │                           │
-            ▼                           ▼
-    ┌──────────────┐           ┌─────────────────┐
-    │   Supabase   │           │   Frontend      │
-    │   Database   │           │  (Vercel/Local) │
-    │              │           │                 │
-    │ • Workflows  │           │ • Canvas UI     │
-    │ • Executions │           │ • Voice Input   │
-    │ • Schedules  │           │ • Wallet Conn   │
-    │ • Agent State│           │ • Chat Panel    │
-    └──────────────┘           └─────────────────┘
+index.ts              Main server (schedules, webhooks, routers)
+agent.ts              Standalone scheduler entry (no HTTP stack)
+voiceServer.ts        Voice router + optional standalone server
+workflowRunner.ts     Block execution and Guardian payments
+guardianExecutor.ts   Signed payment groups
+aiAgent.ts            AgentLoop entry for ai-agent blocks
+agent/                Loop, memory, tools, multi-agent coordination
+scripts/              Guardian and x402 maintenance scripts
 ```
 
----
+Agent mnemonics stay in `.keystore.json` or `ZUIK_AGENT_KEYS`. Never commit them.
 
-## 📡 API Endpoints
+## Troubleshooting
 
-### **Health & Status**
-```
-GET  /health                    # Service health check
-GET  /status                    # Detailed status info
-```
+**Workflows not firing** - Check `railway logs` or local console for Supabase errors. Confirm schedules have `requires_signer=false` and `next_run_at` in the past.
 
-### **Workflow Management**  
-```
-POST /webhook/:workflowId       # External webhook triggers
-GET  /workflows/active          # List active workflows
-```
+**Voice 503** - Set `GROQ_API_KEY` (STT) and/or `ELEVENLABS_API_KEY` (TTS). In dev, run `npm run voice` if `NODE_ENV` is not `production`.
 
-### **Telegram Integration**
-```
-POST /telegram/webhook          # Telegram bot webhook
-GET  /telegram/status           # Bot configuration status
-```
+**Agent payments fail** - Agent needs a key in keystore, Guardian policy registered, and enough ALGO. Run `npm run check:guardian`.
 
-### **Voice Processing**
-```
-POST /api/voice/transcribe      # Audio → Text (Groq Whisper)
-POST /api/voice/synthesize      # Text → Audio (ElevenLabs)
-GET  /api/voice/voices          # Available TTS voices
-POST /api/voice/detect-language # Language detection
-```
+## Related docs
 
----
-
-## 🧪 Testing
-
-### **Multi-Agent Test Suite**
-```bash
-# Run comprehensive tests
-npm test
-
-# Quick smoke test
-npm run test:quick
-```
-
-### **Manual Testing**
-```bash
-# Test agent execution
-curl -X POST http://localhost:3001/webhook/test-workflow
-
-# Test voice processing
-curl -X POST http://localhost:3002/api/voice/synthesize \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Testing voice synthesis"}'
-
-# Test Telegram webhook
-curl -X POST http://localhost:3001/telegram/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"update_id": 1, "message": {"text": "/start", "from": {"id": 123}}}'
-```
-
----
-
-## 🔍 Monitoring & Debugging
-
-### **View Logs**
-```bash
-# Railway logs (production)
-railway logs --tail 100
-
-# Local logs
-npm run dev  # Logs to console
-```
-
-### **Health Monitoring**
-```bash
-# Check all services
-curl https://your-app.railway.app/health | jq
-
-# Expected healthy response:
-{
-  "status": "healthy",
-  "uptime": 3600,
-  "services": {
-    "supabase": "connected",
-    "telegram": "webhook_configured", 
-    "voice": "ready"
-  }
-}
-```
-
-### **Common Issues**
-
-**❌ Agent not executing workflows**
-```bash
-# Check Supabase connection
-railway logs | grep -i supabase
-
-# Verify environment variables
-railway variables
-```
-
-**❌ Voice processing failing**
-```bash
-# Check API keys
-curl -H "Authorization: Bearer $GROQ_API_KEY" https://api.groq.com/openai/v1/models
-
-# Verify ElevenLabs key
-curl -H "xi-api-key: $ELEVENLABS_API_KEY" https://api.elevenlabs.io/v1/voices
-```
-
-**❌ Telegram bot not responding**
-```bash
-# Check webhook configuration
-curl https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo
-
-# Test bot token
-curl https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getMe
-```
-
----
-
-## 📈 Scaling & Performance
-
-### **Resource Usage**
-- **CPU**: Low usage except during voice processing
-- **Memory**: ~100MB base + ~50MB per concurrent workflow  
-- **Storage**: Minimal (logs and temporary audio files)
-- **Bandwidth**: ~1KB per workflow execution, ~100KB per voice message
-
-### **Railway Limits (Free Tier)**
-- **Execution Hours**: 500 hours/month (≈16 hours/day)
-- **Resource Credit**: $5/month
-- **Bandwidth**: 100GB/month outbound
-
-### **Optimization Tips**
-1. **Pause during development**: Stop when not actively testing
-2. **Monitor usage**: Check Railway dashboard weekly
-3. **Optimize workflows**: Use rate limiters and conditions to prevent over-execution
-4. **Upgrade when needed**: Pro plan ($20/month) for unlimited hours
-
----
-
-## 🚀 Production Deployment Checklist
-
-### **Pre-Deployment**
-- [ ] All environment variables configured
-- [ ] Supabase schema applied (base + multi-agent)  
-- [ ] API keys tested and working
-- [ ] Telegram bot configured with @BotFather
-
-### **Post-Deployment**
-- [ ] Health endpoint returning 200 OK
-- [ ] Telegram webhook configured and responding
-- [ ] Voice endpoints working (if configured)
-- [ ] Test workflow execution end-to-end
-- [ ] Monitoring and alerting set up
-
-### **Security**
-- [ ] Environment variables never committed to git
-- [ ] Service role key (not anon key) used for Supabase
-- [ ] Webhook signatures validated (if implementing)
-- [ ] Rate limiting configured for production
-
----
-
-## 📚 Additional Resources
-
-- **Development plan**: `../reference_docs/ZUIK_DEVELOPMENT_PLAN.md`
-- **Project documentation (stakeholders)**: `../reference_docs/Zuik_Project_Documentation.md`
-- **Testing and demo**: `../docs/testing/README.md`
-- **📝 Changelog**: `../reference_docs/CHANGELOG.md`
-
----
-
-**🎯 Ready to automate your DeFi strategies 24/7? Deploy to Railway and let Zuik handle the rest!**
+- `../reference_docs/ZUIK_DEVELOPMENT_PLAN.md`
+- `../docs/testing/README.md`

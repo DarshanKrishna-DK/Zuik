@@ -7,19 +7,15 @@ const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MAX_MESSAGES = 32
 const MAX_MESSAGE_CHARS = 12_000
 
-// Retry configuration for rate limiting
 const MAX_RETRIES = 3
-const BASE_DELAY = 1000 // 1 second base delay
-const MAX_DELAY = 10000 // 10 seconds max delay
+const BASE_DELAY = 1000
+const MAX_DELAY = 10000
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
 }
 
-/**
- * Retry function with exponential backoff for rate limiting
- */
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries = MAX_RETRIES,
@@ -33,14 +29,12 @@ async function retryWithBackoff<T>(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error))
       
-      // If it's not a rate limit error or we've exhausted retries, throw immediately
       if (!isRateLimitError(error) || attempt === maxRetries) {
         throw lastError
       }
-      
-      // Calculate delay with exponential backoff and jitter
+
       const delay = Math.min(baseDelay * Math.pow(2, attempt), MAX_DELAY)
-      const jitter = Math.random() * 0.1 * delay // 10% jitter
+      const jitter = Math.random() * 0.1 * delay
       const finalDelay = delay + jitter
       
       console.log(`[AiChatRouter] Rate limited, retrying in ${Math.round(finalDelay)}ms (attempt ${attempt + 1}/${maxRetries + 1})`)
@@ -51,9 +45,6 @@ async function retryWithBackoff<T>(
   throw lastError
 }
 
-/**
- * Check if error is a rate limit error
- */
 function isRateLimitError(error: unknown): boolean {
   if (error && typeof error === 'object') {
     const err = error as any
@@ -64,9 +55,6 @@ function isRateLimitError(error: unknown): boolean {
   return false
 }
 
-/**
- * Make a Groq API request with retry logic
- */
 async function makeGroqRequest(requestBody: any): Promise<Response> {
   return retryWithBackoff(async () => {
     const response = await fetch(GROQ_URL, {
@@ -79,7 +67,6 @@ async function makeGroqRequest(requestBody: any): Promise<Response> {
       body: JSON.stringify(requestBody),
     })
     
-    // If it's a rate limit error, throw with proper status for retry logic
     if (response.status === 429) {
       const errorText = await response.text()
       const error = new Error(`Groq API rate limit exceeded: ${errorText}`)

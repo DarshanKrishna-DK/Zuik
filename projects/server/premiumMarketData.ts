@@ -1,7 +1,4 @@
-/**
- * Premium market data served behind x402 payment.
- * Uses richer CoinGecko fields than the free single-price endpoint.
- */
+// Richer CoinGecko fields, gated behind x402 on /api/x402/premium.
 
 const COINGECKO_BASE = 'https://api.coingecko.com/api/v3'
 

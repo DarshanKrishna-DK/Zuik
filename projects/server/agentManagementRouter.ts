@@ -51,10 +51,8 @@ export async function createAgentManagementRouter(): Promise<express.Router> {
         .select('*')
       
       if (ownerAddress) {
-        // Include system templates + user's custom templates
         query.or(`is_system.eq.true,wallet_address.eq.${ownerAddress}`)
       } else {
-        // Only system templates
         query.or('is_system.eq.true,wallet_address.is.null')
       }
       

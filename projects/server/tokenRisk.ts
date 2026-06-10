@@ -1,6 +1,4 @@
-/**
- * Server-side 0-100 ASA risk rubric (mirrors frontend tokenRisk.ts for autonomous workflows).
- */
+// ASA risk scoring for headless workflows (same rubric as the frontend).
 import algosdk from 'algosdk'
 import { getAlgodClient } from './algorand.js'
 

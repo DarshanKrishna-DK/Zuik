@@ -5,9 +5,7 @@ import {
   type VoiceShellState,
 } from '../../services/voiceAssistant/componentRegistry'
 
-/**
- * Registers global shell state (wallet, navbar) for voice queries across pages.
- */
+/** Navbar wallet state for voice queries on any page. */
 export function useVoiceShellState(state: Omit<VoiceShellState, 'updatedAt'>): void {
   const stateRef = useRef(state)
   stateRef.current = state

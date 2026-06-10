@@ -1,9 +1,4 @@
-/**
- * Market snapshot for the AI decision layer.
- *
- * Free tier: Vestige + CoinGecko simple price.
- * Premium tier: x402-gated CoinGecko full market data (when agent context is available).
- */
+// Market data for the AI layer: free CoinGecko/Vestige, or x402 premium when an agent wallet is set.
 
 import type { AgentExecutionContext } from './agentSigner.js'
 import { fetchWithGuardianX402 } from './x402AgentClient.js'
@@ -58,9 +53,6 @@ async function fetchFreeAlgoSpot(): Promise<{ algoUsd: number | null; algoChange
   }
 }
 
-/**
- * Fetch premium ALGO quote via x402 with Guardian-enforced agent payment.
- */
 export async function fetchPremiumAlgoQuoteViaX402(
   agent: AgentExecutionContext,
   coinId = 'algorand',
@@ -76,10 +68,6 @@ export async function fetchPremiumAlgoQuoteViaX402(
   }
 }
 
-/**
- * Build a market snapshot. When agentContext is provided and X402 is not disabled,
- * uses the x402 premium endpoint instead of the free CoinGecko spot call.
- */
 export async function getMarketSnapshot(
   assetId = 0,
   agentContext?: AgentExecutionContext | null,

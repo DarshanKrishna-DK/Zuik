@@ -10,10 +10,7 @@ export interface VoicePageContextInput {
   data?: Record<string, unknown>
 }
 
-/**
- * Registers page-specific state with the voice assistant while the page is mounted.
- * State persists in the registry until unmount for cross-page continuity reads.
- */
+/** Registers page context while mounted (voice commands use it for richer answers). */
 export function useVoicePageContext(pageId: VoicePageId, context: VoicePageContextInput): void {
   const summaryRef = useRef(context.summary)
   const dataRef = useRef(context.data)

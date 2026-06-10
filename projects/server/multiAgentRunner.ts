@@ -3,23 +3,8 @@ import type { FlowNode, FlowEdge, RunContext } from './workflowRunner.js'
 import { executeBlock } from './workflowRunner.js'
 import { MultiAgentCoordinator } from './agent/MultiAgentCoordinator.js'
 
-/**
- * Server-side multi-agent orchestrator.
- *
- * When an agent wallet context is available, fork/join/merge_gate/event/spawn_agent blocks run
- * through MultiAgentCoordinator: independent AgentLoop branch agents, message-bus negotiation,
- * consensus at join, and x402-capable tool use.
- *
- * Without agent context, falls back to deterministic parallel branch execution (legacy mode).
- *
- * Blocks:
- *   fork          -> spawn reasoning branch agents (or parallel scripts in legacy mode)
- *   join          -> consensus and result aggregation
- *   merge_gate    -> negotiation-based conflict resolution
- *   event_emit    -> agent message bus + agent_events table
- *   event_trigger -> bus history or agent_events
- *   spawn_agent   -> hierarchical multi-agent child workflow
- */
+// Multi-agent block runner. Uses MultiAgentCoordinator when an agent wallet is available;
+// otherwise falls back to deterministic parallel branches.
 
 const MULTI_AGENT_BLOCKS = new Set([
   'merge_gate',
@@ -59,7 +44,6 @@ function findTriggers(state: OrchestratorState): FlowNode[] {
   return state.nodes.filter((n) => !hasIncoming.has(n.id))
 }
 
-/** Emit an event into the agent_events table (the shared multi-agent event bus). */
 async function emitEvent(
   sb: SupabaseClient,
   workflowId: string | null | undefined,
@@ -78,7 +62,6 @@ async function emitEvent(
   }
 }
 
-/** Look for an already-emitted event matching name (+ optional filter) for this workflow. */
 async function findEvent(
   sb: SupabaseClient,
   workflowId: string | null | undefined,
@@ -154,7 +137,6 @@ function extractBranch(
   return reachable
 }
 
-/** Run a fixed ordered list of node ids as a sequential sub-branch. */
 async function runBranch(state: OrchestratorState, nodeIds: string[]): Promise<void> {
   for (const id of nodeIds) {
     const node = state.nodeMap.get(id)
@@ -390,10 +372,6 @@ async function orchestrate(state: OrchestratorState): Promise<void> {
   }
 }
 
-/**
- * Entry point used by executeWorkflowHeadless when a flow contains multi-agent blocks.
- * Uses true multi-agent coordination when agentContext is set; otherwise legacy orchestration.
- */
 export async function runMultiAgentHeadless(
   nodes: FlowNode[],
   edges: FlowEdge[],

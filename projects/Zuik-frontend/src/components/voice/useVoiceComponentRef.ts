@@ -5,10 +5,7 @@ import {
   type VoiceComponentHandle,
 } from '../../services/voiceAssistant/componentRegistry'
 
-/**
- * Registers imperative handles for voice-driven component control.
- * Prefer data-testid values documented in component-registry.md.
- */
+/** Wire up imperative handles so voice can click/focus this component. */
 export function useVoiceComponentRef(
   testId: string,
   handle: Omit<VoiceComponentHandle, 'testId'>,

@@ -1,7 +1,4 @@
-/**
- * Coordinates multiple AgentLoop instances with communication, negotiation, and consensus.
- * Transforms fork/join/merge_gate/event blocks from parallel scripts into collaborating agents.
- */
+// Runs multiple AgentLoop branches and handles join/merge consensus.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FlowNode, FlowEdge, RunContext } from '../workflowRunner.js'

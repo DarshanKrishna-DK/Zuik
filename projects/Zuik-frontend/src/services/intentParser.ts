@@ -11,22 +11,22 @@ import {
 const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'llama-3.3-70b-versatile'
 
 function resolveAiChatUrl(): string {
-  // In dev, always use the Vite proxy to avoid CORS (even when VITE_SERVER_URL is set for demos).
+  // Dev uses the Vite proxy so we skip CORS headaches.
   if (import.meta.env.DEV) return '/api/ai/chat'
-  
+
   const serverBase = (import.meta.env.VITE_SERVER_URL as string | undefined)?.trim()
-  
-  // If no server base configured, use relative API calls (same domain deployment like Vercel Functions)
+
   if (!serverBase || serverBase === '') return '/api/ai/chat'
-  
-  // If server base includes localhost in production, that's likely a misconfiguration
-  const isProductionDeployment = import.meta.env.PROD && (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
+
+  const isProductionDeployment =
+    import.meta.env.PROD &&
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost'
   if (isProductionDeployment && serverBase.includes('localhost')) {
     console.warn('[AI] localhost server in production - falling back to relative API calls')
     return '/api/ai/chat'
   }
-  
-  // Use configured external server
+
   const normalized = serverBase.replace(/\/$/, '').replace(/\/api\/?$/i, '')
   return `${normalized}/api/ai/chat`
 }

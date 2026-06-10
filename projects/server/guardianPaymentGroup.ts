@@ -33,11 +33,7 @@ function toBase64Txn(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64')
 }
 
-/**
- * Build and sign the Guardian-enforced ALGO payment atomic group:
- *   [0] PaymentTxn agent -> recipient
- *   [1] ZuikGuardian authorize_trade(pay)
- */
+// Atomic group: [pay, authorize_trade]. Guardian rejects anything over policy limits.
 export async function buildSignedGuardianAlgoPaymentGroup(
   params: GuardianAlgoPaymentGroupParams,
 ): Promise<GuardianAlgoPaymentGroupResult> {

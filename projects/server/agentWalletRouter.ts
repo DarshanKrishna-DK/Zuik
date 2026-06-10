@@ -27,16 +27,7 @@ async function fetchWalletBalance(agentAddress: string): Promise<AgentWalletBala
   }
 }
 
-/**
- * REST routes for the funded agent sub-account model.
- *
- * - POST /register   stores the agent mnemonic in the server keystore (never persisted to DB)
- *                    and upserts public metadata into the agent_wallets table.
- * - GET  /:agentAddress/balance   reads the on-chain balance of an agent sub-account.
- * - GET  /by-wallet/:ownerAddress lists agent wallets owned by a connected wallet.
- *
- * The agent secret is NEVER stored in Supabase or returned to the client.
- */
+// Agent wallet API: register keys server-side, expose balances and metadata (never the mnemonic).
 export async function createAgentWalletRouter(): Promise<express.Router> {
   if (!sb) {
     sb = await createValidatedSupabaseClient()
@@ -51,10 +42,9 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
         return res.status(400).json({ error: 'ownerAddress, agentAddress and mnemonic are required' })
       }
 
-      // Persist the secret server-side only. Throws if the mnemonic does not derive agentAddress.
       storeAgentKey(agentAddress, mnemonic)
 
-      // workflow_id is a UUID column; ignore non-UUID values (e.g. demo placeholders).
+      // workflow_id must be a UUID; skip demo placeholders.
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       const safeWorkflowId = typeof workflowId === 'string' && UUID_RE.test(workflowId) ? workflowId : null
 
@@ -96,7 +86,6 @@ export async function createAgentWalletRouter(): Promise<express.Router> {
         }
       }
 
-      // Do not echo the mnemonic back.
       res.json({ success: true, agentAddress })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to register agent wallet'

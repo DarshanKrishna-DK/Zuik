@@ -68,7 +68,7 @@ export default function App() {
     },
     options: {
       resetNetwork: true,
-      debug: false, // Disable debug to avoid network detection issues
+      debug: false,
     },
   })
 

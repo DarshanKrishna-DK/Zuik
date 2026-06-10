@@ -31,19 +31,12 @@ export interface WorkflowAgentBinding {
 }
 
 export interface CreatedAgentWallet {
-  /** Public Algorand address of the freshly generated agent sub-account. */
   agentAddress: string
-  /** 25-word mnemonic. Handed to the server keystore; never persisted in Supabase or the bundle. */
+  /** Mnemonic goes to the server keystore only - never Supabase or the bundle. */
   mnemonic: string
 }
 
-/**
- * Generate a fresh Ed25519 agent sub-account for a workflow.
- *
- * The mnemonic is POSTed to the 24/7 server, which stores it in its keystore and upserts
- * public metadata (owner, agent address, guardian app id, budget) into Supabase agent_wallets.
- * The secret never touches Supabase or the frontend bundle beyond this in-memory hand-off.
- */
+/** Generate an agent sub-account and register it with the server + Supabase metadata. */
 export async function createAgentWallet(
   workflowId: string,
   ownerAddress: string,
@@ -79,9 +72,6 @@ export async function createAgentWallet(
   return { agentAddress, mnemonic }
 }
 
-/**
- * Read the agent wallet metadata for a workflow from Supabase. Returns null when none exists.
- */
 const AGENT_WALLET_SELECT =
   'id, workflow_id, wallet_address, agent_address, guardian_app_id, budget_microalgos, status, display_name, policy_binding_id, binding_type, created_at'
 

@@ -1,12 +1,4 @@
-/**
- * AI decision layer for autonomous Zuik agents.
- *
- * makeAgentDecision runs a bounded AgentLoop (perceive-reason-act-observe) with tool use
- * and persistent memory instead of a single Groq call. The decision is ADVISORY: the runner
- * still routes every spend through sendAuthorizedPayment, so the Guardian app is the hard limit.
- *
- * When Groq is unavailable the loop degrades to a deterministic hold.
- */
+// AI decision layer. Proposals are advisory; Guardian enforces spends on-chain via sendAuthorizedPayment.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { GuardianContext } from './guardianPolicy.js'

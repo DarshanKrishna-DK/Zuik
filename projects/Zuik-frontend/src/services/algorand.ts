@@ -7,10 +7,6 @@ import {
 
 let _algorand: AlgorandClient | null = null
 
-/**
- * Creates and returns a shared AlgorandClient instance from env config.
- * Uses algod and indexer configs from Vite environment variables.
- */
 export function getAlgorandClient(): AlgorandClient {
   if (!_algorand) {
     const algodConfig = getAlgodConfigFromViteEnvironment()
@@ -18,7 +14,7 @@ export function getAlgorandClient(): AlgorandClient {
     try {
       indexerConfig = getIndexerConfigFromViteEnvironment()
     } catch {
-      // Indexer is optional; continue without it
+      /* indexer optional */
     }
     _algorand = AlgorandClient.fromConfig({
       algodConfig,
@@ -28,17 +24,11 @@ export function getAlgorandClient(): AlgorandClient {
   return _algorand
 }
 
-/**
- * Returns the raw algosdk Algodv2 client from the shared AlgorandClient.
- */
 export function getAlgodClient(): algosdk.Algodv2 {
   return getAlgorandClient().client.algod
 }
 
-/**
- * Returns the raw algosdk Indexer client from the shared AlgorandClient.
- * Throws if indexer was not configured.
- */
+/** Throws if indexer was not configured in env. */
 export function getIndexerClient(): algosdk.Indexer {
   return getAlgorandClient().client.indexer
 }

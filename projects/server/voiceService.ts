@@ -7,12 +7,11 @@ import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js'
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || ''
-const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb' // Default voice
+const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb'
 
 let groqClient: Groq | null = null
 let elevenLabsClient: ElevenLabsClient | null = null
 
-// Initialize clients
 if (GROQ_API_KEY) {
   groqClient = new Groq({ apiKey: GROQ_API_KEY })
 }
@@ -34,9 +33,6 @@ export interface TTSResult {
   duration?: number
 }
 
-/**
- * Transcribe audio buffer to text using Groq Whisper
- */
 export async function transcribeAudio(
   audioBuffer: Buffer,
   language?: string,
@@ -46,28 +42,24 @@ export async function transcribeAudio(
     throw new Error('Groq client not initialized. Set GROQ_API_KEY environment variable.')
   }
 
-  // Create temporary file
   const tempFilePath = join(tmpdir(), `audio_${Date.now()}.${format}`)
-  
+
   try {
-    // Write buffer to temporary file
     const writeStream = createWriteStream(tempFilePath)
     writeStream.write(audioBuffer)
     writeStream.end()
 
-    // Wait for file to be written
     await new Promise<void>((resolve, reject) => {
       writeStream.on('finish', resolve)
       writeStream.on('error', reject)
     })
 
-    // Transcribe using Groq Whisper
     const transcription = await groqClient.audio.transcriptions.create({
       file: createReadStream(tempFilePath),
       model: 'whisper-large-v3-turbo',
       language: language || undefined,
       response_format: 'verbose_json',
-      temperature: 0.1, // Low temperature for more consistent results
+      temperature: 0.1,
     })
 
     const verbose = transcription as { text: string; language?: string; duration?: number }
@@ -76,24 +68,20 @@ export async function transcribeAudio(
       text: verbose.text,
       language: verbose.language || 'unknown',
       duration: verbose.duration,
-      confidence: 0.9, // Groq Whisper typically has high accuracy
+      confidence: 0.9,
     }
   } catch (error) {
     console.error('[VoiceService] Transcription failed:', error)
     throw new Error(`Audio transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   } finally {
-    // Clean up temporary file
     try {
       unlinkSync(tempFilePath)
     } catch {
-      // Ignore cleanup errors
+      // temp file cleanup
     }
   }
 }
 
-/**
- * Convert text to speech using ElevenLabs
- */
 export async function synthesizeSpeech(
   text: string,
   voiceId?: string,
@@ -105,12 +93,7 @@ export async function synthesizeSpeech(
 
   try {
     const voice = voiceId || ELEVENLABS_VOICE_ID
-    
-    // Choose model based on language
-    let modelId = 'eleven_multilingual_v2'
-    if (language === 'hi' || language?.startsWith('hi')) {
-      modelId = 'eleven_multilingual_v2' // Supports Hindi
-    }
+    const modelId = 'eleven_multilingual_v2'
 
     const audioStream = await elevenLabsClient.textToSpeech.convert(voice, {
       text,
@@ -124,7 +107,6 @@ export async function synthesizeSpeech(
       },
     })
 
-    // Collect audio chunks
     const chunks: Uint8Array[] = []
     for await (const chunk of audioStream) {
       chunks.push(chunk)
@@ -140,7 +122,7 @@ export async function synthesizeSpeech(
     return {
       audioData,
       format: 'mp3',
-      duration: undefined, // ElevenLabs doesn't provide duration in the basic response
+      duration: undefined,
     }
   } catch (error) {
     console.error('[VoiceService] TTS synthesis failed:', error)
@@ -148,11 +130,7 @@ export async function synthesizeSpeech(
   }
 }
 
-/**
- * Detect language from text (basic heuristic)
- */
 export function detectLanguage(text: string): string {
-  // Simple language detection based on character sets
   const hindiPattern = /[\u0900-\u097F]/
   const englishPattern = /[a-zA-Z]/
 
@@ -161,12 +139,9 @@ export function detectLanguage(text: string): string {
   } else if (englishPattern.test(text)) {
     return 'en'
   }
-  return 'en' // Default to English
+  return 'en'
 }
 
-/**
- * Check if voice services are configured
- */
 export function isVoiceServiceConfigured(): { groq: boolean; elevenlabs: boolean } {
   return {
     groq: Boolean(GROQ_API_KEY && groqClient),
@@ -174,9 +149,6 @@ export function isVoiceServiceConfigured(): { groq: boolean; elevenlabs: boolean
   }
 }
 
-/**
- * Get available voice IDs from ElevenLabs
- */
 export async function getAvailableVoices(): Promise<Array<{ id: string; name: string; language: string }>> {
   if (!elevenLabsClient) {
     return []

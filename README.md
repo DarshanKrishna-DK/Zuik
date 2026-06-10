@@ -141,13 +141,16 @@ You stay non-custodial: Zuik coordinates, your wallet signs, and multi-step flow
 
 | Capability | Examples |
 |------------|----------|
-| **Multimodal input** | Voice, chat, and a 34-block visual flow builder |
+| **Multimodal input** | Voice, chat, and a 54-block visual flow builder |
 | **Non-custodial execution** | Wallet-signed transactions; assets stay in your control |
 | **Atomic groups** | Multi-step trades succeed together or not at all |
 | **DEX connectivity** | Tinyman direct pools and Folks Router aggregation |
 | **On-chain safety** | Guardian atomic enforcement (max per trade, daily cap, allowlists, expiry) |
 | **Cloud agent** | Background schedules, price monitors, and Telegram alerts |
-| **Persistence** | Supabase-backed workflows and run history |
+| **Agent sub-accounts** | Guardian-bounded headless ALGO payments with policy templates |
+| **Multi-agent flows** | Fork, join, and consensus blocks for parallel treasury logic |
+| **Premium data (x402)** | Micropayment-gated market quotes on TestNet |
+| **Persistence** | Supabase-backed workflows, schedules, and run history |
 | **Trading and investing** | Weekly DCA, conditional swaps on price drops, take-profit flows |
 | **Scheduled payments** | Recurring sends to any Algorand address, payroll-style batches |
 | **Portfolio management** | Rebalancing, yield routing, auto-allocate incoming stablecoin deposits |
@@ -161,31 +164,35 @@ You stay non-custodial: Zuik coordinates, your wallet signs, and multi-step flow
 graph TB
     subgraph USERS["Users"]
         WEB["Web application"]
-        TG["Telegram"]
-        VOICE["Voice"]
+        TG["Telegram bot"]
+        VOICE["Voice assistant"]
     end
 
     subgraph PLATFORM["Zuik platform"]
-        INTENT["Intent and advisor"]
-        BUILDER["Flow builder"]
-        EXEC["Workflow engine"]
-        SAFE["Safety and limits"]
+        INTENT["Intent engine and advisor"]
+        BUILDER["54-block flow builder"]
+        EXEC["Workflow runner"]
+        MULTI["Multi-agent coordinator"]
+        SAFE["Safety preview and token risk"]
     end
 
     subgraph PERSIST["Persistence"]
-        DB["Supabase workflows and history"]
+        DB["Supabase workflows, schedules, agents"]
     end
 
     subgraph AGENT["Cloud agent optional"]
-        SCHED["Schedules"]
+        SCHED["Interval schedules"]
+        WH["Webhook triggers"]
         PRICE["Price monitors"]
-        NOTIFY["Notifications"]
+        NOTIFY["Telegram and Discord"]
     end
 
     subgraph ALGORAND["Algorand"]
-        WALLET["Your wallet"]
+        WALLET["User wallet"]
+        SUB["Agent sub-account"]
         SWAPS["Tinyman and Folks Router"]
-        GUARD["ZuikGuardian and delegation verifier"]
+        GUARD["ZuikGuardian policy store"]
+        X402["x402 premium APIs"]
     end
 
     WEB --> INTENT
@@ -193,15 +200,19 @@ graph TB
     TG --> INTENT
     INTENT --> BUILDER
     BUILDER --> EXEC
-    EXEC --> SAFE
+    EXEC --> MULTI
+    MULTI --> SAFE
     SAFE --> WALLET
+    SAFE --> SUB
     EXEC --> SWAPS
-    SAFE --> GUARD
+    SUB --> GUARD
+    GUARD --> ALGORAND
     EXEC --> DB
     AGENT --> EXEC
     AGENT --> DB
     AGENT --> ALGORAND
     WALLET --> ALGORAND
+    EXEC --> X402
 
     style USERS fill:#1a1040,stroke:#a78bfa,color:#f8fafc
     style PLATFORM fill:#0a1a2a,stroke:#00e5ff,color:#f8fafc
@@ -212,10 +223,11 @@ graph TB
 | Layer | Role |
 |-------|------|
 | **Experience** | Web builder, chat, voice, and Telegram as entry points |
-| **Orchestration** | Ordered steps with logic, math, conditions, and multi-agent flows |
+| **Orchestration** | Ordered steps with logic, math, conditions, fork/join multi-agent flows |
+| **Execution modes** | User mode (wallet signs all txns) or agent mode (Guardian-bounded sub-account) |
 | **Safety** | Pre-sign previews, advisor context, Guardian on-chain caps, ASA risk scoring |
 | **Execution** | Wallet-signed transactions and atomic groups on Algorand |
-| **Persistence** | Supabase stores workflows and run history across sessions |
+| **Persistence** | Supabase stores workflows, schedules, agent policies, and run history |
 | **Cloud agent** | Background triggers when you opt in (Node.js server on Railway or local) |
 
 ### Repository structure
@@ -241,13 +253,16 @@ flowchart TD
     MATERIALIZE --> REFINE{"Need changes?"}
     REFINE -->|"Chat or voice"| PARSE
     REFINE -->|"Drag and drop"| MATERIALIZE
-    REFINE -->|"Looks good"| PREVIEW["Safety preview: fees, slippage, limits"]
-    PREVIEW --> POLICY{"Agent mode + Guardian?"}
+    REFINE -->|"Looks good"| MODE{"Execution mode?"}
+    MODE -->|"User"| PREVIEW["Safety preview: fees, slippage, risk"]
+    MODE -->|"Agent"| AGENT_SETUP["Create agent + Guardian policy + fund sub-account"]
+    AGENT_SETUP --> PREVIEW
+    PREVIEW --> POLICY{"Agent mode?"}
     POLICY -->|"Yes"| VERIFY["On-chain policy check"]
     POLICY -->|"No"| SIGN
     VERIFY --> SIGN["Wallet or agent signs atomic group"]
-    SIGN --> RUN["Workflow runs on trigger or schedule"]
-    RUN --> HISTORY["Results stored in dashboard"]
+    SIGN --> RUN["Workflow runs on trigger, schedule, or webhook"]
+    RUN --> HISTORY["Results in dashboard + Telegram alerts"]
 
     style START fill:#1a1040,stroke:#a78bfa,color:#f8fafc
     style PREVIEW fill:#0a1a2a,stroke:#00e5ff,color:#f8fafc
@@ -255,7 +270,7 @@ flowchart TD
     style RUN fill:#2a1020,stroke:#ec4899,color:#f8fafc
 ```
 
-Adjust using chat, voice, or drag-and-drop until the workflow looks right. The safety preview shows fees and slippage before you sign.
+Adjust using chat, voice, or drag-and-drop until the workflow looks right. Pick **User** mode to sign every transaction in your wallet, or **Agent** mode for Guardian-bounded ALGO payments when the browser is closed. The safety preview shows fees, slippage, and token risk before you sign.
 
 ---
 
@@ -285,7 +300,7 @@ sequenceDiagram
     Server->>Agent: Build payment txn
     Server->>Guardian: authorize_trade atomic group
     Guardian-->>Server: Approve or revert entire group
-    Server->>DEX: Optional swap path (wallet or future headless)
+    Server->>DEX: Swap path (wallet mode today; headless swaps on roadmap)
     Server-->>Frontend: Execution result + tx ids
 ```
 
@@ -369,11 +384,25 @@ Integration tests: `npm run test:localnet` and `npm run test:testnet` in `projec
 | **[Defly Wallet](https://defly.app/)** | Wallet connect via `@blockshake/defly-connect` |
 | **[AlgoKit](https://github.com/algorandfoundation/algokit-cli)** | Workspace build, LocalNet, contract deploy, client generation |
 | **[Nodely](https://nodely.io/)** | Free-tier TestNet algod and indexer endpoints (default in `.env.template`) |
-| **[Supabase](https://supabase.com/)** | Workflow persistence, dashboard, delegation metadata |
-| **[Groq](https://groq.com/)** | Server-side LLM for intent parsing (key never exposed to browser) |
-| **[Telegram](https://telegram.org/)** | Bot notifications, workflow control, voice conversations via `@ZuikDeFiBot` |
+| **[Supabase](https://supabase.com/)** | Workflows, schedules, agent policies, execution history |
+| **[Groq](https://groq.com/)** | Server-side LLM for intent parsing and Whisper transcription |
+| **[Telegram](https://telegram.org/)** | Bot notifications, workflow control, voice via `@ZuikDeFiBot` |
+| **[Vestige](https://vestige.fi/)** | Token stats and ASA risk scoring inputs |
+| **[x402-avm](https://github.com/algorandfoundation/x402-avm)** | Micropayment-gated premium market data on TestNet |
 
 Swap routing checks **Tinyman** first (on-chain pool state), then **Folks Router** for better quotes (`projects/Zuik-frontend/src/services/swapToken.ts`).
+
+### Pitch documents
+
+Investor and partner-ready PDFs live in [`reference_docs/`](reference_docs/):
+
+| Document | Audience | Contents |
+|----------|----------|----------|
+| [`technical-pitch.pdf`](reference_docs/technical-pitch.pdf) | Engineers, auditors | Architecture, Guardian mechanics, APIs, security |
+| [`business-pitch.pdf`](reference_docs/business-pitch.pdf) | Investors, GTM | Market fit, personas, monetization, unit economics |
+| [`scalability-pitch.pdf`](reference_docs/scalability-pitch.pdf) | Partners, infra | Scaling plan, integrations, roadmap |
+
+Regenerate with `python reference_docs/generate_pitch_pdfs.py`.
 
 ---
 

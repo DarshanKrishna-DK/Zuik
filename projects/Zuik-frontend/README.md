@@ -17,20 +17,6 @@ The React web application for Zuik. This is the visual interface where users bui
 
 ---
 
-## Stakeholder demos (browser automation)
-
-Automated presentation scripts with visual cursor highlights and step banners:
-
-```bash
-npm run demo:install
-cp demo/demo.config.example.json demo/demo.config.json
-npm run demo:full
-```
-
-See [demo/README.md](demo/README.md) for the story flow (`demo:ai-workflow`, `demo:ai-edit`, `demo:guardian`, `demo:logicsig`, `demo:full`), wallet setup, and troubleshooting.
-
----
-
 ## Setup
 
 ### Requirements
@@ -117,6 +103,8 @@ On LocalNet, the KMD (Key Management Daemon) wallet is used automatically.
 | `npm run dev` | Starts the development server on port 5173 |
 | `npm run build` | Compiles TypeScript and builds for production |
 | `npm run preview` | Previews the production build locally |
+| `npm run test` | Runs Vitest unit tests |
+| `npm run test:e2e` | Runs Playwright end-to-end tests |
 
 ---
 

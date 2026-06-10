@@ -1,6 +1,5 @@
 /**
- * Global registry for page state and component handles used by the voice assistant.
- * Pages register context on mount; the command processor reads it for richer responses.
+ * Voice assistant reads page and component state from here.
  */
 
 export type VoicePageId = '/' | '/builder' | '/dashboard' | '/settings' | '/market'

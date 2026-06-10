@@ -2,10 +2,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 import type { ParsedIntent, CanvasBlock } from '../intentParser'
 import type { Node, Edge } from '@xyflow/react'
 
-/**
- * Integration tests that simulate the complete workflow editing scenarios
- * mentioned in the plan, verifying that the fixes work end-to-end.
- */
+/** End-to-end checks for AI workflow edit scenarios. */
 
 describe('Workflow Editing Integration Tests', () => {
   let mockNodes: Node[]

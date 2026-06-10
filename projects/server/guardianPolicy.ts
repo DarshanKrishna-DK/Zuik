@@ -1,14 +1,7 @@
 import algosdk from 'algosdk'
 import { getAlgodClient } from './algorand.js'
 
-/**
- * Read-only view of the Guardian per-agent policy and pause flag.
- *
- * This module ONLY reads on-chain state. It never builds, signs, or submits a transaction.
- * The authoritative limits live in the Guardian app (App 763727553 on TestNet); the AI
- * decision layer reads them here so it can pre-clamp proposals, but the real enforcement is
- * still done on-chain by authorize_trade when sendAuthorizedPayment submits the atomic group.
- */
+// Read-only Guardian policy view. Actual enforcement happens in authorize_trade on-chain.
 
 export interface GuardianPolicy {
   maxPerTradeMicroAlgos: bigint
@@ -39,12 +32,8 @@ function policyBoxName(agentAddress: string): Uint8Array {
   return new Uint8Array([...enc.encode('pol'), ...algosdk.decodeAddress(agentAddress).publicKey])
 }
 
-/**
- * Decode the AgentPolicy ARC-4 struct (8 big-endian uint64s, 64 bytes) from the policy box value.
- * Returns null when the box does not exist (agent not bootstrapped).
- */
 function decodePolicy(value: Uint8Array): GuardianPolicy | null {
-  // AgentPolicy: 8 x uint64 on deployed TestNet app (64 bytes); newer builds may use 72 bytes.
+  // 8 x uint64 (64 bytes) on current TestNet deploy; newer builds may pad to 72.
   if (value.length < 64) return null
   const dv = new DataView(value.buffer, value.byteOffset, value.byteLength)
   return {
@@ -60,10 +49,6 @@ function decodePolicy(value: Uint8Array): GuardianPolicy | null {
   }
 }
 
-/**
- * Read the recipient allowlist flag from the Guardian 'rcv' BoxMap.
- * Returns false when the recipient box is absent.
- */
 export async function isRecipientAllowed(
   guardianAppId: number,
   recipient: string,
@@ -73,17 +58,13 @@ export async function isRecipientAllowed(
     const name = new Uint8Array([...enc.encode('rcv'), ...algosdk.decodeAddress(recipient).publicKey])
     const box = await getAlgodClient().getApplicationBoxByName(guardianAppId, name).do()
     const v = box.value
-    // ARC-4 bool is a single byte; allowed when the stored flag is non-zero.
+    // ARC-4 bool: last byte non-zero means allowed.
     return v.length > 0 && v[v.length - 1] !== 0
   } catch {
     return false
   }
 }
 
-/**
- * Read the full Guardian context for an agent: pause flag, policy box, and derived headroom.
- * Pure read path - no signing. Used by the AI decision layer to bound its proposals.
- */
 export async function readGuardianContext(
   guardianAppId: number,
   agentAddress: string,
@@ -114,7 +95,7 @@ export async function readGuardianContext(
       }
     }
   } catch {
-    // Global state read is best effort; authorize_trade still enforces pause on-chain.
+    // If this read fails, authorize_trade still blocks paused agents on-chain.
   }
 
   let policy: GuardianPolicy | null = null
@@ -137,7 +118,7 @@ export async function readGuardianContext(
     round = 0n
   }
 
-  // Daily cap headroom: the on-chain counter resets when round >= dayResetRound.
+  // Daily counter resets once round passes dayResetRound.
   const spentToday = round >= policy.dayResetRound ? 0n : policy.dailySpentMicroAlgos
   const remainingDaily = policy.dailyCapMicroAlgos > spentToday
     ? policy.dailyCapMicroAlgos - spentToday
@@ -169,10 +150,6 @@ export async function readGuardianContext(
   }
 }
 
-/**
- * The hard ceiling (microAlgos) a single proposed spend may take, given the policy headroom.
- * Returns 0n when nothing can be spent (blocked or out of headroom).
- */
 export function maxSpendableMicroAlgos(ctx: GuardianContext): bigint {
   if (ctx.blocked || !ctx.policy) return 0n
   const perTrade = ctx.policy.maxPerTradeMicroAlgos

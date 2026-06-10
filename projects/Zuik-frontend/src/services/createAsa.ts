@@ -16,10 +16,7 @@ export interface CreateAsaResult {
   assetId: number
 }
 
-/**
- * Create a new Algorand Standard Asset.
- * The sender becomes the creator and receives all units.
- */
+/** Create an ASA; sender becomes creator and receives the full supply. */
 export async function createAsa(params: CreateAsaParams): Promise<CreateAsaResult> {
   const { sender, name, unitName, totalSupply, decimals, url, signer } = params
 

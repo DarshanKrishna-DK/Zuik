@@ -1,7 +1,4 @@
-/**
- * DOM helpers for voice-driven UI control.
- * Patterns from docs/voice-assistant/component-registry.md
- */
+/** DOM helpers for voice-driven clicks and form fills. */
 
 export function clickTestId(testId: string): boolean {
   const el = document.querySelector(`[data-testid="${testId}"]`)

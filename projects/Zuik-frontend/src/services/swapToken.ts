@@ -1,10 +1,5 @@
 /**
- * Multi-DEX swap aggregation for Algorand.
- *
- * Strategy:
- *   1. Tinyman V2 SDK (reads pool state from chain - works on testnet)
- *   2. Folks Router V2 API (aggregator)
- *   3. Error if neither returns a valid quote
+ * Swap quotes: Tinyman V2 first (on-chain pools), then Folks Router.
  */
 
 import algosdk from 'algosdk'
@@ -107,9 +102,6 @@ async function fetchTinymanQuote(params: GetSwapQuoteParams): Promise<SwapQuoteR
   }
 }
 
-/**
- * Multi-DEX quote: tries Tinyman first (on-chain pool state), then Folks Router.
- */
 export async function getSwapQuote(params: GetSwapQuoteParams): Promise<SwapQuoteResponse> {
   const network = params.network ?? 'testnet'
 
@@ -125,9 +117,6 @@ export async function getSwapQuote(params: GetSwapQuoteParams): Promise<SwapQuot
   )
 }
 
-/**
- * Execute a swap using the quote's source DEX.
- */
 export async function executeSwap(params: ExecuteSwapParams): Promise<ExecuteSwapResult> {
   const { quote, sender, signer, algodClient } = params
 
@@ -164,7 +153,7 @@ async function executeFolksSwap(
     }
   }
 
-  // Wait 2 seconds before requesting user signature to prevent Pera wallet conflicts
+  // Pera gets confused if we ask for a signature too soon after quote
   await new Promise(resolve => setTimeout(resolve, 2000))
 
   const indexesToSign = txns.map((_, i) => i)

@@ -1,7 +1,4 @@
-/**
- * Persistent agent memory with importance scoring and retrieval.
- * Stores observations, decisions, and reflections from AgentLoop cycles.
- */
+// Agent memory in Supabase: observations, decisions, reflections from each loop cycle.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -48,9 +45,7 @@ function expiresAtForType(type: MemoryType): string | null {
   return d.toISOString()
 }
 
-/**
- * Score memory importance (0-1) from content signals: outcome, spend size, confidence swings.
- */
+// Higher score = more likely to show up in future context windows.
 export function computeImportanceScore(
   memoryType: MemoryType,
   content: Record<string, unknown>,

@@ -14,11 +14,7 @@ export interface OptInToAsaResult {
   alreadyOptedIn: boolean
 }
 
-/**
- * Opt in to an Algorand Standard Asset.
- * First checks if already opted in; if so, returns without sending a transaction.
- * Otherwise sends a zero-amount asset transfer to self.
- */
+/** Opt in if needed; otherwise no-op. Uses a zero-amount self-transfer. */
 export async function optInToAsa(params: OptInToAsaParams): Promise<OptInToAsaResult> {
   const { sender, assetId, signer } = params
 

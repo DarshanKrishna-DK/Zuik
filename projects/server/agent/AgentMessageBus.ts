@@ -1,7 +1,4 @@
-/**
- * In-session message bus for agent-to-agent communication, negotiation, and consensus.
- * Persists cross-run events to agent_events when Supabase is available.
- */
+// In-session bus for fork/join agents. Also writes to agent_events when Supabase is wired up.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
