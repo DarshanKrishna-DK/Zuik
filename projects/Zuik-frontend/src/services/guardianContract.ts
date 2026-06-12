@@ -146,10 +146,17 @@ export class GuardianContractService {
     try {
       const sender = readerAddress || agentAddress
       const client = getGuardianClient()
+      console.log(`Checking Guardian policy for agent: ${agentAddress}, reader: ${sender}`)
+      
       const result = await client.send.getPolicy({ sender, args: { agent: agentAddress } })
       const p = result.return
-      if (!p) return null
-      return {
+      
+      if (!p) {
+        console.log('Guardian policy not found - no policy box exists for this agent')
+        return null
+      }
+      
+      const policy = {
         maxPerTradeMicroAlgos: BigInt(p.maxPerTradeMicroAlgos),
         dailyCapMicroAlgos: BigInt(p.dailyCapMicroAlgos),
         dailySpentMicroAlgos: BigInt(p.dailySpentMicroAlgos),
@@ -160,7 +167,11 @@ export class GuardianContractService {
         allowedDexAppId: BigInt(p.allowedDexAppId),
         allowedAssetId: BigInt(p.allowedAssetId),
       }
-    } catch {
+      
+      console.log('Guardian policy found:', policy)
+      return policy
+    } catch (error) {
+      console.error('Error reading Guardian policy:', error)
       return null
     }
   }

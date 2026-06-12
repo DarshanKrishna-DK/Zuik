@@ -9,6 +9,7 @@ import {
 import { guardianContract } from '../services/guardianContract'
 import { getAlgorandClient } from '../services/algorand'
 import { estimateStepFee } from '../services/transactionSimulator'
+import { debugGuardianPolicy } from '../utils/debugGuardianPolicy'
 
 export type ExecutionMode = 'user' | 'agent'
 
@@ -109,8 +110,11 @@ async function evaluatePolicyStatus(
   ownerAddress: string,
 ): Promise<{ status: PolicyReadinessStatus; message?: string }> {
   const guardianAppId = parseInt(import.meta.env.VITE_GUARDIAN_APP_ID || '0', 10)
+  
+  console.log('🔍 Guardian policy check:', { agentAddress, ownerAddress, guardianAppId })
+  
   if (!guardianAppId) {
-    return { status: 'missing', message: 'Guardian is not configured for this deployment.' }
+    return { status: 'missing', message: 'Guardian is not configured for this deployment. Set VITE_GUARDIAN_APP_ID in your .env.local file.' }
   }
 
   const paused = await guardianContract.isPaused(ownerAddress)
@@ -119,12 +123,22 @@ async function evaluatePolicyStatus(
   }
 
   const policy = await guardianContract.getPolicy(agentAddress, ownerAddress)
+  console.log('🔍 Policy check result:', policy)
+  
   if (!policy) {
+    // Check if this is a database vs blockchain mismatch
+    console.warn('❌ No Guardian policy found on-chain for agent:', agentAddress)
+    console.log('💡 This suggests a database vs blockchain state mismatch')
+    console.log('💡 The Agent Management UI shows policy from database, but blockchain contract has none')
+    
+    // Provide actionable guidance
     return {
       status: 'missing',
-      message: 'No Guardian policy for this agent. Register a policy in Agent Management.',
+      message: `Database shows policy but Guardian contract has none for agent ${agentAddress.slice(0, 8)}... The bootstrap transaction may have failed. Re-register policy in Agent Management.`,
     }
   }
+
+  console.log('✅ Guardian policy found on-chain')
 
   const round = await getCurrentRound()
   if (round > 0n && round > policy.expiryRound) {
@@ -146,7 +160,10 @@ export async function checkAgentReadiness(
   workflowId: string | null,
   nodes: FlowNode[],
   ownerAddress: string | undefined,
+  forceRefresh = false,
 ): Promise<AgentReadiness> {
+  console.log('🔍 Starting agent readiness check', { workflowId, ownerAddress, nodeCount: nodes.length, forceRefresh })
+  
   if (!ownerAddress) {
     return { ok: false, code: 'no_agent', message: 'Connect your wallet first.' }
   }
@@ -208,8 +225,26 @@ export async function checkAgentReadiness(
     }
   }
 
+  // Force fresh policy check on execution attempts
+  console.log('🔍 Checking Guardian policy status...', { agentAddress: wallet.agent_address, ownerAddress })
   const policyCheck = await evaluatePolicyStatus(wallet.agent_address, ownerAddress)
+  
   if (policyCheck.status !== 'active') {
+    console.warn('❌ Policy check failed:', policyCheck)
+    
+    // If policy is missing, suggest immediate action
+    if (policyCheck.status === 'missing') {
+      return {
+        ok: false,
+        code: 'policy_blocked',
+        message: `No Guardian policy found on-chain. Go to Settings → Agent Management → Register Policy for agent ${wallet.agent_address.slice(0, 8)}...`,
+        wallet,
+        balance,
+        requiredMicroAlgos,
+        policyStatus: policyCheck.status,
+      }
+    }
+    
     return {
       ok: false,
       code: 'policy_blocked',
@@ -220,6 +255,8 @@ export async function checkAgentReadiness(
       policyStatus: policyCheck.status,
     }
   }
+  
+  console.log('✅ Guardian policy is active and ready')
 
   return { ok: true, wallet, balance, requiredMicroAlgos, policyStatus: 'active' }
 }

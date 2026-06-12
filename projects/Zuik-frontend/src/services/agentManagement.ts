@@ -162,6 +162,29 @@ export async function syncPolicyStatus(
   return json
 }
 
+export async function forcePolicyResync(
+  ownerAddress: string,
+  agentAddress: string,
+): Promise<{ fixed: boolean; message: string }> {
+  const res = await fetch(
+    `${SERVER_URL}/api/agent-management/force-policy-resync`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ownerAddress,
+        agentAddress,
+      }),
+    },
+  )
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`Failed to force resync: ${text}`)
+  }
+  const json = (await res.json()) as { fixed: boolean; message: string }
+  return json
+}
+
 export async function updateAgentDisplay(
   ownerAddress: string,
   agentAddress: string,

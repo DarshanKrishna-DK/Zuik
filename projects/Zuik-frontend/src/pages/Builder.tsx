@@ -47,6 +47,7 @@ import ExecutionLog from '../components/flow/ExecutionLog'
 import ChatPanel from '../components/flow/ChatPanel'
 import SchedulePanel from '../components/flow/SchedulePanel'
 import TemplateGallery from '../components/flow/TemplateGallery'
+import GuardianPolicyHealthCheck from '../components/flow/GuardianPolicyHealthCheck'
 import * as XLSX from 'xlsx'
 import type { WorkflowTemplate, TemplateNode, TemplateEdge } from '../services/templateService'
 import { getBlockById } from '../lib/blockRegistry'
@@ -88,6 +89,7 @@ import {
   subscribeVoiceIntent,
 } from '../services/voiceAssistant/voiceBridge'
 import { useVoicePageContext } from '../components/voice'
+import '../utils/testGuardianPolicy' // Make test function available in console
 
 /* ── Inline SVG Icons ─────────────────────────────────── */
 
@@ -204,7 +206,25 @@ export default function Builder() {
   const prefillAppliedRef = useRef<string | null>(null)
   const [executionMode, setExecutionMode] = useState<ExecutionMode>(() => getStoredExecutionMode(null))
   const [agentReadiness, setAgentReadiness] = useState<AgentReadiness | null>(null)
+  const [healthCheckOpen, setHealthCheckOpen] = useState(false)
   const agentAddressRef = useRef<string | undefined>(undefined)
+
+  const canvasBlocks: CanvasBlock[] = useMemo(() => {
+    return nodes.map((n) => {
+      const data = n.data as Record<string, unknown>
+      const blockId = data.blockId as string
+      const def = getBlockById(blockId)
+      return {
+        nodeId: n.id,
+        blockId,
+        blockName: def?.name ?? blockId,
+        config: (data.config as Record<string, string | number | undefined>) ?? {},
+      }
+    }).filter((b) => b.blockId)
+  }, [nodes])
+
+  const canvasBlocksRef = useRef(canvasBlocks)
+  canvasBlocksRef.current = canvasBlocks
 
   const refreshSpawnWorkflowOptions = useCallback(async () => {
     if (!activeAddress || !isSupabaseConfigured()) {
@@ -574,16 +594,49 @@ export default function Builder() {
     }
 
     if (executionMode === 'agent') {
+      addLog({
+        nodeId: '',
+        blockId: 'agent-readiness',
+        blockName: 'Debug',
+        type: 'info',
+        message: `Checking agent readiness for workflow ${workflowIdRef.current}...`,
+      })
+      
       const readiness = await checkAgentReadiness(workflowIdRef.current, flowNodesForMode, activeAddress)
       setAgentReadiness(readiness)
+      
+      // Enhanced logging for debugging
+      console.log('🔍 Agent Readiness Check Result:', readiness)
+      
       if (!readiness.ok) {
         addLog({
           nodeId: '',
           blockId: 'agent-wallet',
           blockName: 'Execution',
           type: 'error',
-          message: readiness.message,
+          message: `Agent readiness failed (${readiness.code}): ${readiness.message}`,
         })
+        
+        // Add specific debugging info based on error code
+        if (readiness.code === 'policy_blocked') {
+          addLog({
+            nodeId: '',
+            blockId: 'guardian-debug',
+            blockName: 'Debug',
+            type: 'info',
+            message: `Policy status: ${readiness.policyStatus}, Wallet: ${readiness.wallet?.agent_address?.slice(0, 12)}...`,
+          })
+          
+          // Suggest specific actions
+          addLog({
+            nodeId: '',
+            blockId: 'guardian-help',
+            blockName: 'Help',
+            type: 'info',
+            message: 'Go to Settings → Agent Management → Find your agent → Register/Renew Policy → Sign with owner wallet',
+          })
+        }
+        
         setLogOpen(true)
         return
       }
@@ -1160,23 +1213,6 @@ export default function Builder() {
     }
   }, [nodes, setNodes])
 
-  const canvasBlocks: CanvasBlock[] = useMemo(() => {
-    return nodes.map((n) => {
-      const data = n.data as Record<string, unknown>
-      const blockId = data.blockId as string
-      const def = getBlockById(blockId)
-      return {
-        nodeId: n.id,
-        blockId,
-        blockName: def?.name ?? blockId,
-        config: (data.config as Record<string, string | number | undefined>) ?? {},
-      }
-    }).filter((b) => b.blockId)
-  }, [nodes])
-
-  const canvasBlocksRef = useRef(canvasBlocks)
-  canvasBlocksRef.current = canvasBlocks
-
   useEffect(() => {
     const provider = () => canvasBlocksRef.current
     registerCanvasProvider(provider)
@@ -1326,6 +1362,10 @@ export default function Builder() {
                 <button onClick={() => { setLogOpen((o) => !o); setMenuOpen(false) }}>
                   <ActivityIcon /> Execution Log
                 </button>
+                <div className="z-dropdown-sep" />
+                <button onClick={() => { setHealthCheckOpen(true); setMenuOpen(false) }} title="Diagnose Guardian policy and agent wallet issues">
+                  🩺 Guardian Health Check
+                </button>
               </div>
             )}
           </div>
@@ -1432,6 +1472,11 @@ export default function Builder() {
           isOpen={templateGalleryOpen}
           onClose={() => setTemplateGalleryOpen(false)}
           onUseTemplate={handleUseTemplate}
+        />
+        <GuardianPolicyHealthCheck
+          workflowId={workflowId}
+          isOpen={healthCheckOpen}
+          onClose={() => setHealthCheckOpen(false)}
         />
         <ReactFlow
           nodes={nodes}

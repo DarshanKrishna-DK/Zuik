@@ -186,13 +186,32 @@ export default function ExecutionModeSelector({
 
     setBanner(null)
 
+    console.log('🔄 Refreshing agent readiness (forced policy check)...')
+
     try {
 
-      const r = await checkAgentReadiness(workflowId, flowNodes, activeAddress ?? undefined)
+      const r = await checkAgentReadiness(workflowId, flowNodes, activeAddress ?? undefined, true)
 
       setReadiness(r)
 
       onReadinessChange?.(r)
+      
+      // Enhanced logging for Guardian policy debugging
+      if (!r.ok && r.code === 'policy_blocked') {
+        console.warn('❌ Agent blocked by Guardian policy:', {
+          code: r.code,
+          message: r.message,
+          policyStatus: r.policyStatus,
+          walletAddress: r.wallet?.agent_address,
+          workflowId
+        })
+      } else if (r.ok) {
+        console.log('✅ Agent readiness check passed:', {
+          agentAddress: r.wallet.agent_address,
+          policyStatus: r.policyStatus,
+          balance: r.balance.available
+        })
+      }
 
       if (r.wallet?.agent_address) {
 
@@ -724,13 +743,39 @@ export default function ExecutionModeSelector({
 
           {!checking && readiness?.ok === false && readiness.code === 'policy_blocked' && (
 
-            <span className="zuik-exec-mode-warn">
+            <div className="zuik-exec-mode-actions">
 
-              {readiness.message}{' '}
+              <span className="zuik-exec-mode-warn">{readiness.message}</span>
 
-              <Link to="/settings?section=agents" className="zuik-exec-mode-link">Settings</Link>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
 
-            </span>
+                <button 
+
+                  type="button" 
+
+                  className="z-btn z-btn-ghost z-btn-sm" 
+
+                  onClick={() => void refresh()}
+
+                  disabled={checking}
+
+                  title="Refresh Guardian policy status"
+
+                >
+
+                  {checking ? 'Checking...' : '🔄 Refresh Status'}
+
+                </button>
+
+                <Link to="/settings?section=agents" className="z-btn z-btn-primary z-btn-sm">
+
+                  Fix in Settings
+
+                </Link>
+
+              </div>
+
+            </div>
 
           )}
 

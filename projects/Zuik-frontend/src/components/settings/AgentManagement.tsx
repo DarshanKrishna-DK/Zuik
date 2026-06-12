@@ -17,6 +17,7 @@ import {
   createCustomPolicyTemplate,
   savePolicyBinding,
   syncPolicyStatus,
+  forcePolicyResync,
   updateAgentDisplay,
   policyStatusLabel,
   policyStatusVariant,
@@ -430,6 +431,41 @@ export function AgentManagement() {
     }
   }
 
+  const handleSyncPolicy = async (entry: AgentOverviewEntry) => {
+    if (!activeAddress) return
+    setLoading(true)
+    try {
+      showMessage('info', 'Syncing policy status from blockchain...')
+      await syncPolicyStatus(activeAddress, entry.wallet.agent_address)
+      await loadAll()
+      showMessage('success', 'Policy status synced from blockchain.')
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Policy sync failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleForcePolicyResync = async (entry: AgentOverviewEntry) => {
+    if (!activeAddress) return
+    setLoading(true)
+    try {
+      showMessage('info', 'Checking database vs blockchain policy state...')
+      const result = await forcePolicyResync(activeAddress, entry.wallet.agent_address)
+      await loadAll()
+      
+      if (result.fixed) {
+        showMessage('success', `Fixed policy mismatch: ${result.message}`)
+      } else {
+        showMessage('info', result.message)
+      }
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Force resync failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleDelete = async (entry: AgentOverviewEntry) => {
     if (!activeAddress) return
     const ok = window.confirm(
@@ -704,24 +740,66 @@ export function AgentManagement() {
                   </button>
                 )}
                 {entry.policyStatus === 'active' && (
-                  <button
-                    type="button"
-                    className="z-btn z-btn-ghost z-btn-sm"
-                    onClick={() => {
-                      setEditingPolicy(entry.wallet.agent_address)
-                      if (entry.policyBinding) {
-                        setEditPolicy({
-                          name: entry.policyTemplate?.name || 'Custom Policy',
-                          maxPerTrade: microToAlgo(entry.policyBinding.max_per_trade_microalgos || 0).toString(),
-                          dailyCap: microToAlgo(entry.policyBinding.daily_cap_microalgos || 0).toString(),
-                          dailyExecutions: (entry.policyBinding.daily_executions_cap || 0).toString(),
-                          expiryDays: '30'
-                        })
-                      }
-                    }}
-                  >
-                    Edit policy
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="z-btn z-btn-ghost z-btn-sm"
+                      onClick={() => {
+                        setEditingPolicy(entry.wallet.agent_address)
+                        if (entry.policyBinding) {
+                          setEditPolicy({
+                            name: entry.policyTemplate?.name || 'Custom Policy',
+                            maxPerTrade: microToAlgo(entry.policyBinding.max_per_trade_microalgos || 0).toString(),
+                            dailyCap: microToAlgo(entry.policyBinding.daily_cap_microalgos || 0).toString(),
+                            dailyExecutions: (entry.policyBinding.daily_executions_cap || 0).toString(),
+                            expiryDays: '30'
+                          })
+                        }
+                      }}
+                    >
+                      Edit policy
+                    </button>
+                    <button
+                      type="button"
+                      className="z-btn z-btn-ghost z-btn-sm"
+                      onClick={() => void handleSyncPolicy(entry)}
+                      disabled={loading}
+                    >
+                      <RefreshCw size={14} />
+                      Sync
+                    </button>
+                    <button
+                      type="button"
+                      className="z-btn z-btn-warning z-btn-sm"
+                      onClick={() => void handleForcePolicyResync(entry)}
+                      disabled={loading}
+                      title="Fix database vs blockchain policy mismatch"
+                    >
+                      🔧 Fix Policy
+                    </button>
+                  </>
+                )}
+                {(entry.policyStatus === 'missing' || entry.policyStatus === 'expired') && (
+                  <>
+                    <button
+                      type="button"
+                      className="z-btn z-btn-ghost z-btn-sm"
+                      onClick={() => void handleSyncPolicy(entry)}
+                      disabled={loading}
+                    >
+                      <RefreshCw size={14} />
+                      Sync Status
+                    </button>
+                    <button
+                      type="button"
+                      className="z-btn z-btn-warning z-btn-sm"
+                      onClick={() => void handleForcePolicyResync(entry)}
+                      disabled={loading}
+                      title="Fix database vs blockchain policy mismatch"
+                    >
+                      🔧 Fix Policy
+                    </button>
+                  </>
                 )}
               </div>
 

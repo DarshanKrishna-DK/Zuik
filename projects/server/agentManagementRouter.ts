@@ -404,6 +404,100 @@ export async function createAgentManagementRouter(): Promise<express.Router> {
     }
   })
 
+  router.post('/force-policy-resync', async (req, res) => {
+    try {
+      const { ownerAddress, agentAddress } = req.body
+
+      if (!ownerAddress || !agentAddress) {
+        return res.status(400).json({ error: 'ownerAddress and agentAddress are required' })
+      }
+
+      console.log('[AgentManagement] Force policy resync:', { ownerAddress, agentAddress })
+
+      // 1. Check what's actually on-chain
+      const guardianCtx = await readGuardianContext(defaultGuardianAppId, agentAddress)
+      const hasOnChainPolicy = guardianCtx.policy !== null
+
+      console.log('On-chain policy status:', { hasPolicy: hasOnChainPolicy, blocked: guardianCtx.blocked, blockReason: guardianCtx.blockReason })
+
+      // 2. Check what's in the database
+      const { data: agentWallet } = await sb
+        .from('agent_wallets')
+        .select('*, policy_binding_id')
+        .eq('agent_address', agentAddress)
+        .eq('wallet_address', ownerAddress)
+        .maybeSingle()
+
+      if (!agentWallet) {
+        return res.status(404).json({ error: 'Agent wallet not found' })
+      }
+
+      const { data: policyBinding } = await sb
+        .from('agent_policy_bindings')
+        .select('*')
+        .eq('agent_address', agentAddress)
+        .maybeSingle()
+
+      const hasDbPolicy = policyBinding !== null
+
+      console.log('Database policy status:', { hasPolicy: hasDbPolicy, bindingStatus: policyBinding?.status })
+
+      let fixed = false
+      let message = ''
+
+      // 3. Fix database vs blockchain mismatches
+      if (hasDbPolicy && !hasOnChainPolicy) {
+        // Database says there's a policy, but blockchain doesn't have one
+        // This is the main issue - reset the binding status to require re-registration
+        
+        if (policyBinding) {
+          await sb
+            .from('agent_policy_bindings')
+            .update({ 
+              status: 'failed',
+              last_bootstrap_tx_id: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', policyBinding.id)
+
+          console.log('Updated policy binding status to failed')
+        }
+
+        // Clear the policy_binding_id from agent_wallets if it's set
+        if (agentWallet.policy_binding_id) {
+          await sb
+            .from('agent_wallets')
+            .update({ policy_binding_id: null })
+            .eq('id', agentWallet.id)
+
+          console.log('Cleared policy_binding_id from agent wallet')
+        }
+
+        fixed = true
+        message = `Database policy binding reset. Bootstrap transaction likely failed. Please re-register policy in Agent Management.`
+
+      } else if (!hasDbPolicy && hasOnChainPolicy) {
+        // Blockchain has policy but database doesn't know about it
+        // This is unusual but can happen - create a database record
+        message = `On-chain policy exists but not in database. This is unusual - policy may have been registered externally.`
+
+      } else if (hasDbPolicy && hasOnChainPolicy) {
+        // Both exist - check if they match
+        message = `Both database and blockchain have policy records. Sync looks consistent.`
+
+      } else {
+        // Neither has policy
+        message = `No policy found in database or on-chain. Register a new policy in Agent Management.`
+      }
+
+      res.json({ fixed, message, hasOnChainPolicy, hasDbPolicy })
+
+    } catch (error) {
+      console.error('[AgentManagement] force resync error:', error)
+      res.status(500).json({ error: 'Internal server error' })
+    }
+  })
+
   return router
 }
 
