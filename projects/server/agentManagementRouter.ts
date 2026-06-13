@@ -13,6 +13,23 @@ import {
 
 let sb: SupabaseClient
 
+// Helper function to convert BigInt values to strings for JSON serialization
+function serializeBigInts(obj: any): any {
+  if (obj === null || typeof obj !== 'object') {
+    return typeof obj === 'bigint' ? obj.toString() : obj
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(serializeBigInts)
+  }
+  
+  const result: any = {}
+  for (const [key, value] of Object.entries(obj)) {
+    result[key] = serializeBigInts(value)
+  }
+  return result
+}
+
 async function fetchWalletBalance(agentAddress: string) {
   const algod = getAlgodClient()
   try {
@@ -351,7 +368,9 @@ export async function createAgentManagementRouter(): Promise<express.Router> {
         return res.status(500).json({ error: 'Failed to sync policy status' })
       }
 
-      res.json({ binding: data, policyStatus: status, guardian: ctx })
+      // Serialize BigInt values before sending response
+      const response = serializeBigInts({ binding: data, policyStatus: status, guardian: ctx })
+      res.json(response)
     } catch (error) {
       console.error('[AgentManagement] policy-sync error:', error)
       res.status(500).json({ error: 'Internal server error' })
