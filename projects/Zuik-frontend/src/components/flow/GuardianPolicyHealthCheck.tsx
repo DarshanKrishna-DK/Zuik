@@ -42,7 +42,7 @@ export default function GuardianPolicyHealthCheck({ workflowId, isOpen, onClose 
         step: '1. Environment Configuration',
         status: 'error',
         message: 'VITE_GUARDIAN_APP_ID not configured',
-        action: 'Add VITE_GUARDIAN_APP_ID=763727553 to your .env.local file and restart dev server'
+        action: 'Add VITE_GUARDIAN_APP_ID=764398655 to your .env.local file and restart dev server'
       }
       setResults([...checkResults])
       setRunning(false)

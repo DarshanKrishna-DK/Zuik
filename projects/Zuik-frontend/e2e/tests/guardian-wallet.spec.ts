@@ -44,7 +44,7 @@ test.describe('Guardian wallet flows @wallet', () => {
 
 test.describe('Guardian env', () => {
   test('documents expected app id constant', () => {
-    expect(GUARDIAN_APP_ID).toBe(763727553)
+    expect(GUARDIAN_APP_ID).toBe(764398655)
     expect(TEST_RECIPIENT).toHaveLength(58)
   })
 })

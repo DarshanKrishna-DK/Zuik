@@ -4,7 +4,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 // Mock environment variables
 Object.defineProperty(import.meta, 'env', {
   value: {
-    VITE_GUARDIAN_APP_ID: '763727553',
+    VITE_GUARDIAN_APP_ID: '764398655',
     VITE_GUARDIAN_APP_ADDRESS: 'RMZRRH5YEVQCAXLSPYDUG7RTCXNJ6MHA77KGDC3DMNRHG3SYNLVW32YS2M',
     VITE_ALGOD_NETWORK: 'testnet',
     VITE_ALGOD_SERVER: 'https://testnet-api.4160.nodely.dev',

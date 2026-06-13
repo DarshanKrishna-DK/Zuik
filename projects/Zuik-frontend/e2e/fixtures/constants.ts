@@ -1,5 +1,5 @@
 /** TestNet MVP constants - keep in sync with docs/testing/README.md */
-export const GUARDIAN_APP_ID = 763727553
+export const GUARDIAN_APP_ID = 764398655
 
 export const TEST_RECIPIENT =
   'ZMDNZ4VGMVTKWIJNTYUGMBJR2GAKWVDCQ4WOGNGMITYAJ3BDSA7OOWXBYA'
