@@ -238,7 +238,7 @@ Monorepo managed with [AlgoKit](https://github.com/algorandfoundation/algokit-cl
 |---------|------|------|
 | **Frontend** | `projects/Zuik-frontend` | React web app: builder, dashboard, wallet, swap execution |
 | **Backend** | `projects/server` | AI proxy, market proxy, cloud agent, Telegram, voice |
-| **Contracts** | `projects/Zuik-contracts` | ZuikGuardian smart contract (Algorand TypeScript / Puya) |
+| **Contracts** | `projects/Zuik-contracts` | ZuikGuardian ract (Algorand TypeScript / Puya) |
 
 ---
 
@@ -277,32 +277,6 @@ Adjust using chat, voice, or drag-and-drop until the workflow looks right. Pick 
 ## Smart contracts
 
 Contracts are written in **Algorand TypeScript**, compiled with **Puya**, and deployed through **AlgoKit**. Generated TypeScript clients link into the frontend via `algokit project link`.
-
-### Contract interaction flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend
-    participant Wallet
-    participant Server
-    participant Agent as Agent sub-account
-    participant Guardian as ZuikGuardian
-    participant DEX as Tinyman / Folks Router
-
-    User->>Frontend: Create agent + set Guardian policy
-    Frontend->>Wallet: bootstrap + allowRecipient (owner signs)
-    User->>Wallet: Fund agent sub-account (one-time)
-    Wallet->>Agent: ALGO transfer
-
-    User->>Frontend: Run workflow (Agent mode)
-    Frontend->>Server: Execute headless flow
-    Server->>Agent: Build payment txn
-    Server->>Guardian: authorize_trade atomic group
-    Guardian-->>Server: Approve or revert entire group
-    Server->>DEX: Swap path (wallet mode today; headless swaps on roadmap)
-    Server-->>Frontend: Execution result + tx ids
-```
 
 ### ZuikGuardian
 
